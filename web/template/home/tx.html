@@ -1,0 +1,68 @@
+{{ define "home/tx.html" }}
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<!-- Head -->
+{{ template "public/head.html"}}
+<!-- End Head -->
+
+<body>
+  <!-- Header (Topbar) -->
+  {{ template "public/header.html"}}
+  <!-- End Header (Topbar) -->
+
+  <main class="u-main" role="main">
+    <!-- Sidebar -->
+    {{ template "public/aside.html"}}
+    <!-- End Sidebar -->
+    <div class="u-content">
+      <div class="u-body" style="min-height: 500px;">
+        <h2>Transaction {{.TxHash}}</h2>
+        <div>
+          <div class="row row-title">{{ .InputNum }} Input</div>
+          <div>
+            <ul>
+              {{ range $i1, $v1 := .TxIn }}
+              <li style="padding-left: 15px;line-height: 30px;">
+                <a style="text-decoration: underline;" href="/tx/{{ $.Chain }}/{{$v1.Point | outpointToTxId}}"
+                   target="_blank">{{
+                  $v1.Point}}</a>
+                {{ if $v1.Witness }}
+                <div class="script">
+                  {{ range $wn := $v1.Witness }}
+                  <div>
+                    {{ range $info := $wn }}
+                    {{ $info }}
+                    {{ end }}
+                  </div>
+                  {{end}}
+                </div>
+                {{end}}
+
+              </li>
+              {{ end }}
+            </ul>
+          </div>
+
+          <div class="row row-title">{{ .OutPutNum }} Outputs</div>
+          <div>
+            <ul>
+              {{ range $i2, $v2 := .TxOut }}
+              <li style="padding-left: 30px;">{{ $v2.Id}} </li>
+              <div><span class="blod">value</span>&nbsp;&nbsp;{{ $v2.Value }}</div>
+              <div><span class="blod">address</span>&nbsp;&nbsp;{{ $v2.Address }}</div>
+              {{ end }}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div>
+      </div>
+      <!-- Footer -->
+      {{ template "public/footer.html"}}
+      <!-- End Footer -->
+    </div>
+  </main>
+</body>
+
+</html>
+{{end}}

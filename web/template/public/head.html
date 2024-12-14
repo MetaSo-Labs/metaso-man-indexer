@@ -1,0 +1,46 @@
+{{define "public/head.html"}}
+
+<head>
+  <title>MetaID App Node</title>
+
+  <!-- Meta -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="keywords" content="MetaID App Node">
+  <meta name="description" content="MetaID App Node">
+  <meta name="author" content="MetaID App Node">
+
+  <!-- Favicon -->
+  <link rel="shortcut icon" href="/assets/img/logo.png" type="image/x-icon">
+  <!-- Theme Styles -->
+  <link rel="stylesheet" href="/assets/css/theme.css">
+  <script src="/assets/js/iconfont.js"></script>
+  <!-- Global Vendor -->
+
+  <!-- Initialization  -->
+
+  <link rel="stylesheet" href="/assets/css/fix.css">
+  <!-- Custom Charts -->
+  <style>
+    .js-doughnut-chart {
+      width: 70px !important;
+      height: 70px !important;
+    }
+  </style>
+  <script>
+    function search() {
+      const key = document.getElementById("search_key").value.replace(/^s*|s*$/g, '')
+      if (key.length > 0) {
+        location.href = "/search/" + key;
+      }
+    }
+    function keyup_submit(e) {
+      var evt = window.event || e;
+      if (evt.keyCode == 13) {
+        search()
+      }
+    }
+  </script>
+</head>
+{{end}}
