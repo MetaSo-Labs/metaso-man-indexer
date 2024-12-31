@@ -148,3 +148,63 @@ type MempoolData struct {
 	CreateMetaId  string `json:"createMetaId"`
 	CreateAddress string `json:"createAddress"`
 }
+
+// PIN Engagement Value
+type PEVData struct {
+	Host             string  `json:"host"`
+	FromPINId        string  `json:"fromPINId"`
+	ToPINId          string  `json:"toPINId"`
+	Path             string  `json:"path"`
+	Address          string  `json:"address"`
+	MetaId           string  `json:"metaId"`
+	FromChainName    string  `json:"fromChainName"`
+	ToChainName      string  `json:"toChainName"`
+	MetaBlockHeight  int64   `json:"metaBlockHeight"`
+	StartBlockHeight int64   `json:"startBlockHeight"`
+	EndBlockHeight   int64   `json:"endBlockHeight"`
+	BlockHeight      int64   `json:"blockHeight"`
+	IncrementalValue float64 `json:"incrementalValue"`
+}
+type MetaBlockData struct {
+	Header          string               `json:"header"`
+	PreHeader       string               `json:"preHeader"`
+	MetablockHeight int64                `json:"metablockHeight"`
+	Chains          []MetaBlockChainData `json:"chains"`
+	OnChain         string               `json:"onChain"`
+	Timestamp       int64                `json:"timestamp"`
+	TxHash          string               `json:"txHash"`
+	TxIndex         int                  `json:"txIndex"`
+}
+type MetaBlockChainData struct {
+	Chain      string `json:"chain"`
+	StartBlock string `json:"startBlock"`
+	EndBlock   string `json:"endBlock"`
+}
+
+// MetaSoMDV
+type MetaSoMDV struct {
+	MetaId    string  `json:"metaId"`
+	Address   string  `json:"address"`
+	DataValue float64 `json:"dataValue"`
+}
+
+// MteaSoNDV
+type MetaSoNDV struct {
+	Host      string  `json:"host"`
+	DataValue float64 `json:"dataValue"`
+}
+
+// MetaSoBlockMDV
+type MetaSoBlockMDV struct {
+	MetaId    string  `json:"metaId"`
+	Address   string  `json:"address"`
+	Block     int64   `json:"block"`
+	DataValue float64 `json:"dataValue"`
+}
+
+// MetaSoBlockNDV
+type MetaSoBlockNDV struct {
+	Host      string  `json:"host"`
+	Block     int64   `json:"block"`
+	DataValue float64 `json:"dataValue"`
+}

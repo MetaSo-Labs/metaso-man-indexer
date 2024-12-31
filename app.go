@@ -9,6 +9,7 @@ import (
 	"manindexer/basicprotocols/metaso"
 	"manindexer/basicprotocols/mrc721"
 	"manindexer/common"
+	"manindexer/database/mongodb"
 	"manindexer/man"
 
 	"time"
@@ -37,7 +38,9 @@ func main() {
 	go man.ZmqRun()
 	if common.ModuleExist("metaso") {
 		ms := metaso.MetaSo{}
+		metaso.ConnectMongoDb()
 		go ms.Synchronization()
+		go ms.SyncPEV()
 	}
 	if common.ModuleExist("metaname") {
 		mn := metaname.MetaName{}
@@ -47,6 +50,7 @@ func main() {
 		mrc721 := mrc721.Mrc721{}
 		go mrc721.Synchronization()
 	}
+	go mongodb.FixNullMetaIdPinId()
 	for {
 		man.IndexerRun(common.TestNet)
 		man.CheckNewBlock()

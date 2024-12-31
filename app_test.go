@@ -233,3 +233,7 @@ func TestUrlEncode(t *testing.T) {
 	e := url.PathEscape(s)
 	fmt.Println(e)
 }
+func TestPinHost(t *testing.T) {
+	b, h, p := pin.ValidHostPath("/aa/bb/cc")
+	fmt.Println(b, h, p)
+}

@@ -672,7 +672,7 @@ func metaIdInfoParse(pinNode *pin.PinInscription, path string, metaIdData *map[s
 		}
 	}
 	if metaIdInfo == nil {
-		metaIdInfo = &pin.MetaIdInfo{MetaId: common.GetMetaIdByAddress(pinNode.Address), Address: pinNode.Address}
+		metaIdInfo = &pin.MetaIdInfo{MetaId: common.GetMetaIdByAddress(pinNode.Address), Address: pinNode.Address, PinId: pinNode.Id}
 	}
 	if path == "" {
 		path = pinNode.Path
@@ -691,6 +691,9 @@ func metaIdInfoParse(pinNode *pin.PinInscription, path string, metaIdData *map[s
 	case "/info/avatar":
 		metaIdInfo.Avatar = fmt.Sprintf("/content/%s", pinNode.Id)
 		metaIdInfo.AvatarId = pinNode.Id
+	case "/info/nft-avatar":
+		metaIdInfo.NftAvatar = fmt.Sprintf("/content/%s", pinNode.Id)
+		metaIdInfo.NftAvatar = pinNode.Id
 	case "/info/bio":
 		metaIdInfo.Bio = string(pinNode.ContentBody)
 		metaIdInfo.BioId = pinNode.Id

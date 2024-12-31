@@ -11,7 +11,6 @@ import (
 )
 
 func (metaso *MetaSo) Synchronization() {
-	connectMongoDb()
 	for {
 		metaso.synchTweet()
 		metaso.synchTweetLike()
@@ -20,6 +19,12 @@ func (metaso *MetaSo) Synchronization() {
 		metaso.syncMrc20TickData()
 		metaso.synchMempoolData()
 		time.Sleep(time.Second * 3)
+	}
+}
+func (metaso *MetaSo) SyncPEV() (err error) {
+	for {
+		metaso.syncPEV()
+		time.Sleep(time.Second * 10)
 	}
 }
 

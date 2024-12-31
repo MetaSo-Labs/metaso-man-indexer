@@ -224,6 +224,84 @@ func getBlockInfo(height int64, host string, cursor int64, size int64, orderby s
 	}
 	return
 }
+func getBlockNDV(height int64, host string, cursor int64, size int64, orderby string) (list []*MetaSoBlockNDV, err error) {
+	var filter primitive.D
+	if height > 0 {
+		filter = bson.D{{Key: "block", Value: height}}
+	}
+	if host != "" {
+		filter = bson.D{{Key: "host", Value: host}}
+	}
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(MetaSoNDVBlockData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return
+}
+func getNdvPageList(host string, cursor int64, size int64, orderby string) (list []*MetaSoNDV, err error) {
+	filter := bson.D{}
+	if host != "" {
+		filter = bson.D{{Key: "host", Value: host}}
+	}
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(MetaSoNDVData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return
+}
+func getMdvPageList(address string, cursor int64, size int64, orderby string) (list []*MetaSoMDV, err error) {
+	filter := bson.D{}
+	if address != "" {
+		filter = bson.D{{Key: "address", Value: address}}
+	}
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(MetaSoMDVData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return
+}
+func getBlockMDV(height int64, address string, cursor int64, size int64, orderby string) (list []*MetaSoBlockMDV, err error) {
+	var filter primitive.D
+	if height > 0 {
+		filter = bson.D{{Key: "block", Value: height}}
+	}
+	if address != "" {
+		filter = bson.D{{Key: "address", Value: address}}
+	}
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(MetaSoMDVBlockData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return
+}
 func getTickByAddress(address string, tickType string) (list []*Mrc20DeployInfo, err error) {
 	filter := bson.D{{Key: "address", Value: address}}
 	if tickType == "idcoins" {

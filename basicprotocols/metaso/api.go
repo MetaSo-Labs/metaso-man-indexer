@@ -18,8 +18,11 @@ func Api(r *gin.Engine) {
 	accessGroup.GET("/follow", follow)
 	hostGroup := r.Group("/host")
 	hostGroup.Use(CorsMiddleware())
-	hostGroup.GET("/block/sync-newest", syncNewest)
-	hostGroup.GET("/block/info", blockInfo)
+	hostGroup.GET("/block/sync-newest", syncNewest2)
+	hostGroup.GET("/block/ndv", blockNDV)
+	hostGroup.GET("/block/mdv", blockMDV)
+	hostGroup.GET("/ndv", ndvPageList)
+	hostGroup.GET("/mdv", mdvPageList)
 	hostGroup.GET("/info", hostInfo)
 	ftGroup := r.Group("/ft")
 	ftGroup.Use(CorsMiddleware())
@@ -141,6 +144,10 @@ func syncNewest(ctx *gin.Context) {
 	_, height := getSyncHeight()
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", height))
 }
+func syncNewest2(ctx *gin.Context) {
+	height, _ := mongodb.GetSyncLastNumber("metablock")
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", height))
+}
 func blockInfo(ctx *gin.Context) {
 	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
 	if err != nil {
@@ -159,6 +166,92 @@ func blockInfo(ctx *gin.Context) {
 	}
 
 	list, err := getBlockInfo(height, "", cursor, size, ctx.Query("orderby"))
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
+}
+func blockNDV(ctx *gin.Context) {
+	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query height error"))
+		return
+	}
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+
+	list, err := getBlockNDV(height, ctx.Query("host"), cursor, size, ctx.Query("orderby"))
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
+}
+func blockMDV(ctx *gin.Context) {
+	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query height error"))
+		return
+	}
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+
+	list, err := getBlockMDV(height, ctx.Query("address"), cursor, size, ctx.Query("orderby"))
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
+}
+func ndvPageList(ctx *gin.Context) {
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+
+	list, err := getNdvPageList(ctx.Query("host"), cursor, size, ctx.Query("orderby"))
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
+}
+func mdvPageList(ctx *gin.Context) {
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+
+	list, err := getMdvPageList(ctx.Query("address"), cursor, size, ctx.Query("orderby"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return

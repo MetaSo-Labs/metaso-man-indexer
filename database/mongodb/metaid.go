@@ -89,6 +89,8 @@ func findMetaIdInfoInMempool(key string, value string) (info pin.MetaIdInfo, err
 			info.Name = string(pin.ContentBody)
 		} else if pin.OriginalPath == "/info/avatar" {
 			info.Avatar = fmt.Sprintf("/content/%s", pin.Id)
+		} else if pin.OriginalPath == "/info/nft-avatar" {
+			info.Avatar = fmt.Sprintf("/content/%s", pin.Id)
 		} else if pin.OriginalPath == "/info/bid" {
 			info.Bio = string(pin.ContentBody)
 		} else if pin.Path == "/info/background" {
@@ -138,6 +140,12 @@ func (mg *Mongodb) BatchUpsertMetaIdInfo(infoList map[string]*pin.MetaIdInfo) (e
 		}
 		if len(info.AvatarId) > 0 {
 			updateInfo = append(updateInfo, bson.E{Key: "avatarid", Value: info.AvatarId})
+		}
+		if len(info.NftAvatar) > 0 {
+			updateInfo = append(updateInfo, bson.E{Key: "nftavatar", Value: info.NftAvatar})
+		}
+		if len(info.NftAvatarId) > 0 {
+			updateInfo = append(updateInfo, bson.E{Key: "nftavatarid", Value: info.NftAvatarId})
 		}
 		if len(info.Bio) > 0 {
 			updateInfo = append(updateInfo, bson.E{Key: "bio", Value: info.Bio})

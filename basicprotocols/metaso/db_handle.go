@@ -31,6 +31,11 @@ const (
 	HostDataCollection      string = "host_data"
 	MetasoTickCollection    string = "metaso_tick"
 	MetaSoMempoolCollection string = "metaso_mempool"
+	MetaSoPEVData           string = "metaso_pevdata"
+	MetaSoMDVData           string = "metaso_mdvdata"
+	MetaSoNDVData           string = "metaso_ndvdata"
+	MetaSoMDVBlockData      string = "metaso_block_mdvdata"
+	MetaSoNDVBlockData      string = "metaso_block_ndvdata"
 )
 
 var DataFilter = bson.D{
@@ -42,7 +47,7 @@ var DataFilter = bson.D{
 	}},
 }
 
-func connectMongoDb() {
+func ConnectMongoDb() {
 	mg := common.Config.MongoDb
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(mg.TimeOut))
 	defer cancel()
@@ -101,6 +106,24 @@ func createIndex(mongoClient *mongo.Database) {
 	//MetaSoMempoolCollection
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMempoolCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMempoolCollection, "target_1", bson.D{{Key: "target", Value: 1}}, false)
+	//MetaSoPEVData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "frompinid_1", bson.D{{Key: "frompinid", Value: 1}}, true)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_1", bson.D{{Key: "host", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_metablockheight_1", bson.D{{Key: "host", Value: 1}, {Key: "metablockheight", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "address_1", bson.D{{Key: "address", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "address_metablockheight_1", bson.D{{Key: "address", Value: 1}, {Key: "metablockheight", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "address_host_1", bson.D{{Key: "address", Value: 1}, {Key: "host", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_address_metablockheight_1", bson.D{{Key: "host", Value: 1}, {Key: "address", Value: 1}, {Key: "metablockheight", Value: 1}}, false)
+	//MetaSoMDVData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMDVData, "metaid_1", bson.D{{Key: "metaid", Value: 1}}, true)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMDVData, "address_1", bson.D{{Key: "address", Value: 1}}, true)
+	//MetaSoNDVData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoNDVData, "host_1", bson.D{{Key: "host", Value: 1}}, true)
+	//MetaSoMDVBlockData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMDVBlockData, "address_block_1", bson.D{{Key: "address", Value: 1}, {Key: "block", Value: 1}}, true)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMDVBlockData, "metaid_block_1", bson.D{{Key: "metaid", Value: 1}, {Key: "block", Value: 1}}, true)
+	//MetaSoNDVBlockData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoNDVBlockData, "host_block_1", bson.D{{Key: "host", Value: 1}, {Key: "block", Value: 1}}, true)
 }
 func createBuzzView() {
 	views, err := mongoClient.ListCollectionNames(context.Background(), bson.M{"name": BuzzView})

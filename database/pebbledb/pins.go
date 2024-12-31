@@ -479,7 +479,7 @@ func (pb *Pebble) AddMempoolPin(pin *pin.PinInscription) (err error) {
 		addNumLog("mem_"+pin.Path, 1)
 	}
 	//add MempoolMetaIdInfo
-	if pin.OriginalPath == "/info/name" || pin.OriginalPath == "/info/avatar" || pin.Path == "/info/name" || pin.Path == "/info/avatar" {
+	if pin.OriginalPath == "/info/name" || pin.OriginalPath == "/info/avatar" || pin.OriginalPath == "/info/nft-avatar" || pin.Path == "/info/name" || pin.Path == "/info/avatar" || pin.Path == "/info/nft-avatar" {
 		key := fmt.Sprintf("%s_%s_%d", pin.Address, pin.Id, pin.Timestamp)
 		Pb[MempoolMetaIdInfo].Set([]byte(key), b, opts)
 
@@ -558,7 +558,7 @@ func (pb *Pebble) DeleteMempoolInscription(txIds []string) (err error) {
 			batchPath.Delete([]byte(key), pebble.Sync)
 			addNumLog("mem_"+pinNode.Path, -1)
 		}
-		if pinNode.OriginalPath == "/info/name" || pinNode.OriginalPath == "/info/avatar" || pinNode.Path == "/info/name" || pinNode.Path == "/info/avatar" {
+		if pinNode.OriginalPath == "/info/name" || pinNode.OriginalPath == "/info/avatar" || pinNode.OriginalPath == "/info/nft-avatar" || pinNode.Path == "/info/name" || pinNode.Path == "/info/avatar" || pinNode.Path == "/info/nft-avatar" {
 			key := fmt.Sprintf("%s_%s_%d", pinNode.Address, pinNode.Id, pinNode.Timestamp)
 			batchPath.Delete([]byte(key), pebble.Sync)
 		}

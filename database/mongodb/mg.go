@@ -86,13 +86,17 @@ func connectMongoDb() {
 	createIndexIfNotExists(mongoClient, PinsCollection, "operation_1", bson.D{{Key: "operation", Value: 1}}, false)
 	createIndexIfNotExists(mongoClient, PinsCollection, "address_status_1", bson.D{{Key: "address", Value: 1}, {Key: "status", Value: 1}}, false)
 	createIndexIfNotExists(mongoClient, PinsCollection, "host_1", bson.D{{Key: "host", Value: 1}}, false)
+	createIndexIfNotExists(mongoClient, PinsCollection, "genesisheight_chainname_1", bson.D{{Key: "genesisheight", Value: 1}, {Key: "chainname", Value: 1}}, false)
 	//PinTransferHistory
 	createIndexIfNotExists(mongoClient, PinTransferHistory, "transfertx_1", bson.D{{Key: "transfertx", Value: 1}}, true)
 	createIndexIfNotExists(mongoClient, PinTransferHistory, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, false)
 	createIndexIfNotExists(mongoClient, PinTransferHistory, "transferheight_1", bson.D{{Key: "transferheight", Value: 1}}, false)
 
-	createIndexIfNotExists(mongoClient, MempoolPinsCollection, "id_1", bson.D{{Key: "id", Value: 1}}, true)
 	createIndexIfNotExists(mongoClient, MetaIdInfoCollection, "address_1", bson.D{{Key: "address", Value: 1}}, true)
+	createIndexIfNotExists(mongoClient, MetaIdInfoCollection, "metaid_1", bson.D{{Key: "metaid", Value: 1}}, true)
+	createIndexIfNotExists(mongoClient, MetaIdInfoCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, false)
+
+	createIndexIfNotExists(mongoClient, MempoolPinsCollection, "id_1", bson.D{{Key: "id", Value: 1}}, true)
 	createIndexIfNotExists(mongoClient, PinTreeCatalogCollection, "treepath_1", bson.D{{Key: "treepath", Value: 1}}, true)
 
 	createIndexIfNotExists(mongoClient, FollowCollection, "metaid_1", bson.D{{Key: "metaid", Value: 1}}, false)
@@ -277,10 +281,23 @@ func UpdateSyncLastIdLog(key string, id primitive.ObjectID) (err error) {
 
 	return
 }
+func UpdateSyncLastNumber(key string, nb int64) (err error) {
+	filter := bson.D{{Key: "key", Value: key}}
+	update := bson.D{
+		{Key: "$set", Value: bson.D{
+			{Key: "lastnumber", Value: nb},
+		}},
+	}
+	updateOpts := options.Update().SetUpsert(true)
+	_, err = mongoClient.Collection(SyncLastIdLog).UpdateOne(context.TODO(), filter, update, updateOpts)
+
+	return
+}
 
 type LastIdLog struct {
-	Key    string             `bson:"key"`
-	LastId primitive.ObjectID `bson:"lastid"`
+	Key        string             `bson:"key"`
+	LastId     primitive.ObjectID `bson:"lastid"`
+	LastNumber int64              `bson:"lastnumber"`
 }
 
 func GetSyncLastId(key string) (lastId primitive.ObjectID, err error) {
@@ -291,6 +308,16 @@ func GetSyncLastId(key string) (lastId primitive.ObjectID, err error) {
 		err = nil
 	}
 	lastId = res.LastId
+	return
+}
+func GetSyncLastNumber(key string) (LastNumber int64, err error) {
+	filter := bson.D{{Key: "key", Value: key}}
+	var res LastIdLog
+	err = mongoClient.Collection(SyncLastIdLog).FindOne(context.TODO(), filter, nil).Decode(&res)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	LastNumber = res.LastNumber
 	return
 }
 func CompareObjectIDs(id1, id2 primitive.ObjectID) int {

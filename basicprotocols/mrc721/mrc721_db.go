@@ -2,6 +2,8 @@ package mrc721
 
 import (
 	"context"
+	"manindexer/database/mongodb"
+	"manindexer/pin"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -118,6 +120,7 @@ func GetMrc721ItemList(collectionName string, collectionPin string, pinIdList []
 		return
 	}
 	err = result.All(context.TODO(), &itemList)
+	getPinOutput(itemList)
 	if cnt {
 		total, err = mongoClient.Collection(Mrc721Item).CountDocuments(context.TODO(), filter)
 	}
@@ -186,6 +189,7 @@ func GetMrc721ItemByAddress(address string, collectionId string, cursor int64, s
 		return
 	}
 	err = result.All(context.TODO(), &data)
+	getPinOutput(data)
 	if cnt {
 		total, err = mongoClient.Collection(Mrc721Item).CountDocuments(context.TODO(), filter)
 	}
@@ -199,6 +203,33 @@ func GetMrc721Item(pinId string) (data *Mrc721ItemDescPin, err error) {
 	err = mongoClient.Collection(Mrc721Item).FindOne(context.TODO(), filter).Decode(&data)
 	if err == mongo.ErrNoDocuments {
 		err = nil
+		return
 	}
+	getPinOutput([]*Mrc721ItemDescPin{data})
 	return
+}
+
+func getPinOutput(list []*Mrc721ItemDescPin) {
+	var idList []string
+	var dataMap = make(map[string]*Mrc721ItemDescPin)
+	for _, item := range list {
+		idList = append(idList, item.ItemPinId)
+		dataMap[item.ItemPinId] = item
+	}
+	filter := bson.M{"id": bson.M{"$in": idList}}
+	result, err := mongoClient.Collection(mongodb.PinsView).Find(context.TODO(), filter, nil)
+	if err != nil {
+		return
+	}
+	var pinList []pin.PinInscription
+	err = result.All(context.TODO(), &pinList)
+	if err != nil {
+		return
+	}
+	for _, pinNode := range pinList {
+		if v, ok := dataMap[pinNode.Id]; ok {
+			v.TxOutput = pinNode.Output
+			v.TxValue = pinNode.OutputValue
+		}
+	}
 }

@@ -1,7 +1,6 @@
 package pin
 
 import (
-	"regexp"
 	"strings"
 )
 
@@ -98,12 +97,15 @@ type FollowData struct {
 type MetaIdInfo struct {
 	ChainName     string `json:"chainName"`
 	Number        int64  `json:"number"`
+	PinId         string `json:"pinId"`
 	MetaId        string `json:"metaid"`
 	Name          string `json:"name"`
 	NameId        string `json:"nameId"`
 	Address       string `json:"address"`
 	Avatar        string `json:"avatar"`
 	AvatarId      string `json:"avatarId"`
+	NftAvatar     string `json:"nftAvatar"`
+	NftAvatarId   string `json:"nftAvatarId"`
 	Bio           string `json:"bio"`
 	BioId         string `json:"bioId"`
 	SoulbondToken string `json:"soulbondToken"`
@@ -185,10 +187,15 @@ type PinStatus struct {
 }
 
 func ValidHostPath(input string) (bool, string, string) {
-	pattern := `^[a-f0-9]{16}:/.*$`
-	matched, _ := regexp.MatchString(pattern, input)
-	if matched {
-		parts := strings.SplitN(input, ":", 2)
+	// pattern := `^[a-f0-9]{16}:/.*$`
+	// matched, _ := regexp.MatchString(pattern, input)
+	// if matched {
+	// 	parts := strings.SplitN(input, ":", 2)
+	// 	return true, parts[0], parts[1]
+	// }
+	// return false, "", input
+	parts := strings.SplitN(input, ":", 2)
+	if len(parts) == 2 {
 		return true, parts[0], parts[1]
 	}
 	return false, "", input

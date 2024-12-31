@@ -31,12 +31,18 @@ type AllConfig struct {
 	Pebble     pebble
 	Web        webConfig
 	MetaSo     metasoConfig
+	Statistics Statistics
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
 	SyncProtocols []string `toml:"syncProtocols"`
 	SyncBeginTime string   `toml:"syncBeginTime"`
 	SyncEndTime   string   `toml:"syncEndTime"`
+}
+type Statistics struct {
+	MetaChainHost  string   `toml:"metaChainHost"`
+	AllowHost      []string `toml:"allowHost"`
+	AllowProtocols []string `toml:"allowProtocols"`
 }
 type metasoConfig struct {
 	Pubkey string `toml:"pubkey"`

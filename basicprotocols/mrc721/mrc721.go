@@ -122,4 +122,6 @@ type Mrc721ItemDescPin struct {
 	ContentType       string `json:"contentType"`
 	ContentTypeDetect string `json:"contentTypeDetect"`
 	ContentString     string `json:"contentString"`
+	TxOutput          string `json:"txOutput"`
+	TxValue           int64  `json:"txValue"`
 }
