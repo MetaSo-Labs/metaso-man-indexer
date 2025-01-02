@@ -316,8 +316,10 @@ func GetSyncLastNumber(key string) (LastNumber int64, err error) {
 	err = mongoClient.Collection(SyncLastIdLog).FindOne(context.TODO(), filter, nil).Decode(&res)
 	if err == mongo.ErrNoDocuments {
 		err = nil
+		LastNumber = -1
+	} else {
+		LastNumber = res.LastNumber
 	}
-	LastNumber = res.LastNumber
 	return
 }
 func CompareObjectIDs(id1, id2 primitive.ObjectID) int {

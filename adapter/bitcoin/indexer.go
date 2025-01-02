@@ -335,6 +335,9 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 		if len(input.Witness) <= 1 {
 			continue
 		}
+		if len(input.Witness[len(input.Witness)-1]) <= 1 {
+			continue
+		}
 		//Witness length error,Taproot
 		if len(input.Witness) == 2 && input.Witness[len(input.Witness)-1][0] == txscript.TaprootAnnexTag {
 			continue
@@ -345,7 +348,9 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 		if input.Witness[len(input.Witness)-1][0] == txscript.TaprootAnnexTag {
 			witnessScript = input.Witness[len(input.Witness)-1]
 		} else {
-			witnessScript = input.Witness[len(input.Witness)-2]
+			if len(input.Witness) >= 2 {
+				witnessScript = input.Witness[len(input.Witness)-2]
+			}
 		}
 		// Parse script and get pin content
 		pinInscription := indexer.ParsePin(witnessScript)

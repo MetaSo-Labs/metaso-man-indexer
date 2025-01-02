@@ -1,6 +1,7 @@
 package metaso
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -8,6 +9,9 @@ import (
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"net/http"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func (metaso *MetaSo) syncPEV() {
@@ -18,14 +22,37 @@ func (metaso *MetaSo) syncPEV() {
 	if metaBlock == nil {
 		return
 	}
-	if metaBlock.MetablockHeight <= 0 {
+	if metaBlock.Header == "" {
 		return
 	}
 	log.Println("count metaBlock:", metaBlock.MetablockHeight)
 	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
+	var totalPevList []interface{}
 	for _, chain := range metaBlock.Chains {
-		CountBlockPEV(metaBlock.MetablockHeight, &chain)
+		pevList, _ := CountBlockPEV(metaBlock.MetablockHeight, &chain)
+		totalPevList = append(totalPevList, pevList...)
 	}
+	hostMap := make(map[string]struct{})
+	addressMap := make(map[string]struct{})
+	blockInfoData := &MetaSoBlockInfo{Block: metaBlock.MetablockHeight}
+	for _, item := range totalPevList {
+		pev := item.(PEVData)
+		hostMap[pev.Host] = struct{}{}
+		addressMap[pev.Address] = struct{}{}
+		blockInfoData.DataValue += pev.IncrementalValue
+		blockInfoData.PinNumber += 1
+		if pev.Host != "metabitcoin.unknown" {
+			blockInfoData.PinNumberHasHost += 1
+		}
+	}
+	blockInfoData.AddressNumber = int64(len(addressMap))
+	blockInfoData.HostNumber = int64(len(hostMap))
+	blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
+	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": metaBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
+
+	go UpdateBlcokValue(metaBlock.MetablockHeight, totalPevList)
+	go UpdateDataValue(&hostMap, &addressMap)
+
 }
 func (metaso *MetaSo) getLastMetaBlock() (metaBlock *MetaBlockData, err error) {
 	localHeight, err := mongodb.GetSyncLastNumber("metablock")

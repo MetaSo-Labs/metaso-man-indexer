@@ -194,17 +194,33 @@ type MetaSoNDV struct {
 	DataValue float64 `json:"dataValue"`
 }
 
+// MetaSoBlockInfo
+type MetaSoBlockInfo struct {
+	Block            int64   `json:"block"`
+	HistoryValue     float64 `json:"historyValue"`
+	DataValue        float64 `json:"dataValue"`
+	PinNumber        int64   `json:"pinNumber"`
+	PinNumberHasHost int64   `json:"pinNumberHasHost"`
+	AddressNumber    int64   `json:"addressNumber"`
+	HostNumber       int64   `json:"hostNumber"`
+}
+
 // MetaSoBlockMDV
 type MetaSoBlockMDV struct {
-	MetaId    string  `json:"metaId"`
-	Address   string  `json:"address"`
-	Block     int64   `json:"block"`
-	DataValue float64 `json:"dataValue"`
+	MetaId           string  `json:"metaId"`
+	Address          string  `json:"address"`
+	Block            int64   `json:"block"`
+	HistoryValue     float64 `json:"historyValue"`
+	DataValue        float64 `json:"dataValue"`
+	PinNumber        int64   `json:"pinNumber"`
+	PinNumberHasHost int64   `json:"pinNumberHasHost"`
 }
 
 // MetaSoBlockNDV
 type MetaSoBlockNDV struct {
-	Host      string  `json:"host"`
-	Block     int64   `json:"block"`
-	DataValue float64 `json:"dataValue"`
+	Host         string  `json:"host"`
+	Block        int64   `json:"block"`
+	HistoryValue float64 `json:"historyValue"`
+	DataValue    float64 `json:"dataValue"`
+	PinNumber    int64   `json:"pinNumber"`
 }

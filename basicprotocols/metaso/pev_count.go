@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (err error) {
+func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []interface{}, err error) {
 	if block.StartBlock == "" || block.EndBlock == "" {
 		return
 	}
@@ -49,11 +49,10 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (err error) {
 	var pinList []*pin.PinInscription
 	err = results.All(context.TODO(), &pinList)
 	//fmt.Println("count pinList:", chainName, startHeight, endHeight, len(pinList))
-	var pevList []interface{}
+	//var pevList []interface{}
 	allowProtocols := common.Config.Statistics.AllowProtocols
 	allowHost := common.Config.Statistics.AllowHost
-	hostMap := make(map[string]struct{})
-	addressMap := make(map[string]struct{})
+
 	for _, pinNode := range pinList {
 		if pinNode.Host == "metabitcoin.unknown" {
 			continue
@@ -78,51 +77,87 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (err error) {
 		if pev.ToPINId == "" {
 			continue
 		}
-		hostMap[pev.Host] = struct{}{}
-		addressMap[pev.Address] = struct{}{}
+		if pev.Host == "" || len(pev.Host) == 0 {
+			pev.Host = "metabitcoin.unknown"
+		}
+
 		pevList = append(pevList, pev)
+
 	}
 	if len(pevList) <= 0 {
 		return
 	}
+
 	insertOpts := options.InsertMany().SetOrdered(false)
 	_, err = mongoClient.Collection(MetaSoPEVData).InsertMany(context.TODO(), pevList, insertOpts)
-	go UpdateBlcokValue(blockHeight, pevList)
-	go UpdateDataValue(&hostMap, &addressMap)
+
+	return
+}
+func getBlockHistoryValue(height int64, key string, value string) (total float64, err error) {
+	filter := bson.D{{Key: "metablockheight", Value: bson.D{{Key: "$lt", Value: height}}}}
+	if key != "" && value != "" {
+		filter = append(filter, bson.E{Key: key, Value: value})
+	}
+	match := bson.D{{Key: "$match", Value: filter}}
+	groupStage := bson.D{
+		{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "totalValue", Value: bson.D{{Key: "$sum", Value: "$incrementalvalue"}}},
+		}}}
+	cursor, err := mongoClient.Collection(MetaSoPEVData).Aggregate(context.TODO(), mongo.Pipeline{match, groupStage})
+	if err != nil {
+		return
+	}
+	defer cursor.Close(context.TODO())
+	var results []bson.M
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		return
+	}
+	if len(results) > 0 {
+		total = convertFloat64(results[0]["totalValue"])
+	}
+
 	return
 }
 func UpdateBlcokValue(blockHeight int64, pevList []interface{}) (err error) {
-	var hostMap = make(map[string]float64)
-	var addressMap = make(map[string]float64)
+	var hostMap = make(map[string]*MetaSoBlockNDV)
+	var addressMap = make(map[string]*MetaSoBlockMDV)
+	//fmt.Println("pevList:", blockHeight, ">>", len(pevList))
 	for _, item := range pevList {
 		pev := item.(PEVData)
 		if _, ok := hostMap[pev.Host]; ok {
-			hostMap[pev.Host] = pev.IncrementalValue + hostMap[pev.Host]
+			hostMap[pev.Host].DataValue += pev.IncrementalValue
+			hostMap[pev.Host].PinNumber += 1
 		} else {
-			hostMap[pev.Host] = pev.IncrementalValue
+			hostMap[pev.Host] = &MetaSoBlockNDV{DataValue: pev.IncrementalValue, Block: blockHeight, Host: pev.Host, PinNumber: 1}
 		}
 		if _, ok := addressMap[pev.Address]; ok {
-			addressMap[pev.Address] = pev.IncrementalValue + addressMap[pev.Address]
+			addressMap[pev.Address].DataValue += pev.IncrementalValue
+			addressMap[pev.Address].PinNumber += 1
+			t := int64(0)
+			if pev.Host != "metabitcoin.unknown" {
+				t = 1
+			}
+			addressMap[pev.Address].PinNumberHasHost += t
 		} else {
-			addressMap[pev.Address] = pev.IncrementalValue
+			t := int64(0)
+			if pev.Host != "metabitcoin.unknown" {
+				t = 1
+			}
+			addressMap[pev.Address] = &MetaSoBlockMDV{DataValue: pev.IncrementalValue, Block: blockHeight, Address: pev.Address, MetaId: pev.MetaId, PinNumber: 1, PinNumberHasHost: t}
 		}
 	}
-	var hostList []MetaSoBlockNDV
-	var addressList []MetaSoBlockMDV
-	for host, value := range hostMap {
-		hostList = append(hostList, MetaSoBlockNDV{
-			Host:      host,
-			DataValue: value,
-			Block:     blockHeight,
-		})
+
+	var hostList []*MetaSoBlockNDV
+	var addressList []*MetaSoBlockMDV
+	for _, value := range hostMap {
+		value.HistoryValue, _ = getBlockHistoryValue(blockHeight, "host", value.Host)
+		hostList = append(hostList, value)
+		//fmt.Println(value.Host, value.DataValue)
 	}
-	for address, value := range addressMap {
-		addressList = append(addressList, MetaSoBlockMDV{
-			Address:   address,
-			DataValue: value,
-			Block:     blockHeight,
-			MetaId:    common.GetMetaIdByAddress(address),
-		})
+	for _, value := range addressMap {
+		value.HistoryValue, _ = getBlockHistoryValue(blockHeight, "address", value.Address)
+		addressList = append(addressList, value)
 	}
 	var models []mongo.WriteModel
 	for _, item := range hostList {
@@ -361,7 +396,7 @@ func countSimplebuzz(blockHeight int64, block *MetaBlockChainData, pinNode *pin.
 	if err != nil {
 		return
 	}
-	if dataMap["quotePin"].(string) == "" {
+	if dataMap["quotePin"] == nil || dataMap["quotePin"].(string) == "" {
 		data = createPDV(blockHeight, block, pinNode, pinNode, 1.0)
 		return
 	}

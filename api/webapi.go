@@ -123,6 +123,7 @@ func Start(f embed.FS) {
 	if common.ModuleExist("metaso") {
 		log.Println("use metaso api")
 		metaso.Api(r)
+		metaso.StatisticsApi(r)
 	}
 	if common.ModuleExist("metaname") {
 		log.Println("use metaname api")
