@@ -14,6 +14,13 @@ import (
 
 func (mrc721 *Mrc721) Synchronization() {
 	connectMongoDb()
+	go func() {
+		for {
+			SyncAddress()
+			time.Sleep(time.Minute * 10)
+		}
+	}()
+
 	for {
 		mrc721.sync()
 		mrc721.syncTransfer()

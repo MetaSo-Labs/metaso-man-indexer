@@ -27,7 +27,12 @@ func (metaso *MetaSo) SyncPEV() (err error) {
 		time.Sleep(time.Second * 10)
 	}
 }
-
+func (metaso *MetaSo) SyncPendingPEVF() (err error) {
+	for {
+		metaso.syncPendingPEV()
+		time.Sleep(time.Minute * 5)
+	}
+}
 func (metaso *MetaSo) synchTweet() (err error) {
 	last, err := mongodb.GetSyncLastId("tweet")
 	if err != nil {

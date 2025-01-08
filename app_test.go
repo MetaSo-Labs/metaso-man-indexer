@@ -7,11 +7,13 @@ import (
 	"manindexer/adapter/bitcoin"
 	"manindexer/basicprotocols/metaaccess"
 	"manindexer/basicprotocols/metaso"
+	"manindexer/basicprotocols/mrc721"
 	"manindexer/common"
 	"manindexer/database"
 	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/pin"
+	"math/big"
 	"net/url"
 	"strconv"
 	"testing"
@@ -236,4 +238,47 @@ func TestUrlEncode(t *testing.T) {
 func TestPinHost(t *testing.T) {
 	b, h, p := pin.ValidHostPath("/aa/bb/cc")
 	fmt.Println(b, h, p)
+}
+func octalStringToDecimal(octalStr string, intNum int, divisor float64) (*float64, error) {
+	decimalNum := new(big.Int)
+	base := big.NewInt(8)
+	for _, char := range octalStr {
+		digit := int64(char - '0')
+		if digit < 0 || digit > 7 {
+			return nil, fmt.Errorf("err: %c", char)
+		}
+
+		decimalNum.Mul(decimalNum, base)
+		decimalNum.Add(decimalNum, big.NewInt(digit))
+	}
+	bigIntStrFull := decimalNum.String()
+	bingIntStr := ""
+	if len(bigIntStrFull) > intNum {
+		bingIntStr = bigIntStrFull[:intNum]
+	} else {
+		bingIntStr = bigIntStrFull
+	}
+	firstFourInt, err := strconv.Atoi(bingIntStr)
+	if err != nil {
+		return nil, err
+	}
+	result := float64(firstFourInt) / divisor
+	//rounded := math.Round(result*10000) / 10000
+	return &result, nil
+}
+
+func TestPopValue(t *testing.T) {
+	octalStr1 := "11042570125615234640004625102106357306043255550550076564537140365102132415230142366044306202554235231160276211343053103755346436433707052743553203325000000000000000000000"
+	//octalStr1 = octalStr1[:20]
+	decimalNum1, _ := octalStringToDecimal(octalStr1, 4, 10000)
+	fmt.Println("mvc pop:", octalStr1)
+	fmt.Println("MVC", len("000000000000000000000"), "0，Value=", *decimalNum1)
+	octalStr1 = "25732332603521704665072554007343661227204215575466401372767200614232166343735662202410272547004153704147775065263545712557515043367451760000000000000000000000000000000000"
+	//octalStr1 = octalStr1[:20]
+	decimalNum1, _ = octalStringToDecimal(octalStr1, 4, 10000)
+	fmt.Println("btc pop:", octalStr1)
+	fmt.Println("BTC", len("000000000000000000000000000000000"), "0，Value=", *decimalNum1)
+}
+func TestMrc721SysnAddress(t *testing.T) {
+	mrc721.SyncAddress()
 }

@@ -233,3 +233,36 @@ func getPinOutput(list []*Mrc721ItemDescPin) {
 		}
 	}
 }
+
+func SyncAddress() (err error) {
+	pipeline := mongo.Pipeline{
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: mongodb.PinsCollection},
+				{Key: "localField", Value: "itempinid"},
+				{Key: "foreignField", Value: "id"},
+				{Key: "as", Value: "matchedA"},
+			}},
+		},
+		bson.D{
+			{Key: "$unwind", Value: bson.D{
+				{Key: "path", Value: "$matchedA"},
+				{Key: "preserveNullAndEmptyArrays", Value: false},
+			}},
+		},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "address", Value: "$matchedA.address"},
+			}},
+		},
+		bson.D{
+			{Key: "$merge", Value: bson.D{
+				{Key: "into", Value: Mrc721Item},
+				{Key: "whenMatched", Value: "merge"},
+			}},
+		},
+	}
+	_, err = mongoClient.Collection(Mrc721Item).Aggregate(context.TODO(), pipeline)
+
+	return
+}

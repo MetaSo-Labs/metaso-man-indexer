@@ -2,6 +2,7 @@ package metaso
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"manindexer/common"
 	"manindexer/common/mongo_util"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -37,6 +39,7 @@ const (
 	MetaSoMDVBlockData      string = "metaso_block_mdvdata"
 	MetaSoNDVBlockData      string = "metaso_block_ndvdata"
 	MetaSoBlockInfoData     string = "metaso_block_info"
+	MetaSoHostAddressData   string = "metaso_host_address"
 )
 
 var DataFilter = bson.D{
@@ -70,6 +73,14 @@ func ConnectMongoDb() {
 	mongoClient = client.Database(mg.DbName)
 	createIndex(mongoClient)
 	createBuzzView()
+}
+func Decimal128ToDecimal(d primitive.Decimal128) (decimal.Decimal, error) {
+	decimalStr := d.String()
+	result, err := decimal.NewFromString(decimalStr)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("Decimal128ToDecimal faild: %v", err)
+	}
+	return result, nil
 }
 func createIndex(mongoClient *mongo.Database) {
 	//Tweet
@@ -127,6 +138,8 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoNDVBlockData, "host_block_1", bson.D{{Key: "host", Value: 1}, {Key: "block", Value: 1}}, true)
 	//MetaSoBlockInfoData
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoBlockInfoData, "block_1", bson.D{{Key: "block", Value: 1}}, true)
+	//MetaSoHostAddressData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoHostAddressData, "host_address_block_1", bson.D{{Key: "host", Value: 1}, {Key: "address", Value: 1}, {Key: "block", Value: 1}}, true)
 }
 func createBuzzView() {
 	views, err := mongoClient.ListCollectionNames(context.Background(), bson.M{"name": BuzzView})

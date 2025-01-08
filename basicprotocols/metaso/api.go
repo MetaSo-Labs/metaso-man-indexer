@@ -21,8 +21,6 @@ func Api(r *gin.Engine) {
 	hostGroup.GET("/block/sync-newest", syncNewest2)
 	hostGroup.GET("/block/ndv", blockNDV)
 	hostGroup.GET("/block/mdv", blockMDV)
-	hostGroup.GET("/ndv", ndvPageList)
-	hostGroup.GET("/mdv", mdvPageList)
 	hostGroup.GET("/info", hostInfo)
 	ftGroup := r.Group("/ft")
 	ftGroup.Use(CorsMiddleware())

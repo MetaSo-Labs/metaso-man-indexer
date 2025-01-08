@@ -41,6 +41,7 @@ func main() {
 		metaso.ConnectMongoDb()
 		go ms.Synchronization()
 		go ms.SyncPEV()
+		go ms.SyncPendingPEVF()
 	}
 	if common.ModuleExist("metaname") {
 		mn := metaname.MetaName{}

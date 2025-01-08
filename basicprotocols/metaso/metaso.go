@@ -1,6 +1,11 @@
 package metaso
 
 import (
+	"fmt"
+	"math/big"
+	"strconv"
+
+	"github.com/shopspring/decimal"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -151,19 +156,26 @@ type MempoolData struct {
 
 // PIN Engagement Value
 type PEVData struct {
-	Host             string  `json:"host"`
-	FromPINId        string  `json:"fromPINId"`
-	ToPINId          string  `json:"toPINId"`
-	Path             string  `json:"path"`
-	Address          string  `json:"address"`
-	MetaId           string  `json:"metaId"`
-	FromChainName    string  `json:"fromChainName"`
-	ToChainName      string  `json:"toChainName"`
-	MetaBlockHeight  int64   `json:"metaBlockHeight"`
-	StartBlockHeight int64   `json:"startBlockHeight"`
-	EndBlockHeight   int64   `json:"endBlockHeight"`
-	BlockHeight      int64   `json:"blockHeight"`
-	IncrementalValue float64 `json:"incrementalValue"`
+	Host             string          `json:"host"`
+	FromPINId        string          `json:"fromPINId"`
+	ToPINId          string          `json:"toPINId"`
+	Path             string          `json:"path"`
+	Address          string          `json:"address"`
+	MetaId           string          `json:"metaId"`
+	FromChainName    string          `json:"fromChainName"`
+	ToChainName      string          `json:"toChainName"`
+	MetaBlockHeight  int64           `json:"metaBlockHeight"`
+	StartBlockHeight int64           `json:"startBlockHeight"`
+	EndBlockHeight   int64           `json:"endBlockHeight"`
+	BlockHeight      int64           `json:"blockHeight"`
+	IncrementalValue decimal.Decimal `json:"incrementalValue"`
+	Poplv            int             `json:"poplv"`
+}
+type LastMetaBlockData struct {
+	BlockData  MetaBlockData `json:"blockData"`
+	LastNumber int64         `json:"lastNumber"`
+	Step       int           `json:"step"`
+	Init       int64         `json:"init"`
 }
 type MetaBlockData struct {
 	Header          string               `json:"header"`
@@ -176,51 +188,95 @@ type MetaBlockData struct {
 	TxIndex         int                  `json:"txIndex"`
 }
 type MetaBlockChainData struct {
-	Chain      string `json:"chain"`
-	StartBlock string `json:"startBlock"`
-	EndBlock   string `json:"endBlock"`
+	Chain       string `json:"chain"`
+	PreEndBlock string `json:"preEndBlock"`
+	StartBlock  string `json:"startBlock"`
+	EndBlock    string `json:"endBlock"`
 }
 
 // MetaSoMDV
 type MetaSoMDV struct {
-	MetaId    string  `json:"metaId"`
-	Address   string  `json:"address"`
-	DataValue float64 `json:"dataValue"`
+	MetaId    string          `json:"metaId"`
+	Address   string          `json:"address"`
+	DataValue decimal.Decimal `json:"dataValue"`
 }
 
 // MteaSoNDV
 type MetaSoNDV struct {
-	Host      string  `json:"host"`
-	DataValue float64 `json:"dataValue"`
+	Host      string          `json:"host"`
+	DataValue decimal.Decimal `json:"dataValue"`
 }
 
 // MetaSoBlockInfo
 type MetaSoBlockInfo struct {
-	Block            int64   `json:"block"`
-	HistoryValue     float64 `json:"historyValue"`
-	DataValue        float64 `json:"dataValue"`
-	PinNumber        int64   `json:"pinNumber"`
-	PinNumberHasHost int64   `json:"pinNumberHasHost"`
-	AddressNumber    int64   `json:"addressNumber"`
-	HostNumber       int64   `json:"hostNumber"`
+	Block            int64           `json:"block"`
+	HistoryValue     decimal.Decimal `json:"historyValue"`
+	DataValue        decimal.Decimal `json:"dataValue"`
+	PinNumber        int64           `json:"pinNumber"`
+	PinNumberHasHost int64           `json:"pinNumberHasHost"`
+	AddressNumber    int64           `json:"addressNumber"`
+	HostNumber       int64           `json:"hostNumber"`
+	MetaBlock        MetaBlockData   `json:"metaBlock"`
+	BlockTime        int64           `json:"blockTime"`
 }
 
 // MetaSoBlockMDV
 type MetaSoBlockMDV struct {
-	MetaId           string  `json:"metaId"`
-	Address          string  `json:"address"`
-	Block            int64   `json:"block"`
-	HistoryValue     float64 `json:"historyValue"`
-	DataValue        float64 `json:"dataValue"`
-	PinNumber        int64   `json:"pinNumber"`
-	PinNumberHasHost int64   `json:"pinNumberHasHost"`
+	MetaId           string          `json:"metaId"`
+	Address          string          `json:"address"`
+	Block            int64           `json:"block"`
+	HistoryValue     decimal.Decimal `json:"historyValue"`
+	DataValue        decimal.Decimal `json:"dataValue"`
+	PinNumber        int64           `json:"pinNumber"`
+	PinNumberHasHost int64           `json:"pinNumberHasHost"`
+	BlockTime        int64           `json:"blockTime"`
 }
 
 // MetaSoBlockNDV
 type MetaSoBlockNDV struct {
-	Host         string  `json:"host"`
-	Block        int64   `json:"block"`
-	HistoryValue float64 `json:"historyValue"`
-	DataValue    float64 `json:"dataValue"`
-	PinNumber    int64   `json:"pinNumber"`
+	Host         string          `json:"host"`
+	Block        int64           `json:"block"`
+	HistoryValue decimal.Decimal `json:"historyValue"`
+	DataValue    decimal.Decimal `json:"dataValue"`
+	PinNumber    int64           `json:"pinNumber"`
+	BlockTime    int64           `json:"blockTime"`
+}
+type MetaSoHostAddress struct {
+	Host             string          `json:"host"`
+	MetaId           string          `json:"metaId"`
+	Address          string          `json:"address"`
+	Block            int64           `json:"block"`
+	HistoryValue     decimal.Decimal `json:"historyValue"`
+	DataValue        decimal.Decimal `json:"dataValue"`
+	PinNumber        int64           `json:"pinNumber"`
+	PinNumberHasHost int64           `json:"pinNumberHasHost"`
+	BlockTime        int64           `json:"blockTime"`
+}
+
+func OctalStringToDecimal(octalStr string, intNum int, divisor float64) (*float64, error) {
+	decimalNum := new(big.Int)
+	base := big.NewInt(8)
+	for _, char := range octalStr {
+		digit := int64(char - '0')
+		if digit < 0 || digit > 7 {
+			return nil, fmt.Errorf("err: %c", char)
+		}
+
+		decimalNum.Mul(decimalNum, base)
+		decimalNum.Add(decimalNum, big.NewInt(digit))
+	}
+	bigIntStrFull := decimalNum.String()
+	bingIntStr := ""
+	if len(bigIntStrFull) > intNum {
+		bingIntStr = bigIntStrFull[:intNum]
+	} else {
+		bingIntStr = bigIntStrFull
+	}
+	firstFourInt, err := strconv.Atoi(bingIntStr)
+	if err != nil {
+		return nil, err
+	}
+	result := float64(firstFourInt) / divisor
+	//rounded := math.Round(result*10000) / 10000
+	return &result, nil
 }
