@@ -56,6 +56,7 @@ type Tweet struct {
 	CommentCount       int                `json:"commentCount" bson:"commentcount"`
 	ShareCount         int                `json:"shareCount" bson:"sharecount"`
 	Hot                int                `json:"hot" bson:"hot"`
+	DonateCount        int                `json:"donateCount" bson:"donatecount"`
 }
 type SyncLastId struct {
 	Tweet        primitive.ObjectID `bson:"tweet"`
@@ -279,4 +280,19 @@ func OctalStringToDecimal(octalStr string, intNum int, divisor float64) (*float6
 	result := float64(firstFourInt) / divisor
 	//rounded := math.Round(result*10000) / 10000
 	return &result, nil
+}
+
+type MetasoDonate struct {
+	PinId         string          `json:"pinId" bson:"pinid"`
+	PinNumber     int64           `json:"pinNumber" bson:"pinnumber"`
+	ChainName     string          `json:"chainName" bson:"chainname"`
+	CreateAddress string          `json:"createAddress" bson:"createaddress"`
+	CreateMetaid  string          `json:"CreateMetaid" bson:"createmetaid"`
+	Timestamp     int64           `json:"timestamp" bson:"timestamp"`
+	CreateTime    string          `json:"createTime" bson:"createTime"`
+	ToAddress     string          `json:"toAddress" bson:"toAddress"`
+	CoinType      string          `json:"coinType" bson:"coinType"`
+	Amount        decimal.Decimal `json:"amount" bson:"amount"`
+	ToPin         string          `json:"toPin" bson:"toPin"`
+	Message       string          `json:"message" bson:"message"`
 }

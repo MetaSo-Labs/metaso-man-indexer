@@ -14,6 +14,7 @@ func (metaso *MetaSo) Synchronization() {
 	for {
 		metaso.synchTweet()
 		metaso.synchTweetLike()
+		metaso.synchMeatsoDonate()
 		metaso.synchTweetComment()
 		metaso.syncHostData()
 		metaso.syncMrc20TickData()

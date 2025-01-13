@@ -163,7 +163,7 @@ func getMetaBlock(height int64) (metaBlock *MetaBlockData) {
 	url := fmt.Sprintf("%s/api/block/info?number=%d", common.Config.Statistics.MetaChainHost, height)
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println("Error making GET request:", err)
+		//fmt.Println("Error making GET request:", err)
 		return
 	}
 	defer resp.Body.Close()

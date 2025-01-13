@@ -88,7 +88,7 @@ func getBlockNDVPageList(height, cursor, size int64) (info metaBlockHostInfo, li
 }
 func getHostValuePageList(heightBegin, heightEnd, timeBegin, timeEnd int64, host string, cursor, size int64) (list []*metaBlockHostItem, total int64, err error) {
 	filter := bson.D{}
-	if heightBegin > 0 && heightEnd > 0 {
+	if heightBegin >= -1 && heightEnd >= -1 {
 		filter = append(filter, bson.E{Key: "block", Value: bson.D{{Key: "$gte", Value: heightBegin}, {Key: "$lte", Value: heightEnd}}})
 	}
 	if timeBegin >= 0 && timeEnd > timeBegin {
@@ -136,7 +136,7 @@ func getHostAddressValuePageList(heightBegin, heightEnd, timeBegin, timeEnd int6
 		host = "metabitcoin.unknown"
 	}
 	filter := bson.D{}
-	if heightBegin >= 0 && heightEnd > heightBegin {
+	if heightBegin >= -1 && heightEnd >= -1 {
 		filter = append(filter, bson.E{Key: "block", Value: bson.D{{Key: "$gte", Value: heightBegin}, {Key: "$lte", Value: heightEnd}}})
 	}
 	if timeBegin > 0 && timeEnd > 0 {
@@ -197,7 +197,7 @@ func getHostAddressValue(heightBegin, heightEnd, timeBegin, timeEnd int64, host 
 	}
 	filter := bson.D{}
 	filter = append(filter, bson.E{Key: "address", Value: address})
-	if heightBegin >= 0 && heightEnd > heightBegin {
+	if heightBegin >= -1 && heightEnd >= -1 {
 		filter = append(filter, bson.E{Key: "block", Value: bson.D{{Key: "$gte", Value: heightBegin}, {Key: "$lte", Value: heightEnd}}})
 	}
 	if timeBegin > 0 && timeEnd > 0 {

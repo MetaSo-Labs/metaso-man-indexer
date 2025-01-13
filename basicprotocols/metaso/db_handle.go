@@ -40,6 +40,7 @@ const (
 	MetaSoNDVBlockData      string = "metaso_block_ndvdata"
 	MetaSoBlockInfoData     string = "metaso_block_info"
 	MetaSoHostAddressData   string = "metaso_host_address"
+	MetaSoDonateData        string = "metaso_donate_data"
 )
 
 var DataFilter = bson.D{
@@ -140,6 +141,11 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoBlockInfoData, "block_1", bson.D{{Key: "block", Value: 1}}, true)
 	//MetaSoHostAddressData
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoHostAddressData, "host_address_block_1", bson.D{{Key: "host", Value: 1}, {Key: "address", Value: 1}, {Key: "block", Value: 1}}, true)
+	//MetaSoDonateData
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoDonateData, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, true)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoDonateData, "topin_1", bson.D{{Key: "topin", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoDonateData, "createaddress_1", bson.D{{Key: "createaddress", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoDonateData, "toaddress_1", bson.D{{Key: "toaddress", Value: 1}}, false)
 }
 func createBuzzView() {
 	views, err := mongoClient.ListCollectionNames(context.Background(), bson.M{"name": BuzzView})
