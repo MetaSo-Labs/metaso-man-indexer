@@ -6,6 +6,7 @@ import (
 	"manindexer/common"
 	"manindexer/database/mongodb"
 
+	"github.com/shopspring/decimal"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -14,6 +15,7 @@ import (
 var MempoolDataFilter = bson.D{
 	{Key: "$or", Value: bson.A{
 		bson.D{{Key: "path", Value: "/protocols/paylike"}},
+		bson.D{{Key: "path", Value: "/protocols/simpledonate"}},
 		bson.D{{Key: "path", Value: "/protocols/paycomment"}},
 		bson.D{{Key: "path", Value: "/follow"}},
 		bson.D{{Key: "path", Value: "/unfollow"}},
@@ -78,6 +80,8 @@ func (metaso *MetaSo) getSyncMempoolData(pinNode *Tweet) (mempoolData *MempoolDa
 	switch pinNode.Path {
 	case "/protocols/paylike":
 		err = getPaylikeData(pinNode, mempoolData)
+	case "/protocols/simpledonate":
+		err = getSimpleDonatData(pinNode, mempoolData)
 	case "/protocols/paycomment":
 		err = getCommenteData(pinNode, mempoolData)
 	case "/follow":
@@ -117,7 +121,36 @@ func getPaylikeData(pinNode *Tweet, mempoolData *MempoolData) (err error) {
 	mempoolData.Content = string(contentByte)
 	return
 }
-
+func getSimpleDonatData(pinNode *Tweet, mempoolData *MempoolData) (err error) {
+	var pinDonate DonateProtocols
+	err = json.Unmarshal(pinNode.ContentBody, &pinDonate)
+	if err != nil {
+		return
+	}
+	amt, err := decimal.NewFromString(pinDonate.Amount)
+	if err != nil {
+		return
+	}
+	donate := MetasoDonate{
+		PinId:         pinNode.Id,
+		PinNumber:     pinNode.Number,
+		ChainName:     pinNode.ChainName,
+		CreateAddress: pinNode.Address,
+		CreateMetaid:  common.GetMetaIdByAddress(pinNode.Address),
+		Timestamp:     pinNode.Timestamp,
+		CreateTime:    pinDonate.CreateTime,
+		ToAddress:     pinDonate.To,
+		CoinType:      pinDonate.CoinType,
+		Amount:        amt,
+		ToPin:         pinDonate.ToPin,
+		Message:       pinDonate.Message,
+	}
+	mempoolData.Target = donate.ToPin
+	var contentByte []byte
+	contentByte, err = json.Marshal(donate)
+	mempoolData.Content = string(contentByte)
+	return
+}
 func getCommenteData(pinNode *Tweet, mempoolData *MempoolData) (err error) {
 	var pinComment PinComment
 	err = json.Unmarshal(pinNode.ContentBody, &pinComment)

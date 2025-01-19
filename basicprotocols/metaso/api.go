@@ -101,12 +101,12 @@ func hot(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
 }
 func info(ctx *gin.Context) {
-	tweet, comments, like, err := getInfo(ctx.Query("pinId"))
+	tweet, comments, like, donates, err := getInfo(ctx.Query("pinId"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
 	}
-	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"tweet": tweet, "comments": comments, "like": like}))
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"tweet": tweet, "comments": comments, "like": like, "donates": donates}))
 }
 
 type followItem struct {

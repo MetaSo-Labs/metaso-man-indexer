@@ -57,6 +57,7 @@ type Tweet struct {
 	ShareCount         int                `json:"shareCount" bson:"sharecount"`
 	Hot                int                `json:"hot" bson:"hot"`
 	DonateCount        int                `json:"donateCount" bson:"donatecount"`
+	Host               string             `json:"host"`
 }
 type SyncLastId struct {
 	Tweet        primitive.ObjectID `bson:"tweet"`
@@ -289,10 +290,10 @@ type MetasoDonate struct {
 	CreateAddress string          `json:"createAddress" bson:"createaddress"`
 	CreateMetaid  string          `json:"CreateMetaid" bson:"createmetaid"`
 	Timestamp     int64           `json:"timestamp" bson:"timestamp"`
-	CreateTime    string          `json:"createTime" bson:"createTime"`
-	ToAddress     string          `json:"toAddress" bson:"toAddress"`
-	CoinType      string          `json:"coinType" bson:"coinType"`
+	CreateTime    string          `json:"createTime" bson:"createtime"`
+	ToAddress     string          `json:"toAddress" bson:"toaddress"`
+	CoinType      string          `json:"coinType" bson:"cointype"`
 	Amount        decimal.Decimal `json:"amount" bson:"amount"`
-	ToPin         string          `json:"toPin" bson:"toPin"`
+	ToPin         string          `json:"toPin" bson:"topin"`
 	Message       string          `json:"message" bson:"message"`
 }

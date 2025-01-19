@@ -149,6 +149,10 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 	go indexer.ZmqRun(msg)
 	for x := range msg {
 		for _, pinNode := range x.PinList {
+			onlyHost := common.Config.MetaSo.OnlyHost
+			if onlyHost != "" && pinNode.Host != onlyHost {
+				continue
+			}
 			if !pinNode.IsTransfered {
 				handleMempoolPin(pinNode)
 			} else if pinNode.IsTransfered {
@@ -315,7 +319,7 @@ func DoIndexerRun(chainName string, height int64) (err error) {
 		DbAdapter.BatchUpsertMetaIdInfoAddition(infoAdditional)
 	}
 	//Handle MRC20 last.
-	if height >= Mrc20HeightLimit[chainName] {
+	if height >= Mrc20HeightLimit[chainName] && common.ModuleExist("mrc20") {
 		Mrc20Handle(chainName, height, mrc20List, mrc20TransferPinTx, txInList, false)
 	}
 	// if len(pinNodeList) > 0 && height >= Mrc20HeightLimit[chainName] {

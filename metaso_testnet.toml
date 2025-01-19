@@ -1,0 +1,48 @@
+version = "0.1"
+net = "testnet"
+protocolID = "746573746964"
+module = ["metaso"]
+[metaso]
+syncMode = "db"
+mongoNodeURI = "mongodb://ckleing:qdsbzdHZGpx7g8@47.238.171.212:3369"
+onlyHost = ""
+[sync]
+syncAllData = true
+syncBeginTime = ""
+syncEndTime = ""
+syncProtocols = []
+#testnet3
+[btc]
+initialHeight = 2821010
+mrc20Height = 2821010
+rpcHost = "8.217.235.20:36332"
+rpcUser = "ttiziy"
+rpcPass = "dk1GyqQ1jh0Pdj"
+rpcHttpPostMode = true
+rpcDisableTLS = true
+zmqHost = "tcp://8.217.235.20:26333"
+popCutNum = 18
+[mvc]
+#initialHeight = 91797
+initialHeight = 93702
+mrc20Height = 93702
+rpcHost = "47.243.174.112:9883"
+rpcUser = "velicdk"
+rpcPass = "vveold25c8"
+rpcHttpPostMode = true
+rpcDisableTLS = true
+zmqHost = "tcp://47.243.174.112:15555"
+popCutNum = 8
+
+[mongodb]
+mongoURI = "mongodb://root:123456@127.0.0.1:27017"
+dbName = "man_testnet3"
+poolSize = 200
+timeOut = 20
+[pebble]
+dir = "./pebble_data"
+[web]
+port = ":7777"
+pemFile = ""
+keyFile = ""
+host = "https://man-test.metaid.io"

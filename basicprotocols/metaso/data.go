@@ -2,6 +2,7 @@ package metaso
 
 import (
 	"context"
+	"manindexer/common"
 	"manindexer/database/mongodb"
 	"time"
 
@@ -61,7 +62,11 @@ func (metaso *MetaSo) synchTweet() (err error) {
 
 	var insertDocs []interface{}
 	var lastId primitive.ObjectID
+	onlyHost := common.Config.MetaSo.OnlyHost
 	for _, doc := range pinList {
+		if onlyHost != "" && doc.Host != onlyHost {
+			continue
+		}
 		insertDocs = append(insertDocs, doc)
 		if mongodb.CompareObjectIDs(doc.MogoID, lastId) > 0 {
 			lastId = doc.MogoID

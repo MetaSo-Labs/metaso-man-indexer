@@ -45,8 +45,11 @@ type Statistics struct {
 	AllowProtocols []string `toml:"allowProtocols"`
 }
 type metasoConfig struct {
-	Pubkey string `toml:"pubkey"`
-	Prikey string `toml:"prikey"`
+	Pubkey       string `toml:"pubkey"`
+	Prikey       string `toml:"prikey"`
+	MongoNodeURI string `toml:"mongoNodeURI"`
+	SyncMode     string `toml:"syncMode"`
+	OnlyHost     string `toml:"onlyHost"`
 }
 type protocols struct {
 	Key     string          `toml:"key"`
@@ -150,7 +153,14 @@ func InitConfig() {
 			Config.MongoDb.MongoURI = *v
 		case "mongo_db_name":
 			Config.MongoDb.DbName = *v
+		case "sync_mode":
+			Config.MetaSo.SyncMode = *v
+		case "mongo_node_uri":
+			Config.MetaSo.MongoNodeURI = *v
+		case "only_host":
+			Config.MetaSo.OnlyHost = *v
 		}
+
 	}
 	if TestNet == "1" {
 		Config.Btc.PopCutNum = 17
@@ -196,6 +206,10 @@ func GetFlagConfig() (flagConfig map[string]*string, configFile string) {
 	flagConfig["domain_name"] = flag.String("domain_name", "", "domain name")
 	flagConfig["mongo_uri"] = flag.String("mongo_uri", "", "mongodb uri")
 	flagConfig["mongo_db_name"] = flag.String("mongo_db_name", "", "mongodb database name")
+	flagConfig["sync_mode"] = flag.String("sync_mode", "", "metaso sync mode")
+	flagConfig["mongo_node_uri"] = flag.String("mongo_node_uri", "", "mongo node uri")
+	flagConfig["only_host"] = flag.String("only_host", "", "metaso only_host")
+
 	//reindex := flag.String("reindex", "", "reindex block height,from:to")
 	if !flag.Parsed() {
 		flag.Parse()

@@ -14,7 +14,8 @@ import (
 
 type TweetWithLike struct {
 	Tweet
-	Like []string `json:"like"`
+	Like   []string `json:"like"`
+	Donate []string `json:"donate"`
 }
 
 func getNewest(lastId string, size int64, listType string, metaid string, followed string) (listData []*TweetWithLike, total int64, err error) {
@@ -69,17 +70,35 @@ func getNewest(lastId string, size int64, listType string, metaid string, follow
 				if item.Id == data.Target && data.Path == "/protocols/paycomment" {
 					item.CommentCount += 1
 				}
+				if item.Id == data.Target && data.Path == "/protocols/simpledonate" {
+					item.DonateCount += 1
+				}
 			}
 		}
+	}
+	checkMap := make(map[string]*TweetWithLike, len(list))
+	for _, item := range list {
+		checkMap[item.Id] = &TweetWithLike{Tweet: *item, Like: []string{}, Donate: []string{}}
 	}
 	likeMap, err := batchGetPayLike(pinIdList)
 	if err == nil {
 		for _, item := range list {
 			if v, ok := likeMap[item.Id]; ok {
-				listData = append(listData, &TweetWithLike{Tweet: *item, Like: v})
-			} else {
-				listData = append(listData, &TweetWithLike{Tweet: *item, Like: []string{}})
+				checkMap[item.Id].Like = v
 			}
+		}
+	}
+	donateMap, err := batchGetSimpleDonat(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			if v, ok := donateMap[item.Id]; ok {
+				checkMap[item.Id].Donate = v
+			}
+		}
+	}
+	for _, item := range list {
+		if v, ok := checkMap[item.Id]; ok {
+			listData = append(listData, v)
 		}
 	}
 	total, err = mongoClient.Collection(BuzzView).CountDocuments(context.TODO(), totalFilter)
@@ -142,6 +161,29 @@ func batchGetPayLike(pinIdList []string) (list map[string][]string, err error) {
 	}
 	return
 }
+func batchGetSimpleDonat(pinIdList []string) (list map[string][]string, err error) {
+	list = make(map[string][]string)
+	filter1 := bson.D{{Key: "topin", Value: bson.D{{Key: "$in", Value: pinIdList}}}}
+	result, err := mongoClient.Collection(MetaSoDonateData).Find(context.TODO(), filter1)
+	var donatList []*MetasoDonate
+	if err == nil {
+		result.All(context.TODO(), &donatList)
+	}
+	for _, donat := range donatList {
+		list[donat.ToPin] = append(list[donat.ToPin], donat.CreateMetaid)
+	}
+	//mempool
+	filter2 := bson.D{{Key: "target", Value: bson.D{{Key: "$in", Value: pinIdList}}}, {Key: "path", Value: "/protocols/simpledonate"}}
+	resultMempool, err := mongoClient.Collection(MetaSoMempoolCollection).Find(context.TODO(), filter2)
+	if err == nil {
+		var mempoolData []MempoolData
+		resultMempool.All(context.TODO(), &mempoolData)
+		for _, data := range mempoolData {
+			list[data.Target] = append(list[data.Target], data.CreateMetaId)
+		}
+	}
+	return
+}
 func deleteSlice(s []string, elem string) []string {
 	r := s[:0]
 	for _, v := range s {
@@ -151,7 +193,7 @@ func deleteSlice(s []string, elem string) []string {
 	}
 	return r
 }
-func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*TweetLike, err error) {
+func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*TweetLike, donates []*MetasoDonate, err error) {
 	filter := bson.D{{Key: "id", Value: pinId}}
 	err = mongoClient.Collection(BuzzView).FindOne(context.TODO(), filter, nil).Decode(&tweet)
 	if err != nil {
@@ -174,6 +216,13 @@ func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*Twee
 	if err == nil {
 		result2.All(context.TODO(), &like)
 	}
+
+	filter5 := bson.D{{Key: "topin", Value: pinId}}
+	result5, err := mongoClient.Collection(MetaSoDonateData).Find(context.TODO(), filter5)
+	if err == nil {
+		result5.All(context.TODO(), &donates)
+	}
+
 	//mempool
 	filter4 := bson.D{{Key: "target", Value: pinId}}
 	resultMempool, err := mongoClient.Collection(MetaSoMempoolCollection).Find(context.TODO(), filter4)
@@ -196,6 +245,13 @@ func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*Twee
 			if err == nil {
 				comments = append(comments, &commentData)
 				tweet.CommentCount += 1
+			}
+		} else if data.Path == "/protocols/simpledonate" {
+			var donatedata MetasoDonate
+			err := json.Unmarshal([]byte(data.Content), &donatedata)
+			if err == nil {
+				donates = append(donates, &donatedata)
+				tweet.DonateCount += 1
 			}
 		}
 	}

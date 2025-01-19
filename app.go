@@ -39,6 +39,9 @@ func main() {
 	if common.ModuleExist("metaso") {
 		ms := metaso.MetaSo{}
 		metaso.ConnectMongoDb()
+		if common.Config.MetaSo.SyncMode == "db" {
+			ms.SyncPin(500)
+		}
 		go ms.Synchronization()
 		go ms.SyncPEV()
 		go ms.SyncPendingPEVF()
