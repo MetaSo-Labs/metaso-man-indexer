@@ -4,7 +4,7 @@ protocolID = "746573746964"
 module = ["metaso"]
 [metaso]
 syncMode = "db"
-mongoNodeURI = "mongodb://ckleing:qdsbzdHZGpx7g8@47.238.171.212:3369"
+mongoNodeURI = ""
 onlyHost = ""
 [sync]
 syncAllData = true
