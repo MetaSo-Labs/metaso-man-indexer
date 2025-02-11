@@ -25,6 +25,11 @@ func Api(r *gin.Engine) {
 	ftGroup := r.Group("/ft")
 	ftGroup.Use(CorsMiddleware())
 	ftGroup.GET("/mrc20/address/deploy-list", mrc20TickList)
+	settingGroup := r.Group("/metaso/settings")
+	settingGroup.Use(CorsMiddleware())
+	settingGroup.GET("/blocked/list", blockedList)
+	settingGroup.GET("/blocked/add", blockedAdd)
+	settingGroup.GET("/blocked/delete", blockedDelete)
 }
 func CorsMiddleware() gin.HandlerFunc {
 	return func(context *gin.Context) {
@@ -78,7 +83,24 @@ func newest(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception."))
 		return
 	}
-	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
+	var newList []*TweetWithLike
+	for _, item := range list {
+		hostKey := fmt.Sprintf("host_%s", item.Host)
+		metaidKey := fmt.Sprintf("metaid_%s", item.MetaId)
+		pinidKey := fmt.Sprintf("pinid_%s", item.Id)
+		if _, ok := _blockedData[hostKey]; ok {
+			continue
+		}
+		if _, ok := _blockedData[metaidKey]; ok {
+			continue
+		}
+		if _, ok := _blockedData[pinidKey]; ok {
+			continue
+		}
+		newList = append(newList, item)
+	}
+
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": newList, "total": total, "lastId": lastId}))
 }
 func hot(ctx *gin.Context) {
 	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
@@ -286,4 +308,64 @@ func mrc20TickList(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
+}
+
+func blockedList(ctx *gin.Context) {
+	blockType := ctx.Query("blockType")
+	if blockType == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "blockType is null"))
+		return
+	}
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+	list, total, err := getBlockedList(blockType, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total}))
+}
+func blockedAdd(ctx *gin.Context) {
+	blockType := ctx.Query("blockType")
+	if blockType == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "blockType is null"))
+		return
+	}
+	blockContent := ctx.Query("blockContent")
+	if blockContent == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "blockContent is null"))
+		return
+	}
+	err := addBlockedList(blockType, blockContent)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
+}
+func blockedDelete(ctx *gin.Context) {
+	blockType := ctx.Query("blockType")
+	if blockType == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "blockType is null"))
+		return
+	}
+	blockContent := ctx.Query("blockContent")
+	if blockContent == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "blockContent is null"))
+		return
+	}
+	err := deleteBlockedList(blockType, blockContent)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
 }

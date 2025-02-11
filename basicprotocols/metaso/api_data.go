@@ -388,3 +388,29 @@ func getMempoolFollow(metaid string) (list []*string, err error) {
 	}
 	return
 }
+
+func getBlockedList(blockType string, cursor int64, size int64) (list []*BlockedSetting, total int64, err error) {
+	filter := bson.D{{Key: "blockedtype", Value: blockType}}
+	findOptions := options.Find()
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(BlockedSettingData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	total, _ = mongoClient.Collection(BlockedSettingData).CountDocuments(context.TODO(), filter)
+	return
+}
+
+func addBlockedList(blockType string, blockContent string) (err error) {
+	_, err = mongoClient.Collection(BlockedSettingData).InsertOne(context.TODO(), BlockedSetting{BlockedType: blockType, BlockedContent: blockContent})
+	return
+}
+func deleteBlockedList(blockType string, blockContent string) (err error) {
+	filter := bson.D{{Key: "blockedtype", Value: blockType}, {Key: "blockedcontent", Value: blockContent}}
+	_, err = mongoClient.Collection(BlockedSettingData).DeleteOne(context.TODO(), filter)
+	return
+}

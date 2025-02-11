@@ -42,6 +42,7 @@ func main() {
 		if common.Config.MetaSo.SyncMode == "db" {
 			ms.SyncPin(500)
 		}
+		go ms.SynchBlockedSettings()
 		go ms.Synchronization()
 		go ms.SyncPEV()
 		go ms.SyncPendingPEVF()

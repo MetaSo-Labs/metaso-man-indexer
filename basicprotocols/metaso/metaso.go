@@ -297,3 +297,8 @@ type MetasoDonate struct {
 	ToPin         string          `json:"toPin" bson:"topin"`
 	Message       string          `json:"message" bson:"message"`
 }
+
+type BlockedSetting struct {
+	BlockedType    string `json:"blockedType"`
+	BlockedContent string `json:"blockedContent"`
+}
