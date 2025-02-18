@@ -89,13 +89,13 @@ func newest(ctx *gin.Context) {
 		metaidKey := fmt.Sprintf("metaid_%s", item.MetaId)
 		pinidKey := fmt.Sprintf("pinid_%s", item.Id)
 		if _, ok := _blockedData[hostKey]; ok {
-			continue
+			item.Blocked = true
 		}
 		if _, ok := _blockedData[metaidKey]; ok {
-			continue
+			item.Blocked = true
 		}
 		if _, ok := _blockedData[pinidKey]; ok {
-			continue
+			item.Blocked = true
 		}
 		newList = append(newList, item)
 	}
@@ -128,7 +128,14 @@ func info(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
 	}
-	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"tweet": tweet, "comments": comments, "like": like, "donates": donates}))
+	blocked := false
+	pinidKey := fmt.Sprintf("pinid_%s", tweet.Id)
+
+	if _, ok := _blockedData[pinidKey]; ok {
+		blocked = true
+	}
+
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"tweet": tweet, "comments": comments, "like": like, "donates": donates, "blocked": blocked}))
 }
 
 type followItem struct {

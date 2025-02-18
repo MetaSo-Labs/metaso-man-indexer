@@ -19,6 +19,7 @@ var (
 
 func (metaso *MetaSo) Synchronization() {
 	_blockedData = map[string]struct{}{}
+	fixHost()
 	for {
 		metaso.synchTweet()
 		metaso.synchTweetLike()
@@ -36,6 +37,14 @@ func (metaso *MetaSo) SyncPEV() (err error) {
 		time.Sleep(time.Second * 10)
 	}
 }
+func fixHost() {
+	fixed, _ := mongodb.GetSyncLastNumber("fixhost")
+	if fixed == -1 {
+		mongoClient.Collection(TweetCollection).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "tweet"})
+	}
+	mongodb.UpdateSyncLastNumber("fixhost", 1)
+}
 func (metaso *MetaSo) SyncPendingPEVF() (err error) {
 	for {
 		metaso.syncPendingPEV()
@@ -49,7 +58,7 @@ func (metaso *MetaSo) SynchBlockedSettings() (err error) {
 	}
 }
 func (metaso *MetaSo) synchBlockedSettings() (err error) {
-	_blockedData = nil
+	_blockedData = map[string]struct{}{}
 	for _, tp := range _typeList {
 		list1, _, err1 := getBlockedList(tp, 0, 10000)
 		if err1 == nil {

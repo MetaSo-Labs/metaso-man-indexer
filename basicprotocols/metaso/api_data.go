@@ -14,8 +14,9 @@ import (
 
 type TweetWithLike struct {
 	Tweet
-	Like   []string `json:"like"`
-	Donate []string `json:"donate"`
+	Like    []string `json:"like"`
+	Donate  []string `json:"donate"`
+	Blocked bool     `json:"blocked"`
 }
 
 func getNewest(lastId string, size int64, listType string, metaid string, followed string) (listData []*TweetWithLike, total int64, err error) {
