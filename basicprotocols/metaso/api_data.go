@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"manindexer/database/mongodb"
 	"manindexer/pin"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -406,8 +407,8 @@ func getBlockedList(blockType string, cursor int64, size int64) (list []*Blocked
 	return
 }
 
-func addBlockedList(blockType string, blockContent string) (err error) {
-	_, err = mongoClient.Collection(BlockedSettingData).InsertOne(context.TODO(), BlockedSetting{BlockedType: blockType, BlockedContent: blockContent})
+func addBlockedList(blockType string, blockContent string, originalContent string) (err error) {
+	_, err = mongoClient.Collection(BlockedSettingData).InsertOne(context.TODO(), BlockedSetting{BlockedType: blockType, BlockedContent: blockContent, Timestamp: time.Now().Unix(), OriginalContent: originalContent})
 	return
 }
 func deleteBlockedList(blockType string, blockContent string) (err error) {

@@ -299,6 +299,8 @@ type MetasoDonate struct {
 }
 
 type BlockedSetting struct {
-	BlockedType    string `json:"blockedType"`
-	BlockedContent string `json:"blockedContent"`
+	BlockedType     string `json:"blockedType"`
+	BlockedContent  string `json:"blockedContent"`
+	Timestamp       int64  `json:"timestamp"`
+	OriginalContent string `json:"originalContent"`
 }

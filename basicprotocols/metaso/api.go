@@ -5,6 +5,7 @@ import (
 	"manindexer/database/mongodb"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -86,15 +87,15 @@ func newest(ctx *gin.Context) {
 	var newList []*TweetWithLike
 	for _, item := range list {
 		hostKey := fmt.Sprintf("host_%s", item.Host)
-		metaidKey := fmt.Sprintf("metaid_%s", item.MetaId)
+		metaidKey := fmt.Sprintf("metaid_%s", item.CreateMetaId)
 		pinidKey := fmt.Sprintf("pinid_%s", item.Id)
-		if _, ok := _blockedData[hostKey]; ok {
+		if _, ok := BlockedData[hostKey]; ok {
 			item.Blocked = true
 		}
-		if _, ok := _blockedData[metaidKey]; ok {
+		if _, ok := BlockedData[metaidKey]; ok {
 			item.Blocked = true
 		}
-		if _, ok := _blockedData[pinidKey]; ok {
+		if _, ok := BlockedData[pinidKey]; ok {
 			item.Blocked = true
 		}
 		newList = append(newList, item)
@@ -129,9 +130,16 @@ func info(ctx *gin.Context) {
 		return
 	}
 	blocked := false
+	hostKey := fmt.Sprintf("host_%s", tweet.Host)
+	metaidKey := fmt.Sprintf("metaid_%s", tweet.CreateMetaId)
 	pinidKey := fmt.Sprintf("pinid_%s", tweet.Id)
-
-	if _, ok := _blockedData[pinidKey]; ok {
+	if _, ok := BlockedData[hostKey]; ok {
+		blocked = true
+	}
+	if _, ok := BlockedData[metaidKey]; ok {
+		blocked = true
+	}
+	if _, ok := BlockedData[pinidKey]; ok {
 		blocked = true
 	}
 
@@ -351,7 +359,11 @@ func blockedAdd(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "blockContent is null"))
 		return
 	}
-	err := addBlockedList(blockType, blockContent)
+	originalContent := ctx.Query("blockContent")
+	if blockType == "host" {
+		blockContent = strings.ToLower(blockContent)
+	}
+	err := addBlockedList(blockType, blockContent, originalContent)
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return

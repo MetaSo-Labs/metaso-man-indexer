@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"manindexer/api/respond"
+	"manindexer/basicprotocols/metaso"
 	"manindexer/common"
 	"manindexer/database"
 	"manindexer/man"
@@ -358,6 +360,7 @@ func getParentNodeById(ctx *gin.Context) {
 type metaInfo struct {
 	*pin.MetaIdInfo
 	Unconfirmed string `json:"unconfirmed"`
+	Blocked     bool   `json:"blocked"`
 }
 
 func getInfoByAddress(ctx *gin.Context) {
@@ -369,7 +372,7 @@ func getInfoByAddress(ctx *gin.Context) {
 	if metaid == nil {
 		metaid = &pin.MetaIdInfo{MetaId: common.GetMetaIdByAddress(ctx.Param("address")), Address: ctx.Param("address")}
 		//ctx.JSON(200, apiError(100, "no metaid found."))
-		ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, ""}))
+		ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, "", false}))
 		return
 	}
 	if metaid.Address == "" {
@@ -378,7 +381,12 @@ func getInfoByAddress(ctx *gin.Context) {
 	if metaid.MetaId == "" {
 		metaid.MetaId = common.GetMetaIdByAddress(ctx.Param("address"))
 	}
-	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed}))
+	metaidKey := fmt.Sprintf("metaid_%s", metaid.MetaId)
+	blocked := false
+	if _, ok := metaso.BlockedData[metaidKey]; ok {
+		blocked = true
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed, blocked}))
 }
 
 func getInfoByMetaId(ctx *gin.Context) {
@@ -390,14 +398,19 @@ func getInfoByMetaId(ctx *gin.Context) {
 	if metaid == nil {
 		metaid = &pin.MetaIdInfo{MetaId: ctx.Param("metaId"), Address: ""}
 		//ctx.JSON(200, apiError(100, "no metaid found."))
-		ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, ""}))
+		ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, "", false}))
 		return
 	}
 
 	if metaid.MetaId == "" {
 		metaid.MetaId = ctx.Param("metaId")
 	}
-	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed}))
+	metaidKey := fmt.Sprintf("metaid_%s", metaid.MetaId)
+	blocked := false
+	if _, ok := metaso.BlockedData[metaidKey]; ok {
+		blocked = true
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed, blocked}))
 }
 func generalQuery(ctx *gin.Context) {
 	var g database.Generator

@@ -13,12 +13,12 @@ import (
 )
 
 var (
-	_blockedData map[string]struct{}
-	_typeList    = []string{"metaid", "host", "pinid"}
+	BlockedData map[string]struct{}
+	_typeList   = []string{"metaid", "host", "pinid"}
 )
 
 func (metaso *MetaSo) Synchronization() {
-	_blockedData = map[string]struct{}{}
+	BlockedData = map[string]struct{}{}
 	fixHost()
 	for {
 		metaso.synchTweet()
@@ -58,13 +58,13 @@ func (metaso *MetaSo) SynchBlockedSettings() (err error) {
 	}
 }
 func (metaso *MetaSo) synchBlockedSettings() (err error) {
-	_blockedData = map[string]struct{}{}
+	BlockedData = map[string]struct{}{}
 	for _, tp := range _typeList {
 		list1, _, err1 := getBlockedList(tp, 0, 10000)
 		if err1 == nil {
 			for _, item := range list1 {
 				key := fmt.Sprintf("%s_%s", tp, item.BlockedContent)
-				_blockedData[key] = struct{}{}
+				BlockedData[key] = struct{}{}
 			}
 		}
 	}
