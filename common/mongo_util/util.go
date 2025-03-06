@@ -34,6 +34,11 @@ func CreateIndexIfNotExists(mongoClient *mongo.Database, collectionName, indexNa
 	}
 	return nil
 }
+func DeleteIndex(mongoClient *mongo.Database, collectionName, indexName string) (err error) {
+	collection := mongoClient.Collection(collectionName)
+	_, err = collection.Indexes().DropOne(context.Background(), indexName)
+	return
+}
 func CreateIndexWithFilterIfNotExists(mongoClient *mongo.Database, collectionName, indexName string, keys bson.D, unique bool, filter bson.D) error {
 	exists, err := checkIndexExists(mongoClient, collectionName, indexName)
 	if err != nil {

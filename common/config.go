@@ -159,6 +159,8 @@ func InitConfig() {
 			Config.MetaSo.MongoNodeURI = *v
 		case "only_host":
 			Config.MetaSo.OnlyHost = *v
+		case "meta_chain":
+			Config.Statistics.MetaChainHost = *v
 		}
 
 	}
@@ -209,7 +211,7 @@ func GetFlagConfig() (flagConfig map[string]*string, configFile string) {
 	flagConfig["sync_mode"] = flag.String("sync_mode", "", "metaso sync mode")
 	flagConfig["mongo_node_uri"] = flag.String("mongo_node_uri", "", "mongo node uri")
 	flagConfig["only_host"] = flag.String("only_host", "", "metaso only_host")
-
+	flagConfig["meta_chain"] = flag.String("meta_chain", "", "metachain host")
 	//reindex := flag.String("reindex", "", "reindex block height,from:to")
 	if !flag.Parsed() {
 		flag.Parse()

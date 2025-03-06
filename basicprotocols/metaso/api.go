@@ -267,7 +267,7 @@ func ndvPageList(ctx *gin.Context) {
 		return
 	}
 
-	list, err := getNdvPageList(ctx.Query("host"), cursor, size, ctx.Query("orderby"))
+	list, err := getNdvPageList(strings.ToLower(ctx.Query("host")), cursor, size, ctx.Query("orderby"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return

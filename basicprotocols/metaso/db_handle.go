@@ -121,7 +121,8 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMempoolCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMempoolCollection, "target_1", bson.D{{Key: "target", Value: 1}}, false)
 	//MetaSoPEVData
-	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "frompinid_1", bson.D{{Key: "frompinid", Value: 1}}, true)
+	mongo_util.DeleteIndex(mongoClient, MetaSoPEVData, "frompinid_1")
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "frompinid_metablockheight_1", bson.D{{Key: "frompinid", Value: 1}, {Key: "metablockheight", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_1", bson.D{{Key: "host", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_metablockheight_1", bson.D{{Key: "host", Value: 1}, {Key: "metablockheight", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "address_1", bson.D{{Key: "address", Value: 1}}, false)

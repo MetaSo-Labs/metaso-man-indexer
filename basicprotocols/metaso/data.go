@@ -20,6 +20,7 @@ var (
 func (metaso *MetaSo) Synchronization() {
 	BlockedData = map[string]struct{}{}
 	fixHost()
+	fixStatistics()
 	for {
 		metaso.synchTweet()
 		metaso.synchTweetLike()
@@ -34,7 +35,7 @@ func (metaso *MetaSo) Synchronization() {
 func (metaso *MetaSo) SyncPEV() (err error) {
 	for {
 		metaso.syncPEV()
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 1)
 	}
 }
 func fixHost() {
@@ -44,6 +45,21 @@ func fixHost() {
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "tweet"})
 	}
 	mongodb.UpdateSyncLastNumber("fixhost", 1)
+}
+func fixStatistics() {
+	fixed, _ := mongodb.GetSyncLastNumber("fixstatistics")
+	if fixed != 5 {
+		mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoMDVData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoNDVData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoMDVBlockData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoNDVBlockData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoBlockInfoData).DeleteMany(context.TODO(), bson.D{})
+		mongoClient.Collection(MetaSoHostAddressData).DeleteMany(context.TODO(), bson.D{})
+
+		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "metablock"})
+	}
+	mongodb.UpdateSyncLastNumber("fixstatistics", 5)
 }
 func (metaso *MetaSo) SyncPendingPEVF() (err error) {
 	for {

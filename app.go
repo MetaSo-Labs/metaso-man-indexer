@@ -23,7 +23,7 @@ var (
 func main() {
 	banner := `
     __  ___  ___     _   __
-   /  |/  / /   |   / | / / v0.0.2.5
+   /  |/  / /   |   / | / / v0.3.26
   / /|_/ / / /| |  /  |/ / 
  / /  / / / ___ | / /|  /  
 /_/  /_/ /_/  |_|/_/ |_/                   
@@ -31,7 +31,7 @@ func main() {
 	fmt.Println(banner)
 	common.InitConfig()
 	man.InitAdapter(common.Chain, common.Db, common.TestNet, common.Server)
-	log.Printf("ManIndex,chain=%s,test=%s,db=%s,server=%s,config=%s", common.Chain, common.TestNet, common.Db, common.Server, common.ConfigFile)
+	log.Printf("ManIndex,chain=%s,test=%s,db=%s,server=%s,config=%s,metaChain=%s", common.Chain, common.TestNet, common.Db, common.Server, common.ConfigFile, common.Config.Statistics.MetaChainHost)
 	if common.Server == "1" {
 		go api.Start(f)
 	}

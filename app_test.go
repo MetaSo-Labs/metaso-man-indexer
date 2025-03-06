@@ -282,3 +282,14 @@ func TestPopValue(t *testing.T) {
 func TestMrc721SysnAddress(t *testing.T) {
 	mrc721.SyncAddress()
 }
+func TestPevCount(t *testing.T) {
+	common.InitConfig()
+	dbAdapter := &mongodb.Mongodb{}
+	dbAdapter.InitDatabase()
+	metaso.ConnectMongoDb()
+	//ms := metaso.MetaSo{}
+	//ms.SyncPEVTest(53)
+	//ms.SyncPEV()
+	//total, err := metaso.GetHostDataSum("154haaqbreb9ty1hed6cwnz41pdn92qqqj")
+	//fmt.Println(err, total)
+}

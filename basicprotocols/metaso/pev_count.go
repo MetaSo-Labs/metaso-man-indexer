@@ -97,7 +97,7 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []inte
 	return
 }
 func getBlockHistoryValue(height int64, key string, value string) (total decimal.Decimal, err error) {
-	filter := bson.D{{Key: "metablockheight", Value: bson.D{{Key: "$lt", Value: height}}}}
+	filter := bson.D{{Key: "metablockheight", Value: bson.D{{Key: "$lt", Value: height}}}, {Key: "metablockheight", Value: bson.D{{Key: "$gt", Value: -1}}}}
 	if key != "" && value != "" {
 		filter = append(filter, bson.E{Key: key, Value: value})
 	}
@@ -122,10 +122,18 @@ func getBlockHistoryValue(height int64, key string, value string) (total decimal
 
 	return
 }
+func getBlockHistory(height int64) (total decimal.Decimal, err error) {
+	filter := bson.D{{Key: "block", Value: height}}
+	var block MetaSoBlockInfo
+	err = mongoClient.Collection(MetaSoBlockInfoData).FindOne(context.TODO(), filter).Decode(&block)
+	total = block.HistoryValue.Add(block.DataValue)
+	return
+}
 func UpdateBlockValue(blockHeight int64, pevList []interface{}, blockTime int64) (err error) {
 	if blockHeight == -1 {
 		mongoClient.Collection(MetaSoNDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
 		mongoClient.Collection(MetaSoMDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
+		mongoClient.Collection(MetaSoHostAddressData).DeleteMany(context.TODO(), bson.M{"block": -1})
 	}
 	var hostMap = make(map[string]*MetaSoBlockNDV)
 	var addressMap = make(map[string]*MetaSoBlockMDV)
@@ -222,7 +230,8 @@ func UpdateBlockValue(blockHeight int64, pevList []interface{}, blockTime int64)
 }
 func UpdateDataValue(hostMap *map[string]struct{}, addressMap *map[string]struct{}) (err error) {
 	for host := range *hostMap {
-		total, err := getHostDataSum(host)
+		total, err := GetHostDataSum(host)
+		//fmt.Println(err, host, total)
 		if err == nil && total.Cmp(decimal.Zero) >= 1 {
 			data := MetaSoNDV{
 				Host:      host,
@@ -245,7 +254,7 @@ func UpdateDataValue(hostMap *map[string]struct{}, addressMap *map[string]struct
 	}
 	return
 }
-func getHostDataSum(host string) (dataValue decimal.Decimal, err error) {
+func GetHostDataSum(host string) (dataValue decimal.Decimal, err error) {
 	filter := bson.D{{Key: "host", Value: host}}
 	match := bson.D{{Key: "$match", Value: filter}}
 	groupStage := bson.D{

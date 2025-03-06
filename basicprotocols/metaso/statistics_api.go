@@ -5,6 +5,7 @@ import (
 	"manindexer/database/mongodb"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -120,7 +121,7 @@ func hostValuePageList(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
 		return
 	}
-	list, total, err := getHostValuePageList(heightBegin, heightEnd, timeBegin, timeEnd, ctx.Query("host"), cursor, size)
+	list, total, err := getHostValuePageList(heightBegin, heightEnd, timeBegin, timeEnd, strings.ToLower(ctx.Query("host")), cursor, size)
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
@@ -194,7 +195,7 @@ func hostAddressValuePageList(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
 		return
 	}
-	list, total, err := getHostAddressValuePageList(heightBegin, heightEnd, timeBegin, timeEnd, ctx.Query("host"), cursor, size)
+	list, total, err := getHostAddressValuePageList(heightBegin, heightEnd, timeBegin, timeEnd, strings.ToLower(ctx.Query("host")), cursor, size)
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
@@ -245,7 +246,7 @@ func hostAddressValue(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
 		return
 	}
-	list, total, err := getHostAddressValue(heightBegin, heightEnd, timeBegin, timeEnd, ctx.Query("host"), ctx.Query("address"), cursor, size)
+	list, total, err := getHostAddressValue(heightBegin, heightEnd, timeBegin, timeEnd, strings.ToLower(ctx.Query("host")), ctx.Query("address"), cursor, size)
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
