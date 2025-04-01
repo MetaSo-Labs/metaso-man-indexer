@@ -95,6 +95,7 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "creatormetaid_1", bson.D{{Key: "creatormetaid", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "number_1", bson.D{{Key: "number", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "operation_1", bson.D{{Key: "operation", Value: 1}}, false)
+	mongo_util.CreateTextIndexIfNotExists(mongoClient, TweetCollection, "tweet_text_1", []string{"keywords"})
 	//payLike
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetLikeCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetLikeCollection, "liketopinid_1", bson.D{{Key: "liketopinid", Value: 1}}, false)
@@ -122,7 +123,8 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMempoolCollection, "target_1", bson.D{{Key: "target", Value: 1}}, false)
 	//MetaSoPEVData
 	mongo_util.DeleteIndex(mongoClient, MetaSoPEVData, "frompinid_1")
-	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "frompinid_metablockheight_1", bson.D{{Key: "frompinid", Value: 1}, {Key: "metablockheight", Value: 1}}, true)
+	mongo_util.DeleteIndex(mongoClient, MetaSoPEVData, "frompinid_metablockheight_1")
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "frompinid_topinid_metablockheight_1", bson.D{{Key: "frompinid", Value: 1}, {Key: "topinid", Value: 1}, {Key: "metablockheight", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_1", bson.D{{Key: "host", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "host_metablockheight_1", bson.D{{Key: "host", Value: 1}, {Key: "metablockheight", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoPEVData, "address_1", bson.D{{Key: "address", Value: 1}}, false)

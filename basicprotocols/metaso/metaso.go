@@ -58,6 +58,7 @@ type Tweet struct {
 	Hot                int                `json:"hot" bson:"hot"`
 	DonateCount        int                `json:"donateCount" bson:"donatecount"`
 	Host               string             `json:"host"`
+	Keywords           []string           `json:"keywords"`
 }
 type SyncLastId struct {
 	Tweet        primitive.ObjectID `bson:"tweet"`

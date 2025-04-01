@@ -1,20 +1,27 @@
 package metaso
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"manindexer/database/mongodb"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
+var serverUrl string
+
 func Api(r *gin.Engine) {
 	accessGroup := r.Group("/social/buzz")
 	accessGroup.Use(CorsMiddleware())
 	accessGroup.GET("/newest", newest)
+	accessGroup.GET("/updater", updater)
 	accessGroup.GET("/hot", hot)
+	accessGroup.GET("/search", search)
 	accessGroup.GET("/info", info)
 	accessGroup.GET("/follow", follow)
 	hostGroup := r.Group("/host")
@@ -103,6 +110,93 @@ func newest(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": newList, "total": total, "lastId": lastId}))
 }
+
+type updaterRes struct {
+	Code int         `json:"code"`
+	Msg  string      `json:"msg"`
+	Data updaterInfo `json:"data"`
+}
+type updaterInfo struct {
+	Version   string `json:"Ver"`
+	BuildNo   int64  `json:"BuildNo"`
+	Mandatory bool   `json:"mandatory"`
+}
+
+func updater(ctx *gin.Context) {
+	lastNo, lastVer, mandatory, err := getUpdaterInfo(true)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, err.Error()))
+		return
+	}
+	curNo, curVer, _, err := getUpdaterInfo(false)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, err.Error()))
+		return
+	}
+	if serverUrl == "" {
+		ip, err := GetExternalIP()
+		if err == nil {
+			serverUrl = fmt.Sprintf("http://%s:7171", ip)
+		}
+	}
+
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"lastNo": lastNo, "lastVer": lastVer, "curNo": curNo, "curVer": curVer, "serverUrl": serverUrl, "mandatory": mandatory}))
+}
+
+var services = []string{
+	"https://icanhazip.com",
+	"https://ipinfo.io/ip",
+	"https://api.ipify.org",
+}
+
+func GetExternalIP() (string, error) {
+	for _, service := range services {
+		cmd := exec.Command("curl", "-s", service)
+		output, err := cmd.Output()
+		if err != nil {
+			continue
+		}
+		ip := string(output)
+		ip = strings.ReplaceAll(ip, " ", "")
+		ip = strings.ReplaceAll(ip, "\n", "")
+		ip = strings.ReplaceAll(ip, "\r", "")
+		if isValidIP(ip) {
+			return ip, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to get external IP from all services")
+}
+
+func isValidIP(ip string) bool {
+	arr := strings.Split(ip, ".")
+	return len(arr) == 4
+}
+
+func getUpdaterInfo(last bool) (buildNo int64, ver string, mandatory bool, err error) {
+	versionUrl := "http://host.docker.internal:7171/api/lastVersion"
+	if !last {
+		versionUrl = "http://host.docker.internal:7171/api/checkStatus"
+	}
+	resp, err := http.Get(versionUrl)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return
+	}
+	var data updaterRes
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return
+	}
+	buildNo = data.Data.BuildNo
+	ver = data.Data.Version
+	mandatory = data.Data.Mandatory
+	return
+}
 func hot(ctx *gin.Context) {
 	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
 	if err != nil {
@@ -113,6 +207,27 @@ func hot(ctx *gin.Context) {
 		size = 10
 	}
 	list, total, err := getNewest(ctx.Query("lastId"), size, "hot", "", "")
+	lastId := ""
+	if len(list) > 0 {
+		lastId = list[len(list)-1].MogoID.Hex()
+	}
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception."))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
+}
+
+func search(ctx *gin.Context) {
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "size error"))
+		return
+	}
+	if size == 0 {
+		size = 10
+	}
+	list, total, err := textSearch(ctx.Query("lastId"), size, ctx.Query("key"))
 	lastId := ""
 	if len(list) > 0 {
 		lastId = list[len(list)-1].MogoID.Hex()

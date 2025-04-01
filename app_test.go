@@ -7,7 +7,6 @@ import (
 	"manindexer/adapter/bitcoin"
 	"manindexer/basicprotocols/metaaccess"
 	"manindexer/basicprotocols/metaso"
-	"manindexer/basicprotocols/mrc721"
 	"manindexer/common"
 	"manindexer/database"
 	"manindexer/database/mongodb"
@@ -280,7 +279,9 @@ func TestPopValue(t *testing.T) {
 	fmt.Println("BTC", len("000000000000000000000000000000000"), "0，Value=", *decimalNum1)
 }
 func TestMrc721SysnAddress(t *testing.T) {
-	mrc721.SyncAddress()
+	//mrc721.SyncAddress()
+	ip, err := metaso.GetExternalIP()
+	fmt.Println(ip, err)
 }
 func TestPevCount(t *testing.T) {
 	common.InitConfig()
@@ -292,4 +293,11 @@ func TestPevCount(t *testing.T) {
 	//ms.SyncPEV()
 	//total, err := metaso.GetHostDataSum("154haaqbreb9ty1hed6cwnz41pdn92qqqj")
 	//fmt.Println(err, total)
+	block := &metaso.MetaBlockChainData{}
+	pinNode, _ := mongodb.GetPin("7ea6f3f6dc030e797d3c4bdd8247a9a7eabf7088e0d8f9800ef6e272f4fc1d1ai0")
+	pevs, err := metaso.CountPDV(-1, block, &pinNode)
+	fmt.Println(err, len(pevs))
+	for _, pev := range pevs {
+		fmt.Println(pev.MetaBlockHeight, pev.FromPINId, pev.ToPINId)
+	}
 }

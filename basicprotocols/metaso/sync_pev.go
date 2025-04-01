@@ -105,7 +105,7 @@ func (metaso *MetaSo) syncPEV() {
 			return
 		}
 	}
-
+	mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.M{"metablockheight": -1})
 	var totalPevList []interface{}
 	for _, chain := range metaBlock.Chains {
 		pevList, err := CountBlockPEV(metaBlock.MetablockHeight, &chain)

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"manindexer/common"
 	"manindexer/database/mongodb"
+	"path"
 	"time"
 
+	"github.com/yanyiwu/gojieba"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -15,12 +17,22 @@ import (
 var (
 	BlockedData map[string]struct{}
 	_typeList   = []string{"metaid", "host", "pinid"}
+	jiebax      *gojieba.Jieba
 )
 
 func (metaso *MetaSo) Synchronization() {
 	BlockedData = map[string]struct{}{}
 	fixHost()
 	fixStatistics()
+	dictDir := "./jieba_dict"
+	jiebaPath := path.Join(dictDir, "jieba.dict.utf8")
+	hmmPath := path.Join(dictDir, "hmm_model.utf8")
+	userPath := path.Join(dictDir, "user.dict.utf8")
+	idfPath := path.Join(dictDir, "idf.utf8")
+	stopPath := path.Join(dictDir, "stop_words.utf8")
+	jiebax = gojieba.NewJieba(jiebaPath, hmmPath, userPath, idfPath, stopPath)
+
+	defer jiebax.Free()
 	for {
 		metaso.synchTweet()
 		metaso.synchTweetLike()
@@ -34,8 +46,9 @@ func (metaso *MetaSo) Synchronization() {
 }
 func (metaso *MetaSo) SyncPEV() (err error) {
 	for {
+		metaso.syncPendingPEV()
 		metaso.syncPEV()
-		time.Sleep(time.Second * 1)
+		time.Sleep(time.Second * 5)
 	}
 }
 func fixHost() {
@@ -48,7 +61,7 @@ func fixHost() {
 }
 func fixStatistics() {
 	fixed, _ := mongodb.GetSyncLastNumber("fixstatistics")
-	if fixed != 5 {
+	if fixed != 17 {
 		mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoMDVData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoNDVData).DeleteMany(context.TODO(), bson.D{})
@@ -56,15 +69,16 @@ func fixStatistics() {
 		mongoClient.Collection(MetaSoNDVBlockData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoBlockInfoData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoHostAddressData).DeleteMany(context.TODO(), bson.D{})
-
+		mongoClient.Collection(TweetCollection).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "metablock"})
+		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "tweet"})
 	}
-	mongodb.UpdateSyncLastNumber("fixstatistics", 5)
+	mongodb.UpdateSyncLastNumber("fixstatistics", 17)
 }
 func (metaso *MetaSo) SyncPendingPEVF() (err error) {
 	for {
 		metaso.syncPendingPEV()
-		time.Sleep(time.Minute * 5)
+		time.Sleep(time.Minute * 2)
 	}
 }
 func (metaso *MetaSo) SynchBlockedSettings() (err error) {
@@ -114,9 +128,13 @@ func (metaso *MetaSo) synchTweet() (err error) {
 	var insertDocs []interface{}
 	var lastId primitive.ObjectID
 	onlyHost := common.Config.MetaSo.OnlyHost
+
 	for _, doc := range pinList {
 		if onlyHost != "" && doc.Host != onlyHost {
 			continue
+		}
+		if doc.Path == "/protocols/simplebuzz" {
+			doc.Keywords = jiebax.Cut(string(doc.ContentBody), true)
 		}
 		insertDocs = append(insertDocs, doc)
 		if mongodb.CompareObjectIDs(doc.MogoID, lastId) > 0 {

@@ -23,7 +23,7 @@ var (
 func main() {
 	banner := `
     __  ___  ___     _   __
-   /  |/  / /   |   / | / / v0.3.26
+   /  |/  / /   |   / | / / v0.4.18
   / /|_/ / / /| |  /  |/ / 
  / /  / / / ___ | / /|  /  
 /_/  /_/ /_/  |_|/_/ |_/                   
@@ -45,7 +45,7 @@ func main() {
 		go ms.SynchBlockedSettings()
 		go ms.Synchronization()
 		go ms.SyncPEV()
-		go ms.SyncPendingPEVF()
+		//go ms.SyncPendingPEVF()
 	}
 	if common.ModuleExist("metaname") {
 		mn := metaname.MetaName{}

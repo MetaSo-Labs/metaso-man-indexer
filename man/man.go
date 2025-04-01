@@ -560,8 +560,20 @@ func handlePathAndOperation(
 				}
 			}
 			//unfollow
-			if pinNode.Operation == "revoke" && pinNode.OriginalPath == "/follow" {
-				*followData = append(*followData, creatFollowData(pinNode, false))
+			if pinNode.Operation == "revoke" {
+				isUnfollow := false
+				if pinNode.OriginalPath == "/follow" {
+					isUnfollow = true
+				}
+				arr := strings.Split(pinNode.OriginalPath, ":")
+				if len(arr) == 2 {
+					if arr[1] == "/follow" {
+						isUnfollow = true
+					}
+				}
+				if isUnfollow {
+					*followData = append(*followData, creatFollowData(pinNode, false))
+				}
 			}
 			//infoAdditional
 			if pinNode.Operation == "modify" {
