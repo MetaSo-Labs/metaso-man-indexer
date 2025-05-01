@@ -72,6 +72,19 @@ func ApiSuccess(code int, msg string, data interface{}) (res *ApiResponse) {
 	return &ApiResponse{Code: code, Msg: msg, Data: data}
 }
 
+// @Summary      Get latest buzz feed
+// @Description  Retrieve paginated list of newest buzz items with filtering options
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        lastId    query    string  false  "Last record ID for pagination (cursor)"
+// @Param        size      query    int     false  "Items per page (default: 10)"
+// @Param        metaid    query    string  false  "Filter by meta ID"
+// @Param        followed  query    string  false  "Filter followed content only (true/false)"
+// @Success      200  {object}  ApiResponse{data=object{list=[]TweetWithLike,total=int,lastId=string}}  "Successfully retrieved buzz list"
+// @Failure      400  {object}  ApiResponse  "Invalid parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/newest [get]
 func newest(ctx *gin.Context) {
 	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
 	if err != nil {
@@ -122,6 +135,15 @@ type updaterInfo struct {
 	Mandatory bool   `json:"mandatory"`
 }
 
+// @Summary      Get update information
+// @Description  Retrieves current and latest version information along with server details
+// @Tags         Updater
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  ApiResponse{data=object{lastNo=string,lastVer=string,curNo=string,curVer=string,serverUrl=string,mandatory=bool}}  "Successfully retrieved update information"
+// @Failure      400  {object}  ApiResponse  "Error retrieving update information"
+// @Failure      500  {object}  ApiResponse  "Server error"
+// @Router       /social/buzz/updater [get]
 func updater(ctx *gin.Context) {
 	lastNo, lastVer, mandatory, err := getUpdaterInfo(true)
 	if err != nil {
@@ -197,6 +219,18 @@ func getUpdaterInfo(last bool) (buildNo int64, ver string, mandatory bool, err e
 	mandatory = data.Data.Mandatory
 	return
 }
+
+// @Summary      Get hot buzz feed
+// @Description  Retrieve paginated list of hottest buzz items ranked by popularity
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        lastId    query    string  false  "Last record ID for pagination (cursor-based)"
+// @Param        size      query    int     false  "Number of items per page (default: 10, max: 50)"
+// @Success      200  {object}  ApiResponse{data=object{list=[]TweetWithLike,total=int,lastId=string}}  "Successfully retrieved hot buzz list"
+// @Failure      400  {object}  ApiResponse  "Invalid size parameter"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/hot [get]
 func hot(ctx *gin.Context) {
 	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
 	if err != nil {
@@ -218,6 +252,18 @@ func hot(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
 }
 
+// @Summary      Search buzz items
+// @Description  Search buzz items by keyword with pagination support
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        lastId  query  string  false  "Last record ID for pagination"
+// @Param        size    query  int     false  "Number of items per page (default: 10)"
+// @Param        key     query  string  true   "Search keyword"
+// @Success      200  {object}  ApiResponse{data=object{list=[]TweetWithLike,total=int,lastId=string}}  "Search results"
+// @Failure      400  {object}  ApiResponse  "Invalid parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/search [get]
 func search(ctx *gin.Context) {
 	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
 	if err != nil {
@@ -238,6 +284,17 @@ func search(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
 }
+
+// @Summary      Get buzz item details
+// @Description  Get complete information about a specific buzz item including comments, likes and donations
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        pinId  query  string  true  "ID of the buzz item to retrieve"
+// @Success      200  {object}  ApiResponse{data=object{tweet=Tweet,comments=[]TweetComment,like=int,donates=[]MetasoDonate,blocked=bool}}  "Buzz item details"
+// @Failure      400  {object}  ApiResponse  "Missing pinId parameter"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/info [get]
 func info(ctx *gin.Context) {
 	tweet, comments, like, donates, err := getInfo(ctx.Query("pinId"))
 	if err != nil {
@@ -267,6 +324,16 @@ type followItem struct {
 	Unfollow int    `json:"unfollow"`
 }
 
+// @Summary      Get follow information
+// @Description  Retrieve follow data for a specific meta ID including mempool status
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        metaid  query  string  true  "Meta ID to query follow data"
+// @Success      200  {object}  ApiResponse{data=object{list=[]followItem}}  "Follow information"
+// @Failure      400  {object}  ApiResponse  "Missing metaid parameter"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/follow [get]
 func follow(ctx *gin.Context) {
 	if ctx.Query("metaid") == "" {
 		ctx.JSON(http.StatusOK, ApiError(-1, "metaid id null"))
@@ -322,6 +389,21 @@ func blockInfo(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get block NDV data
+// @Description  Retrieve NDV (Node Data Verification) information for blocks with pagination
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        height  query  int     true   "Block height"
+// @Param        host    query  string  false  "Host filter"
+// @Param        cursor  query  int     false  "Pagination cursor"
+// @Param        size    query  int     false  "Number of items per page"
+// @Param        orderby query  string  false  "Sorting field"
+// @Success      200  {object}  ApiResponse  "NDV data for requested block"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /host/block/ndv [get]
 func blockNDV(ctx *gin.Context) {
 	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
 	if err != nil {
@@ -346,6 +428,21 @@ func blockNDV(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get block MDV data
+// @Description  Retrieve MDV (Miner Data Verification) information for blocks with pagination
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        height  query  int     true   "Block height"
+// @Param        address query  string  false  "Miner address filter"
+// @Param        cursor  query  int     false  "Pagination cursor"
+// @Param        size    query  int     false  "Number of items per page"
+// @Param        orderby query  string  false  "Sorting field"
+// @Success      200  {object}  ApiResponse  "MDV data for requested block"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /host/block/mdv [get]
 func blockMDV(ctx *gin.Context) {
 	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
 	if err != nil {
@@ -370,6 +467,20 @@ func blockMDV(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get paginated NDV list
+// @Description  Retrieve paginated list of NDV (Node Data Verification) records
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        host    query  string  false  "Host filter"
+// @Param        cursor  query  int     false  "Pagination cursor"
+// @Param        size    query  int     false  "Number of items per page"
+// @Param        orderby query  string  false  "Sorting field"
+// @Success      200  {object}  ApiResponse  "List of NDV records"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/ndv [get]
 func ndvPageList(ctx *gin.Context) {
 	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
 	if err != nil {
@@ -389,6 +500,20 @@ func ndvPageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get paginated MDV list
+// @Description  Retrieve paginated list of MDV (Miner Data Verification) records
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        address query  string  false  "Miner address filter"
+// @Param        cursor  query  int     false  "Pagination cursor"
+// @Param        size    query  int     false  "Number of items per page"
+// @Param        orderby query  string  false  "Sorting field"
+// @Success      200  {object}  ApiResponse  "List of MDV records"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/mdv [get]
 func mdvPageList(ctx *gin.Context) {
 	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
 	if err != nil {
@@ -408,6 +533,20 @@ func mdvPageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get host information
+// @Description  Retrieve block information for a specific host
+// @Tags         Host
+// @Accept       json
+// @Produce      json
+// @Param        host    query  string  true   "Host identifier"
+// @Param        cursor  query  int     false  "Pagination cursor"
+// @Param        size    query  int     false  "Number of items per page"
+// @Param        orderby query  string  false  "Sorting field"
+// @Success      200  {object}  ApiResponse  "Host block information"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /host/info [get]
 func hostInfo(ctx *gin.Context) {
 	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
 	if err != nil {
@@ -426,6 +565,18 @@ func hostInfo(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
+
+// @Summary      Get MRC20 token list
+// @Description  Retrieve list of MRC20 tokens for an address
+// @Tags         Tokens
+// @Accept       json
+// @Produce      json
+// @Param        address  query  string  true   "Wallet address"
+// @Param        tickType query  string  false  "Token type filter"
+// @Success      200  {object}  ApiResponse  "List of MRC20 tokens"
+// @Failure      400  {object}  ApiResponse  "Missing address parameter"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /ft/mrc20/address/deploy-list [get]
 func mrc20TickList(ctx *gin.Context) {
 	address := ctx.Query("address")
 	if address == "" {
@@ -440,6 +591,18 @@ func mrc20TickList(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", list))
 }
 
+// @Summary      Get blocked items list
+// @Description  Retrieve paginated list of blocked items
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        blockType query  string  true   "Type of blocked items (host/pinid/etc)"
+// @Param        cursor    query  int     false  "Pagination cursor"
+// @Param        size      query  int     false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{list=array,total=int}}  "Blocked items list with total count"
+// @Failure      400  {object}  ApiResponse  "Missing or invalid parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/blocked/list [get]
 func blockedList(ctx *gin.Context) {
 	blockType := ctx.Query("blockType")
 	if blockType == "" {
@@ -463,6 +626,18 @@ func blockedList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total}))
 }
+
+// @Summary      Add item to blocked list
+// @Description  Add new item to the blocked items list
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        blockType      query  string  true  "Type of item to block"
+// @Param        blockContent   query  string  true  "Content to block"
+// @Success      200  {object}  ApiResponse  "Success response"
+// @Failure      400  {object}  ApiResponse  "Missing required parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/blocked/add [get]
 func blockedAdd(ctx *gin.Context) {
 	blockType := ctx.Query("blockType")
 	if blockType == "" {
@@ -485,6 +660,18 @@ func blockedAdd(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
 }
+
+// @Summary      Remove item from blocked list
+// @Description  Remove item from the blocked items list
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        blockType    query  string  true  "Type of blocked item"
+// @Param        blockContent query  string  true  "Content to unblock"
+// @Success      200  {object}  ApiResponse  "Success response"
+// @Failure      400  {object}  ApiResponse  "Missing required parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/blocked/delete [get]
 func blockedDelete(ctx *gin.Context) {
 	blockType := ctx.Query("blockType")
 	if blockType == "" {

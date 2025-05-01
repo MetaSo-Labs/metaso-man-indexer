@@ -143,7 +143,7 @@ func TestCatchData(t *testing.T) {
 	// for i := from; i <= to; i++ {
 	// 	man.DoIndexerRun("btc", int64(i))
 	// }
-	man.DoIndexerRun("btc", int64(2873530))
+	man.DoIndexerRun("btc", int64(2873530), false)
 
 }
 func TestHash(t *testing.T) {
@@ -187,7 +187,7 @@ func TestRarityScoreBinary(t *testing.T) {
 func TestMrc721Save(t *testing.T) {
 	common.InitConfig()
 	man.InitAdapter("btc", "mongo", "1", "1")
-	man.DoIndexerRun("btc", int64(2874040))
+	man.DoIndexerRun("btc", int64(2874040), false)
 }
 func TestMempoolTransfer(t *testing.T) {
 	common.InitConfig()

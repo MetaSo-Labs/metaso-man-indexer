@@ -18,9 +18,13 @@ import (
 	"strings"
 	"time"
 
+	_ "manindexer/docs"
+
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func formatRootId(rootId string) string {
@@ -95,6 +99,8 @@ func Start(f embed.FS) {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
 	r.Use(cors.New(config))
+	// Swagger
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	//r.LoadHTMLGlob("./web/template/**/*")
 	//r.Static("/assets", "./web/static")
 	r.GET("/", home)

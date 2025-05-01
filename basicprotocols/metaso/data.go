@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"manindexer/common"
 	"manindexer/database/mongodb"
+	"manindexer/man"
 	"path"
 	"time"
 
@@ -23,7 +24,7 @@ var (
 func (metaso *MetaSo) Synchronization() {
 	BlockedData = map[string]struct{}{}
 	fixHost()
-	fixStatistics()
+	//fixStatistics()
 	dictDir := "./jieba_dict"
 	jiebaPath := path.Join(dictDir, "jieba.dict.utf8")
 	hmmPath := path.Join(dictDir, "hmm_model.utf8")
@@ -45,6 +46,7 @@ func (metaso *MetaSo) Synchronization() {
 	}
 }
 func (metaso *MetaSo) SyncPEV() (err error) {
+	fixStatistics()
 	for {
 		metaso.syncPendingPEV()
 		metaso.syncPEV()
@@ -61,7 +63,8 @@ func fixHost() {
 }
 func fixStatistics() {
 	fixed, _ := mongodb.GetSyncLastNumber("fixstatistics")
-	if fixed != 17 {
+	fixedTarger := int64(22)
+	if fixed != fixedTarger {
 		mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoMDVData).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection(MetaSoNDVData).DeleteMany(context.TODO(), bson.D{})
@@ -72,8 +75,18 @@ func fixStatistics() {
 		mongoClient.Collection(TweetCollection).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "metablock"})
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "tweet"})
+		if fixedTarger == 22 {
+			for i := 892312; i <= 894039; i++ {
+				man.DoIndexerRun("btc", int64(i), true)
+				fmt.Println("btc reindex", i)
+			}
+			for i := 117006; i <= 118681; i++ {
+				man.DoIndexerRun("mvc", int64(i), true)
+				fmt.Println("mvc reindex", i)
+			}
+		}
 	}
-	mongodb.UpdateSyncLastNumber("fixstatistics", 17)
+	mongodb.UpdateSyncLastNumber("fixstatistics", fixedTarger)
 }
 func (metaso *MetaSo) SyncPendingPEVF() (err error) {
 	for {

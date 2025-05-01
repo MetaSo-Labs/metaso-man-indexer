@@ -147,6 +147,7 @@ type PinMsg struct {
 	Address       string `json:"address"`
 	CreateAddress string `json:"creator"`
 	InitialOwner  string `json:"initialOwner"`
+	Timestamp     int64  `json:"timestamp"`
 }
 
 type BlockMsg struct {

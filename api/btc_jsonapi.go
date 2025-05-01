@@ -100,6 +100,7 @@ func pinList(ctx *gin.Context) {
 			Id: p.Id, Type: p.ContentTypeDetect, Path: p.Path, MetaId: p.MetaId,
 			Pop: p.Pop, ChainName: p.ChainName,
 			InitialOwner: p.InitialOwner, Address: p.Address, CreateAddress: p.CreateAddress,
+			Timestamp: p.Timestamp,
 		}
 		msg = append(msg, pmsg)
 	}
@@ -621,8 +622,9 @@ func reindex(ctx *gin.Context) {
 	from, _ := strconv.ParseInt(ctx.Param("from"), 10, 64)
 	to, _ := strconv.ParseInt(ctx.Param("to"), 10, 64)
 	for i := from; i <= to; i++ {
-		man.DoIndexerRun(chain, i)
+		man.DoIndexerRun(chain, i, true)
+		fmt.Println("reindex", i)
 	}
 
-	ctx.String(http.StatusOK, "finish")
+	ctx.String(http.StatusOK, "reindex finish")
 }

@@ -22,6 +22,15 @@ func StatisticsApi(r *gin.Engine) {
 	group.GET("/metablock/host/address/list", hostAddressValuePageList)
 	group.GET("/metablock/host/address/value", hostAddressValue)
 }
+
+// @Summary      Get latest block sync status
+// @Description  Retrieve the current synchronization status of meta blocks
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  ApiResponse{data=object{currentMetaBlockHeight=int,syncMetaBlockHeight=int,progressStartBlock=int,progressEndBlock=int,initBlockHeight=int,currentBlockHeight=int}}  "Block synchronization status"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/host/metablock/sync-newest [get]
 func blockSyncNewest(ctx *gin.Context) {
 	currentMetaBlockHeight := int64(0)
 	syncMetaBlockHeight := int64(0)
@@ -54,6 +63,19 @@ func blockSyncNewest(ctx *gin.Context) {
 		"currentBlockHeight":     currentBlockHeight,
 	}))
 }
+
+// @Summary      Get paginated NDV block list
+// @Description  Retrieve paginated list of NDV (Node Data Verification) blocks
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        height  query  int  true   "Block height"
+// @Param        cursor  query  int  false  "Pagination cursor"
+// @Param        size    query  int  false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{info=object,total=int,list=array}}  "NDV block list with metadata"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/host/metablock/info [get]
 func blockNDVPageList(ctx *gin.Context) {
 	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
 	if err != nil {
@@ -77,6 +99,23 @@ func blockNDVPageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"info": info, "total": info.Total, "list": list}))
 }
+
+// @Summary      Get paginated host value list
+// @Description  Retrieve paginated list of host values with filtering options
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        heightBegin  query  int     false  "Starting block height filter"
+// @Param        heightEnd    query  int     false  "Ending block height filter"
+// @Param        timeBegin    query  int     false  "Starting timestamp filter"
+// @Param        timeEnd      query  int     false  "Ending timestamp filter"
+// @Param        host         query  string  false  "Host filter"
+// @Param        cursor       query  int     false  "Pagination cursor"
+// @Param        size         query  int     false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{total=int,list=array}}  "Host value list with total count"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/metablock/host/value [get]
 func hostValuePageList(ctx *gin.Context) {
 	var err error
 	heightBegin := int64(0)
@@ -128,6 +167,19 @@ func hostValuePageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"total": total, "list": list}))
 }
+
+// @Summary      Get paginated MDV block list
+// @Description  Retrieve paginated list of MDV (Miner Data Verification) blocks
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        height  query  int  true   "Block height"
+// @Param        cursor  query  int  false  "Pagination cursor"
+// @Param        size    query  int  false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{info=object,total=int,list=array}}  "MDV block list with metadata"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/metablock/address/info [get]
 func blockMDVPageList(ctx *gin.Context) {
 	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
 	if err != nil {
@@ -151,6 +203,23 @@ func blockMDVPageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"info": info, "total": info.Total, "list": list}))
 }
+
+// @Summary      Get paginated host address values
+// @Description  Retrieve paginated list of host address values with filtering
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        heightBegin  query  int     false  "Starting block height filter"
+// @Param        heightEnd    query  int     false  "Ending block height filter"
+// @Param        timeBegin    query  int     false  "Starting timestamp filter"
+// @Param        timeEnd      query  int     false  "Ending timestamp filter"
+// @Param        host         query  string  false  "Host filter"
+// @Param        cursor       query  int     false  "Pagination cursor"
+// @Param        size         query  int     false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{total=int,list=array}}  "Host address values with total count"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/metablock/host/address/list [get]
 func hostAddressValuePageList(ctx *gin.Context) {
 	var err error
 	heightBegin := int64(0)
@@ -202,6 +271,24 @@ func hostAddressValuePageList(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"total": total, "list": list}))
 }
+
+// @Summary      Get host address values
+// @Description  Retrieve values for specific host address with filtering
+// @Tags         Statistics
+// @Accept       json
+// @Produce      json
+// @Param        heightBegin  query  int     false  "Starting block height filter"
+// @Param        heightEnd    query  int     false  "Ending block height filter"
+// @Param        timeBegin    query  int     false  "Starting timestamp filter"
+// @Param        timeEnd      query  int     false  "Ending timestamp filter"
+// @Param        host         query  string  false  "Host filter"
+// @Param        address      query  string  false  "Address filter"
+// @Param        cursor       query  int     false  "Pagination cursor"
+// @Param        size         query  int     false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{total=int,list=array}}  "Host address values with total count"
+// @Failure      400  {object}  ApiResponse  "Invalid query parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /statistics/metablock/host/address/value [get]
 func hostAddressValue(ctx *gin.Context) {
 	var err error
 	heightBegin := int64(0)

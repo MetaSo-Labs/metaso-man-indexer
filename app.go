@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// @title           Metaso API
+// @version         1.0
+// @description     This is a sample API with Swagger documentation.
 var (
 	//go:embed web/static/* web/template/*
 	f embed.FS

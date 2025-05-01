@@ -191,8 +191,9 @@ type MetaBlockData struct {
 	TxIndex         int                  `json:"txIndex"`
 }
 type MetaBlockChainData struct {
-	Chain       string `json:"chain"`
-	PreEndBlock string `json:"preEndBlock"`
+	Chain string `json:"chain"`
+	//PreEndBlock string `json:"preEndBlock"`
+	PreEndBlock string `json:"lastBlock"`
 	StartBlock  string `json:"startBlock"`
 	EndBlock    string `json:"endBlock"`
 }
