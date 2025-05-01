@@ -58,6 +58,7 @@ type Tweet struct {
 	Hot                int                `json:"hot" bson:"hot"`
 	DonateCount        int                `json:"donateCount" bson:"donatecount"`
 	Host               string             `json:"host"`
+	Keywords           []string           `json:"keywords"`
 }
 type SyncLastId struct {
 	Tweet        primitive.ObjectID `bson:"tweet"`
@@ -190,8 +191,9 @@ type MetaBlockData struct {
 	TxIndex         int                  `json:"txIndex"`
 }
 type MetaBlockChainData struct {
-	Chain       string `json:"chain"`
-	PreEndBlock string `json:"preEndBlock"`
+	Chain string `json:"chain"`
+	//PreEndBlock string `json:"preEndBlock"`
+	PreEndBlock string `json:"lastBlock"`
 	StartBlock  string `json:"startBlock"`
 	EndBlock    string `json:"endBlock"`
 }
@@ -296,4 +298,11 @@ type MetasoDonate struct {
 	Amount        decimal.Decimal `json:"amount" bson:"amount"`
 	ToPin         string          `json:"toPin" bson:"topin"`
 	Message       string          `json:"message" bson:"message"`
+}
+
+type BlockedSetting struct {
+	BlockedType     string `json:"blockedType"`
+	BlockedContent  string `json:"blockedContent"`
+	Timestamp       int64  `json:"timestamp"`
+	OriginalContent string `json:"originalContent"`
 }

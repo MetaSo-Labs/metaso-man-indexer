@@ -35,7 +35,7 @@ func TestCatchMvcData(t *testing.T) {
 	// for i := from; i <= to; i++ {
 	// 	man.DoIndexerRun("btc", int64(i))
 	// }
-	man.DoIndexerRun("mvc", int64(101608))
+	man.DoIndexerRun("mvc", int64(101608), false)
 
 }
 func TestMvcGetSaveData(t *testing.T) {

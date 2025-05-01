@@ -279,3 +279,9 @@ Endpoint: /api/generalQuery
     "data": null
 }
 ```
+
+## Docker
+```
+sudo docker build -t man-indexer:0.1 .
+sudo docker run -d  --name man-indexer --network=host  --restart=always man-indexer:0.1
+```

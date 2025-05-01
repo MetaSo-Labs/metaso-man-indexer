@@ -268,19 +268,27 @@ func IndexerRun(test string) {
 		}
 		BarMap[chainName] = progressbar.Default(to-from, "["+chainName+"]")
 		for i := from + 1; i <= to; i++ {
-			DoIndexerRun(chainName, i)
+			DoIndexerRun(chainName, i, false)
 			BarMap[chainName].Add(1)
+		}
+		step := to - from
+		if step == 1 {
+			for x := to - 4; x <= to-1; x++ {
+				go DoIndexerRun(chainName, x, false)
+			}
 		}
 	}
 	FirstCompleted = true
 
 }
-func DoIndexerRun(chainName string, height int64) (err error) {
+func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	//bT := time.Now()
 	//bar := progressbar.Default(to - from)
 	//for i := from + 1; i <= to; i++ {
 	//bar.Add(1)
-	MaxHeight[chainName] = height
+	if !reIndex {
+		MaxHeight[chainName] = height
+	}
 	pinList, protocolsData, metaIdData, pinTreeData,
 		updatedData, mrc20List, txInList, mrc20TransferPinTx,
 		followData, infoAdditional, _ := GetSaveData(chainName, height)
@@ -560,8 +568,20 @@ func handlePathAndOperation(
 				}
 			}
 			//unfollow
-			if pinNode.Operation == "revoke" && pinNode.OriginalPath == "/follow" {
-				*followData = append(*followData, creatFollowData(pinNode, false))
+			if pinNode.Operation == "revoke" {
+				isUnfollow := false
+				if pinNode.OriginalPath == "/follow" {
+					isUnfollow = true
+				}
+				arr := strings.Split(pinNode.OriginalPath, ":")
+				if len(arr) == 2 {
+					if arr[1] == "/follow" {
+						isUnfollow = true
+					}
+				}
+				if isUnfollow {
+					*followData = append(*followData, creatFollowData(pinNode, false))
+				}
 			}
 			//infoAdditional
 			if pinNode.Operation == "modify" {

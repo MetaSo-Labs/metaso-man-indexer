@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"manindexer/database/mongodb"
 	"manindexer/pin"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -14,10 +15,74 @@ import (
 
 type TweetWithLike struct {
 	Tweet
-	Like   []string `json:"like"`
-	Donate []string `json:"donate"`
+	Like    []string `json:"like"`
+	Donate  []string `json:"donate"`
+	Blocked bool     `json:"blocked"`
 }
 
+func textSearch(lastId string, size int64, key string) (listData []*TweetWithLike, total int64, err error) {
+	if len(key) <= 0 {
+		return
+	}
+	var list []*Tweet
+	filter := bson.D{{Key: "$text", Value: bson.D{{Key: "$search", Value: key}}}}
+	totalFilter := bson.D{{Key: "$text", Value: bson.D{{Key: "$search", Value: key}}}}
+	if lastId != "" {
+		var objectId primitive.ObjectID
+		objectId, err = primitive.ObjectIDFromHex(lastId)
+		if err != nil {
+			return
+		}
+		filter = append(filter, bson.E{Key: "_id", Value: bson.D{{Key: "$lt", Value: objectId}}})
+	}
+
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "timestamp", Value: -1}})
+	findOptions.SetLimit(size)
+	result, err := mongoClient.Collection(TweetCollection).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	var pinIdList []string
+	for _, item := range list {
+		item.Content = string(item.ContentBody)
+		item.ContentBody = nil
+		pinIdList = append(pinIdList, item.Id)
+	}
+
+	checkMap := make(map[string]*TweetWithLike, len(list))
+	for _, item := range list {
+		checkMap[item.Id] = &TweetWithLike{Tweet: *item, Like: []string{}, Donate: []string{}}
+	}
+	likeMap, err := batchGetPayLike(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			if v, ok := likeMap[item.Id]; ok {
+				checkMap[item.Id].Like = v
+			}
+		}
+	}
+	donateMap, err := batchGetSimpleDonat(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			if v, ok := donateMap[item.Id]; ok {
+				checkMap[item.Id].Donate = v
+			}
+		}
+	}
+	for _, item := range list {
+		if v, ok := checkMap[item.Id]; ok {
+			listData = append(listData, v)
+		}
+	}
+	total, err = mongoClient.Collection(TweetCollection).CountDocuments(context.TODO(), totalFilter)
+
+	return
+}
 func getNewest(lastId string, size int64, listType string, metaid string, followed string) (listData []*TweetWithLike, total int64, err error) {
 	var list []*Tweet
 	filter := bson.D{}
@@ -41,6 +106,24 @@ func getNewest(lastId string, size int64, listType string, metaid string, follow
 	} else if metaid != "" && followed == "" {
 		filter = append(filter, bson.E{Key: "createmetaid", Value: metaid})
 		totalFilter = append(totalFilter, bson.E{Key: "createmetaid", Value: metaid})
+	}
+	if listType == "hot" {
+		now := time.Now()
+		twentyFourHoursAgo := now.Add(-24 * time.Hour)
+		filter = append(filter, bson.E{
+			Key: "timestamp",
+			Value: bson.D{
+				{Key: "$gt", Value: twentyFourHoursAgo.Unix()},
+				{Key: "$lt", Value: now.Unix()},
+			},
+		})
+		totalFilter = append(totalFilter, bson.E{
+			Key: "timestamp",
+			Value: bson.D{
+				{Key: "$gt", Value: twentyFourHoursAgo.Unix()},
+				{Key: "$lt", Value: now.Unix()},
+			},
+		})
 	}
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{Key: listType, Value: -1}})
@@ -386,5 +469,31 @@ func getMempoolFollow(metaid string) (list []*string, err error) {
 	for _, data := range mempoolData {
 		list = append(list, &data.Content)
 	}
+	return
+}
+
+func getBlockedList(blockType string, cursor int64, size int64) (list []*BlockedSetting, total int64, err error) {
+	filter := bson.D{{Key: "blockedtype", Value: blockType}}
+	findOptions := options.Find()
+	findOptions.SetSkip(cursor).SetLimit(size)
+	result, err := mongoClient.Collection(BlockedSettingData).Find(context.TODO(), filter, findOptions)
+	if err != nil {
+		return
+	}
+	err = result.All(context.TODO(), &list)
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	total, _ = mongoClient.Collection(BlockedSettingData).CountDocuments(context.TODO(), filter)
+	return
+}
+
+func addBlockedList(blockType string, blockContent string, originalContent string) (err error) {
+	_, err = mongoClient.Collection(BlockedSettingData).InsertOne(context.TODO(), BlockedSetting{BlockedType: blockType, BlockedContent: blockContent, Timestamp: time.Now().Unix(), OriginalContent: originalContent})
+	return
+}
+func deleteBlockedList(blockType string, blockContent string) (err error) {
+	filter := bson.D{{Key: "blockedtype", Value: blockType}, {Key: "blockedcontent", Value: blockContent}}
+	_, err = mongoClient.Collection(BlockedSettingData).DeleteOne(context.TODO(), filter)
 	return
 }

@@ -36,3 +36,10 @@ func updateMetaidPinId(item *pin.MetaIdDataValue) (err error) {
 	_, err = mongoClient.Collection(MetaIdInfoCollection).UpdateOne(context.TODO(), filter2, bson.M{"$set": bson.M{"pinid": pinNode.Id}})
 	return
 }
+
+func GetPin(pinId string) (pinNode pin.PinInscription, err error) {
+	filter := bson.M{"id": pinId}
+	findOptions := options.FindOne()
+	err = mongoClient.Collection(PinsCollection).FindOne(context.TODO(), filter, findOptions).Decode(&pinNode)
+	return
+}

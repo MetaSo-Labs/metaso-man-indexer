@@ -73,19 +73,19 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []inte
 				continue
 			}
 		}
-		pev, err := countPDV(blockHeight, block, pinNode)
+		pevs, err := CountPDV(blockHeight, block, pinNode)
 		if err != nil {
 			continue
 		}
-		if pev.ToPINId == "" {
-			continue
+		for _, pev := range pevs {
+			if pev.ToPINId == "" {
+				continue
+			}
+			if pev.Host == "" || len(pev.Host) == 0 {
+				pev.Host = "metabitcoin.unknown"
+			}
+			pevList = append(pevList, pev)
 		}
-		if pev.Host == "" || len(pev.Host) == 0 {
-			pev.Host = "metabitcoin.unknown"
-		}
-
-		pevList = append(pevList, pev)
-
 	}
 	if len(pevList) <= 0 {
 		return
@@ -97,7 +97,7 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []inte
 	return
 }
 func getBlockHistoryValue(height int64, key string, value string) (total decimal.Decimal, err error) {
-	filter := bson.D{{Key: "metablockheight", Value: bson.D{{Key: "$lt", Value: height}}}}
+	filter := bson.D{{Key: "metablockheight", Value: bson.D{{Key: "$lt", Value: height}}}, {Key: "metablockheight", Value: bson.D{{Key: "$gt", Value: -1}}}}
 	if key != "" && value != "" {
 		filter = append(filter, bson.E{Key: key, Value: value})
 	}
@@ -122,10 +122,18 @@ func getBlockHistoryValue(height int64, key string, value string) (total decimal
 
 	return
 }
+func getBlockHistory(height int64) (total decimal.Decimal, err error) {
+	filter := bson.D{{Key: "block", Value: height}}
+	var block MetaSoBlockInfo
+	err = mongoClient.Collection(MetaSoBlockInfoData).FindOne(context.TODO(), filter).Decode(&block)
+	total = block.HistoryValue.Add(block.DataValue)
+	return
+}
 func UpdateBlockValue(blockHeight int64, pevList []interface{}, blockTime int64) (err error) {
 	if blockHeight == -1 {
 		mongoClient.Collection(MetaSoNDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
 		mongoClient.Collection(MetaSoMDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
+		mongoClient.Collection(MetaSoHostAddressData).DeleteMany(context.TODO(), bson.M{"block": -1})
 	}
 	var hostMap = make(map[string]*MetaSoBlockNDV)
 	var addressMap = make(map[string]*MetaSoBlockMDV)
@@ -222,7 +230,8 @@ func UpdateBlockValue(blockHeight int64, pevList []interface{}, blockTime int64)
 }
 func UpdateDataValue(hostMap *map[string]struct{}, addressMap *map[string]struct{}) (err error) {
 	for host := range *hostMap {
-		total, err := getHostDataSum(host)
+		total, err := GetHostDataSum(host)
+		//fmt.Println(err, host, total)
 		if err == nil && total.Cmp(decimal.Zero) >= 1 {
 			data := MetaSoNDV{
 				Host:      host,
@@ -245,7 +254,7 @@ func UpdateDataValue(hostMap *map[string]struct{}, addressMap *map[string]struct
 	}
 	return
 }
-func getHostDataSum(host string) (dataValue decimal.Decimal, err error) {
+func GetHostDataSum(host string) (dataValue decimal.Decimal, err error) {
 	filter := bson.D{{Key: "host", Value: host}}
 	match := bson.D{{Key: "$match", Value: filter}}
 	groupStage := bson.D{
@@ -328,7 +337,7 @@ func ArrayExist(key string, list []string) (exist bool) {
 	}
 	return
 }
-func countPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func CountPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	switch pinNode.Path {
 	case "/follow":
 		return countFollowPDV(blockHeight, block, pinNode)
@@ -347,7 +356,7 @@ func countPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInsc
 		return
 	}
 }
-func createPDV(blockHeight int64, block *MetaBlockChainData, fromPIN *pin.PinInscription, toPIN *pin.PinInscription, value decimal.Decimal) PEVData {
+func createPDV(blockHeight int64, block *MetaBlockChainData, fromPIN *pin.PinInscription, toPIN *pin.PinInscription, value decimal.Decimal) []PEVData {
 	startHeight, _ := strconv.ParseInt(block.StartBlock, 10, 64)
 	endHeight, _ := strconv.ParseInt(block.EndBlock, 10, 64)
 	lv := int64(fromPIN.PopLv)
@@ -359,13 +368,14 @@ func createPDV(blockHeight int64, block *MetaBlockChainData, fromPIN *pin.PinIns
 	if dv != nil {
 		dvDecimal = decimal.NewFromFloat(*dv)
 	}
-	return PEVData{
+	var result []PEVData
+	data := PEVData{
 		Host:             toPIN.Host,
 		FromPINId:        fromPIN.Id,
 		ToPINId:          toPIN.Id,
 		Path:             fromPIN.Path,
-		Address:          toPIN.Address,
-		MetaId:           toPIN.MetaId,
+		Address:          toPIN.CreateAddress,
+		MetaId:           toPIN.CreateMetaId,
 		FromChainName:    fromPIN.ChainName,
 		ToChainName:      toPIN.ChainName,
 		MetaBlockHeight:  blockHeight,
@@ -375,8 +385,29 @@ func createPDV(blockHeight int64, block *MetaBlockChainData, fromPIN *pin.PinIns
 		Poplv:            fromPIN.PopLv,
 		IncrementalValue: decimal.NewFromInt(lv).Mul(value).Add(dvDecimal),
 	}
+	result = append(result, data)
+	if fromPIN.Id != toPIN.Id {
+		data2 := PEVData{
+			Host:             fromPIN.Host,
+			FromPINId:        fromPIN.Id,
+			ToPINId:          fromPIN.Id,
+			Path:             fromPIN.Path,
+			Address:          fromPIN.Address,
+			MetaId:           fromPIN.MetaId,
+			FromChainName:    fromPIN.ChainName,
+			ToChainName:      fromPIN.ChainName,
+			MetaBlockHeight:  blockHeight,
+			StartBlockHeight: startHeight,
+			EndBlockHeight:   endHeight,
+			BlockHeight:      fromPIN.GenesisHeight,
+			Poplv:            fromPIN.PopLv,
+			IncrementalValue: decimal.NewFromInt(lv).Mul(value).Add(dvDecimal),
+		}
+		result = append(result, data2)
+	}
+	return result
 }
-func countFollowPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countFollowPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	metaid := string(pinNode.ContentBody)
 	filter := bson.M{"metaid": metaid}
 	findOptions := options.FindOne()
@@ -394,7 +425,7 @@ func getPINbyId(pinId string) (pinNode *pin.PinInscription, err error) {
 	err = mongoClient.Collection(mongodb.PinsCollection).FindOne(context.TODO(), filter, nil).Decode(&pinNode)
 	return
 }
-func countDonatePDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countDonatePDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	var dataMap map[string]interface{}
 	err = json.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -407,7 +438,7 @@ func countDonatePDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.P
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
 }
-func countPayLike(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countPayLike(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	var dataMap map[string]interface{}
 	err = json.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -423,7 +454,7 @@ func countPayLike(blockHeight int64, block *MetaBlockChainData, pinNode *pin.Pin
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
 }
-func countPaycomment(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countPaycomment(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	var dataMap map[string]interface{}
 	err = json.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -439,7 +470,7 @@ func countPaycomment(blockHeight int64, block *MetaBlockChainData, pinNode *pin.
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
 }
-func countSimplebuzz(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countSimplebuzz(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	var dataMap map[string]interface{}
 	err = json.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -456,7 +487,7 @@ func countSimplebuzz(blockHeight int64, block *MetaBlockChainData, pinNode *pin.
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
 }
-func countMrc20Mint(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data PEVData, err error) {
+func countMrc20Mint(blockHeight int64, block *MetaBlockChainData, pinNode *pin.PinInscription) (data []PEVData, err error) {
 	var dataMap map[string]interface{}
 	err = json.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {

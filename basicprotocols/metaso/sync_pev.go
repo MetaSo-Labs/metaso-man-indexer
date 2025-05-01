@@ -18,6 +18,62 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+func (metaso *MetaSo) SyncPEVTest(height int64) {
+	metaBlock := getMetaBlock(height)
+	var err error
+	for _, chain := range metaBlock.Chains {
+		endBlock := int64(0)
+		maxBlock := int64(0)
+		if chain.Chain == "Bitcoin" {
+			maxBlock = man.MaxHeight["btc"]
+		} else if chain.Chain == "MVC" {
+			maxBlock = man.MaxHeight["mvc"]
+		}
+		if chain.EndBlock == "" {
+			continue
+		}
+		endBlock, err = strconv.ParseInt(chain.EndBlock, 10, 64)
+		if err != nil || endBlock <= 0 {
+			log.Println(">>", chain.Chain, err, endBlock, maxBlock)
+			return
+		}
+	}
+
+	var totalPevList []interface{}
+	for _, chain := range metaBlock.Chains {
+		pevList, err := CountBlockPEV(metaBlock.MetablockHeight, &chain)
+		fmt.Println(err)
+		if len(pevList) > 0 {
+			totalPevList = append(totalPevList, pevList...)
+		}
+	}
+	fmt.Println("len:", len(totalPevList))
+	hostMap := make(map[string]struct{})
+	addressMap := make(map[string]struct{})
+	blockInfoData := &MetaSoBlockInfo{Block: metaBlock.MetablockHeight, MetaBlock: *metaBlock}
+	for _, item := range totalPevList {
+		pev := item.(PEVData)
+		hostMap[pev.Host] = struct{}{}
+		addressMap[pev.Address] = struct{}{}
+		blockInfoData.DataValue = blockInfoData.DataValue.Add(pev.IncrementalValue)
+		fmt.Println("pev.IncrementalValue:", pev.IncrementalValue)
+		blockInfoData.PinNumber += 1
+		if pev.Host != "metabitcoin.unknown" {
+			blockInfoData.PinNumberHasHost += 1
+		}
+	}
+	blockInfoData.AddressNumber = int64(len(addressMap))
+	blockInfoData.HostNumber = int64(len(hostMap))
+	if metaBlock.MetablockHeight > 0 {
+		blockInfoData.HistoryValue, _ = getBlockHistory(metaBlock.MetablockHeight - 1)
+	}
+	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": metaBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
+	UpdateBlockValue(metaBlock.MetablockHeight, totalPevList, metaBlock.Timestamp)
+	fmt.Printf("%+v", hostMap)
+	UpdateDataValue(&hostMap, &addressMap)
+	log.Println("count metaBlock:", metaBlock.MetablockHeight)
+	//mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
+}
 func (metaso *MetaSo) syncPEV() {
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
 		return
@@ -29,12 +85,34 @@ func (metaso *MetaSo) syncPEV() {
 	if metaBlock.Header == "" {
 		return
 	}
-	log.Println("count metaBlock:", metaBlock.MetablockHeight)
-	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
+
+	var err error
+	for _, chain := range metaBlock.Chains {
+		endBlock := int64(0)
+		maxBlock := int64(0)
+		if chain.Chain == "Bitcoin" {
+			maxBlock = man.MaxHeight["btc"]
+		} else if chain.Chain == "MVC" {
+			maxBlock = man.MaxHeight["mvc"]
+		}
+		if chain.EndBlock == "" {
+			continue
+		}
+		endBlock, err = strconv.ParseInt(chain.EndBlock, 10, 64)
+		if err != nil || endBlock <= 0 || endBlock > maxBlock {
+			//if err != nil || endBlock <= 0 {
+			log.Println(">>", chain.Chain, err, endBlock, maxBlock)
+			return
+		}
+	}
+	mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.M{"metablockheight": -1})
 	var totalPevList []interface{}
 	for _, chain := range metaBlock.Chains {
-		pevList, _ := CountBlockPEV(metaBlock.MetablockHeight, &chain)
-		totalPevList = append(totalPevList, pevList...)
+		pevList, err := CountBlockPEV(metaBlock.MetablockHeight, &chain)
+		log.Println(err, chain.Chain, len(pevList))
+		if len(pevList) > 0 {
+			totalPevList = append(totalPevList, pevList...)
+		}
 	}
 	hostMap := make(map[string]struct{})
 	addressMap := make(map[string]struct{})
@@ -51,11 +129,21 @@ func (metaso *MetaSo) syncPEV() {
 	}
 	blockInfoData.AddressNumber = int64(len(addressMap))
 	blockInfoData.HostNumber = int64(len(hostMap))
-	blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
+	if metaBlock.MetablockHeight > 0 {
+		blockInfoData.HistoryValue, _ = getBlockHistory(metaBlock.MetablockHeight - 1)
+	}
 	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": metaBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
 
-	go UpdateBlockValue(metaBlock.MetablockHeight, totalPevList, metaBlock.Timestamp)
-	go UpdateDataValue(&hostMap, &addressMap)
+	err = UpdateBlockValue(metaBlock.MetablockHeight, totalPevList, metaBlock.Timestamp)
+	if err != nil {
+		log.Println("UpdateBlockValue:", err)
+	}
+	err = UpdateDataValue(&hostMap, &addressMap)
+	if err != nil {
+		log.Println("UpdateDataValue:", err)
+	}
+	log.Println("count metaBlock:", metaBlock.MetablockHeight)
+	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
 
 }
 
@@ -75,12 +163,13 @@ func (metaso *MetaSo) syncPendingPEV() {
 	btc := bitcoin.BitcoinChain{}
 	mvc := microvisionchain.MicroVisionChain{}
 	btcLastBlockHeight := btc.GetBestHeight()
-	btcBeginBlockHeight := btcLastBlockHeight
+
+	btcBeginBlockHeight := int64(0)
 	mvcLastBlockHeight := int64(0)
 	mvcBeginBlockHeight := int64(0)
 	if man.ChainAdapter["mvc"] != nil {
 		mvcLastBlockHeight = mvc.GetBestHeight()
-		mvcBeginBlockHeight = mvcLastBlockHeight
+		//mvcBeginBlockHeight = mvcLastBlockHeight
 	}
 
 	for _, c := range lastMetaBlock.Chains {
@@ -114,7 +203,10 @@ func (metaso *MetaSo) syncPendingPEV() {
 	var totalPevList []interface{}
 	for _, chain := range pendingBlock.Chains {
 		pevList, _ := CountBlockPEV(pendingBlock.MetablockHeight, &chain)
-		totalPevList = append(totalPevList, pevList...)
+		if len(pevList) > 0 {
+			totalPevList = append(totalPevList, pevList...)
+		}
+
 	}
 	hostMap := make(map[string]struct{})
 	addressMap := make(map[string]struct{})
@@ -134,8 +226,8 @@ func (metaso *MetaSo) syncPendingPEV() {
 	//blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
 	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": pendingBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
 
-	go UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList, pendingBlock.Timestamp)
-	//go UpdateDataValue(&hostMap, &addressMap)
+	UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList, pendingBlock.Timestamp)
+	UpdateDataValue(&hostMap, &addressMap)
 }
 
 func (metaso *MetaSo) getLastMetaBlock(addNum int64) (metaBlock *MetaBlockData, err error) {

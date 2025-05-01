@@ -1,0 +1,1955 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is a sample API with Swagger documentation.",
+        "title": "Metaso API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "paths": {
+        "/ft/mrc20/address/deploy-list": {
+            "get": {
+                "description": "Retrieve list of MRC20 tokens for an address",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tokens"
+                ],
+                "summary": "Get MRC20 token list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet address",
+                        "name": "address",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Token type filter",
+                        "name": "tickType",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of MRC20 tokens",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing address parameter",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/host/block/mdv": {
+            "get": {
+                "description": "Retrieve MDV (Miner Data Verification) information for blocks with pagination",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get block MDV data",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Block height",
+                        "name": "height",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Miner address filter",
+                        "name": "address",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sorting field",
+                        "name": "orderby",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MDV data for requested block",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/host/block/ndv": {
+            "get": {
+                "description": "Retrieve NDV (Node Data Verification) information for blocks with pagination",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get block NDV data",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Block height",
+                        "name": "height",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Host filter",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sorting field",
+                        "name": "orderby",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "NDV data for requested block",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/host/info": {
+            "get": {
+                "description": "Retrieve block information for a specific host",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Host"
+                ],
+                "summary": "Get host information",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Host identifier",
+                        "name": "host",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sorting field",
+                        "name": "orderby",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Host block information",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metaso/settings/blocked/add": {
+            "get": {
+                "description": "Add new item to the blocked items list",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Add item to blocked list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Type of item to block",
+                        "name": "blockType",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Content to block",
+                        "name": "blockContent",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success response",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metaso/settings/blocked/delete": {
+            "get": {
+                "description": "Remove item from the blocked items list",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Remove item from blocked list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Type of blocked item",
+                        "name": "blockType",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Content to unblock",
+                        "name": "blockContent",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success response",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing required parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/metaso/settings/blocked/list": {
+            "get": {
+                "description": "Retrieve paginated list of blocked items",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Get blocked items list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Type of blocked items (host/pinid/etc)",
+                        "name": "blockType",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Blocked items list with total count",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing or invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/follow": {
+            "get": {
+                "description": "Retrieve follow data for a specific meta ID including mempool status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Buzz"
+                ],
+                "summary": "Get follow information",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Meta ID to query follow data",
+                        "name": "metaid",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Follow information",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.followItem"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing metaid parameter",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/hot": {
+            "get": {
+                "description": "Retrieve paginated list of hottest buzz items ranked by popularity",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Buzz"
+                ],
+                "summary": "Get hot buzz feed",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Last record ID for pagination (cursor-based)",
+                        "name": "lastId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default: 10, max: 50)",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved hot buzz list",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "lastId": {
+                                                    "type": "string"
+                                                },
+                                                "list": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.TweetWithLike"
+                                                    }
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid size parameter",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/info": {
+            "get": {
+                "description": "Get complete information about a specific buzz item including comments, likes and donations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Buzz"
+                ],
+                "summary": "Get buzz item details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID of the buzz item to retrieve",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Buzz item details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "blocked": {
+                                                    "type": "boolean"
+                                                },
+                                                "comments": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.TweetComment"
+                                                    }
+                                                },
+                                                "donates": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.MetasoDonate"
+                                                    }
+                                                },
+                                                "like": {
+                                                    "type": "integer"
+                                                },
+                                                "tweet": {
+                                                    "$ref": "#/definitions/metaso.Tweet"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Missing pinId parameter",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/newest": {
+            "get": {
+                "description": "Retrieve paginated list of newest buzz items with filtering options",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Buzz"
+                ],
+                "summary": "Get latest buzz feed",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Last record ID for pagination (cursor)",
+                        "name": "lastId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 10)",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by meta ID",
+                        "name": "metaid",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter followed content only (true/false)",
+                        "name": "followed",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved buzz list",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "lastId": {
+                                                    "type": "string"
+                                                },
+                                                "list": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.TweetWithLike"
+                                                    }
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/search": {
+            "get": {
+                "description": "Search buzz items by keyword with pagination support",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Buzz"
+                ],
+                "summary": "Search buzz items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Last record ID for pagination",
+                        "name": "lastId",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page (default: 10)",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search keyword",
+                        "name": "key",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Search results",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "lastId": {
+                                                    "type": "string"
+                                                },
+                                                "list": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/definitions/metaso.TweetWithLike"
+                                                    }
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/social/buzz/updater": {
+            "get": {
+                "description": "Retrieves current and latest version information along with server details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Updater"
+                ],
+                "summary": "Get update information",
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved update information",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "curNo": {
+                                                    "type": "string"
+                                                },
+                                                "curVer": {
+                                                    "type": "string"
+                                                },
+                                                "lastNo": {
+                                                    "type": "string"
+                                                },
+                                                "lastVer": {
+                                                    "type": "string"
+                                                },
+                                                "mandatory": {
+                                                    "type": "boolean"
+                                                },
+                                                "serverUrl": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Error retrieving update information",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/host/metablock/info": {
+            "get": {
+                "description": "Retrieve paginated list of NDV (Node Data Verification) blocks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated NDV block list",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Block height",
+                        "name": "height",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "NDV block list with metadata",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "info": {
+                                                    "type": "object"
+                                                },
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/host/metablock/sync-newest": {
+            "get": {
+                "description": "Retrieve the current synchronization status of meta blocks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get latest block sync status",
+                "responses": {
+                    "200": {
+                        "description": "Block synchronization status",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "currentBlockHeight": {
+                                                    "type": "integer"
+                                                },
+                                                "currentMetaBlockHeight": {
+                                                    "type": "integer"
+                                                },
+                                                "initBlockHeight": {
+                                                    "type": "integer"
+                                                },
+                                                "progressEndBlock": {
+                                                    "type": "integer"
+                                                },
+                                                "progressStartBlock": {
+                                                    "type": "integer"
+                                                },
+                                                "syncMetaBlockHeight": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/mdv": {
+            "get": {
+                "description": "Retrieve paginated list of MDV (Miner Data Verification) records",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated MDV list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Miner address filter",
+                        "name": "address",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sorting field",
+                        "name": "orderby",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of MDV records",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/metablock/address/info": {
+            "get": {
+                "description": "Retrieve paginated list of MDV (Miner Data Verification) blocks",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated MDV block list",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Block height",
+                        "name": "height",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "MDV block list with metadata",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "info": {
+                                                    "type": "object"
+                                                },
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/metablock/host/address/list": {
+            "get": {
+                "description": "Retrieve paginated list of host address values with filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated host address values",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Starting block height filter",
+                        "name": "heightBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending block height filter",
+                        "name": "heightEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Starting timestamp filter",
+                        "name": "timeBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending timestamp filter",
+                        "name": "timeEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Host filter",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Host address values with total count",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/metablock/host/address/value": {
+            "get": {
+                "description": "Retrieve values for specific host address with filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get host address values",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Starting block height filter",
+                        "name": "heightBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending block height filter",
+                        "name": "heightEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Starting timestamp filter",
+                        "name": "timeBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending timestamp filter",
+                        "name": "timeEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Host filter",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Address filter",
+                        "name": "address",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Host address values with total count",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/metablock/host/value": {
+            "get": {
+                "description": "Retrieve paginated list of host values with filtering options",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated host value list",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Starting block height filter",
+                        "name": "heightBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending block height filter",
+                        "name": "heightEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Starting timestamp filter",
+                        "name": "timeBegin",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Ending timestamp filter",
+                        "name": "timeEnd",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Host filter",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Host value list with total count",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/metaso.ApiResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "list": {
+                                                    "type": "array"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/statistics/ndv": {
+            "get": {
+                "description": "Retrieve paginated list of NDV (Node Data Verification) records",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get paginated NDV list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Host filter",
+                        "name": "host",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sorting field",
+                        "name": "orderby",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of NDV records",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Service exception",
+                        "schema": {
+                            "$ref": "#/definitions/metaso.ApiResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "metaso.ApiResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "metaso.MetasoDonate": {
+            "type": "object",
+            "properties": {
+                "CreateMetaid": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "chainName": {
+                    "type": "string"
+                },
+                "coinType": {
+                    "type": "string"
+                },
+                "createAddress": {
+                    "type": "string"
+                },
+                "createTime": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "pinId": {
+                    "type": "string"
+                },
+                "pinNumber": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "toAddress": {
+                    "type": "string"
+                },
+                "toPin": {
+                    "type": "string"
+                }
+            }
+        },
+        "metaso.Tweet": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "chainName": {
+                    "type": "string"
+                },
+                "commentCount": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "contentBody": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "contentLength": {
+                    "type": "integer"
+                },
+                "contentSummary": {
+                    "type": "string"
+                },
+                "contentType": {
+                    "type": "string"
+                },
+                "contentTypeDetect": {
+                    "type": "string"
+                },
+                "createMetaId": {
+                    "type": "string"
+                },
+                "creator": {
+                    "type": "string"
+                },
+                "dataValue": {
+                    "type": "integer"
+                },
+                "donateCount": {
+                    "type": "integer"
+                },
+                "encryption": {
+                    "type": "string"
+                },
+                "genesisFee": {
+                    "type": "integer"
+                },
+                "genesisHeight": {
+                    "type": "integer"
+                },
+                "genesisTransaction": {
+                    "type": "string"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "hot": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initialOwner": {
+                    "type": "string"
+                },
+                "isTransfered": {
+                    "type": "boolean"
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "likeCount": {
+                    "type": "integer"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "metaid": {
+                    "type": "string"
+                },
+                "mogoID": {
+                    "type": "string"
+                },
+                "mrc20MintId": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "operation": {
+                    "type": "string"
+                },
+                "originalId": {
+                    "type": "string"
+                },
+                "originalPath": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                },
+                "outputValue": {
+                    "type": "integer"
+                },
+                "parentPath": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "pop": {
+                    "type": "string"
+                },
+                "popLv": {
+                    "type": "integer"
+                },
+                "preview": {
+                    "type": "string"
+                },
+                "shareCount": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "txInIndex": {
+                    "type": "integer"
+                },
+                "txIndex": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "metaso.TweetComment": {
+            "type": "object",
+            "properties": {
+                "CreateMetaid": {
+                    "type": "string"
+                },
+                "chainName": {
+                    "type": "string"
+                },
+                "commentToPinId": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "contentType": {
+                    "type": "string"
+                },
+                "createAddress": {
+                    "type": "string"
+                },
+                "pinId": {
+                    "type": "string"
+                },
+                "pinNumber": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                }
+            }
+        },
+        "metaso.TweetWithLike": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "blocked": {
+                    "type": "boolean"
+                },
+                "chainName": {
+                    "type": "string"
+                },
+                "commentCount": {
+                    "type": "integer"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "contentBody": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "contentLength": {
+                    "type": "integer"
+                },
+                "contentSummary": {
+                    "type": "string"
+                },
+                "contentType": {
+                    "type": "string"
+                },
+                "contentTypeDetect": {
+                    "type": "string"
+                },
+                "createMetaId": {
+                    "type": "string"
+                },
+                "creator": {
+                    "type": "string"
+                },
+                "dataValue": {
+                    "type": "integer"
+                },
+                "donate": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "donateCount": {
+                    "type": "integer"
+                },
+                "encryption": {
+                    "type": "string"
+                },
+                "genesisFee": {
+                    "type": "integer"
+                },
+                "genesisHeight": {
+                    "type": "integer"
+                },
+                "genesisTransaction": {
+                    "type": "string"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "hot": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initialOwner": {
+                    "type": "string"
+                },
+                "isTransfered": {
+                    "type": "boolean"
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "like": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "likeCount": {
+                    "type": "integer"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "metaid": {
+                    "type": "string"
+                },
+                "mogoID": {
+                    "type": "string"
+                },
+                "mrc20MintId": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "operation": {
+                    "type": "string"
+                },
+                "originalId": {
+                    "type": "string"
+                },
+                "originalPath": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                },
+                "outputValue": {
+                    "type": "integer"
+                },
+                "parentPath": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "pop": {
+                    "type": "string"
+                },
+                "popLv": {
+                    "type": "integer"
+                },
+                "preview": {
+                    "type": "string"
+                },
+                "shareCount": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "txInIndex": {
+                    "type": "integer"
+                },
+                "txIndex": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "metaso.followItem": {
+            "type": "object",
+            "properties": {
+                "mempool": {
+                    "type": "integer"
+                },
+                "metaid": {
+                    "type": "string"
+                },
+                "unfollow": {
+                    "type": "integer"
+                }
+            }
+        }
+    }
+}

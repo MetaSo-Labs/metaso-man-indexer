@@ -34,6 +34,36 @@ func CreateIndexIfNotExists(mongoClient *mongo.Database, collectionName, indexNa
 	}
 	return nil
 }
+func CreateTextIndexIfNotExists(mongoClient *mongo.Database, collectionName, indexName string, keys []string) error {
+	exists, err := checkIndexExists(mongoClient, collectionName, indexName)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	keysBson := bson.D{}
+	for _, key := range keys {
+		keysBson = append(keysBson, bson.E{Key: key, Value: "text"})
+	}
+	indexModel := mongo.IndexModel{
+		Keys:    keysBson,
+		Options: options.Index().SetName(indexName).SetDefaultLanguage("none").SetWeights(bson.D{{Key: "keywords", Value: 1}}),
+	}
+	collection := mongoClient.Collection(collectionName)
+	_, err = collection.Indexes().CreateOne(context.Background(), indexModel)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Printf("Index %s created successfully\n", indexName)
+	return nil
+}
+func DeleteIndex(mongoClient *mongo.Database, collectionName, indexName string) (err error) {
+	collection := mongoClient.Collection(collectionName)
+	_, err = collection.Indexes().DropOne(context.Background(), indexName)
+	return
+}
 func CreateIndexWithFilterIfNotExists(mongoClient *mongo.Database, collectionName, indexName string, keys bson.D, unique bool, filter bson.D) error {
 	exists, err := checkIndexExists(mongoClient, collectionName, indexName)
 	if err != nil {

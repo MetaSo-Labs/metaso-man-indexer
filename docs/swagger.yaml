@@ -1,0 +1,1253 @@
+definitions:
+  metaso.ApiResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  metaso.MetasoDonate:
+    properties:
+      CreateMetaid:
+        type: string
+      amount:
+        type: number
+      chainName:
+        type: string
+      coinType:
+        type: string
+      createAddress:
+        type: string
+      createTime:
+        type: string
+      message:
+        type: string
+      pinId:
+        type: string
+      pinNumber:
+        type: integer
+      timestamp:
+        type: integer
+      toAddress:
+        type: string
+      toPin:
+        type: string
+    type: object
+  metaso.Tweet:
+    properties:
+      address:
+        type: string
+      chainName:
+        type: string
+      commentCount:
+        type: integer
+      content:
+        type: string
+      contentBody:
+        items:
+          type: integer
+        type: array
+      contentLength:
+        type: integer
+      contentSummary:
+        type: string
+      contentType:
+        type: string
+      contentTypeDetect:
+        type: string
+      createMetaId:
+        type: string
+      creator:
+        type: string
+      dataValue:
+        type: integer
+      donateCount:
+        type: integer
+      encryption:
+        type: string
+      genesisFee:
+        type: integer
+      genesisHeight:
+        type: integer
+      genesisTransaction:
+        type: string
+      host:
+        type: string
+      hot:
+        type: integer
+      id:
+        type: string
+      initialOwner:
+        type: string
+      isTransfered:
+        type: boolean
+      keywords:
+        items:
+          type: string
+        type: array
+      likeCount:
+        type: integer
+      location:
+        type: string
+      metaid:
+        type: string
+      mogoID:
+        type: string
+      mrc20MintId:
+        items:
+          type: string
+        type: array
+      number:
+        type: integer
+      offset:
+        type: integer
+      operation:
+        type: string
+      originalId:
+        type: string
+      originalPath:
+        type: string
+      output:
+        type: string
+      outputValue:
+        type: integer
+      parentPath:
+        type: string
+      path:
+        type: string
+      pop:
+        type: string
+      popLv:
+        type: integer
+      preview:
+        type: string
+      shareCount:
+        type: integer
+      status:
+        type: integer
+      timestamp:
+        type: integer
+      txInIndex:
+        type: integer
+      txIndex:
+        type: integer
+      version:
+        type: string
+    type: object
+  metaso.TweetComment:
+    properties:
+      CreateMetaid:
+        type: string
+      chainName:
+        type: string
+      commentToPinId:
+        type: string
+      content:
+        type: string
+      contentType:
+        type: string
+      createAddress:
+        type: string
+      pinId:
+        type: string
+      pinNumber:
+        type: integer
+      timestamp:
+        type: integer
+    type: object
+  metaso.TweetWithLike:
+    properties:
+      address:
+        type: string
+      blocked:
+        type: boolean
+      chainName:
+        type: string
+      commentCount:
+        type: integer
+      content:
+        type: string
+      contentBody:
+        items:
+          type: integer
+        type: array
+      contentLength:
+        type: integer
+      contentSummary:
+        type: string
+      contentType:
+        type: string
+      contentTypeDetect:
+        type: string
+      createMetaId:
+        type: string
+      creator:
+        type: string
+      dataValue:
+        type: integer
+      donate:
+        items:
+          type: string
+        type: array
+      donateCount:
+        type: integer
+      encryption:
+        type: string
+      genesisFee:
+        type: integer
+      genesisHeight:
+        type: integer
+      genesisTransaction:
+        type: string
+      host:
+        type: string
+      hot:
+        type: integer
+      id:
+        type: string
+      initialOwner:
+        type: string
+      isTransfered:
+        type: boolean
+      keywords:
+        items:
+          type: string
+        type: array
+      like:
+        items:
+          type: string
+        type: array
+      likeCount:
+        type: integer
+      location:
+        type: string
+      metaid:
+        type: string
+      mogoID:
+        type: string
+      mrc20MintId:
+        items:
+          type: string
+        type: array
+      number:
+        type: integer
+      offset:
+        type: integer
+      operation:
+        type: string
+      originalId:
+        type: string
+      originalPath:
+        type: string
+      output:
+        type: string
+      outputValue:
+        type: integer
+      parentPath:
+        type: string
+      path:
+        type: string
+      pop:
+        type: string
+      popLv:
+        type: integer
+      preview:
+        type: string
+      shareCount:
+        type: integer
+      status:
+        type: integer
+      timestamp:
+        type: integer
+      txInIndex:
+        type: integer
+      txIndex:
+        type: integer
+      version:
+        type: string
+    type: object
+  metaso.followItem:
+    properties:
+      mempool:
+        type: integer
+      metaid:
+        type: string
+      unfollow:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: This is a sample API with Swagger documentation.
+  title: Metaso API
+  version: "1.0"
+paths:
+  /ft/mrc20/address/deploy-list:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve list of MRC20 tokens for an address
+      parameters:
+      - description: Wallet address
+        in: query
+        name: address
+        required: true
+        type: string
+      - description: Token type filter
+        in: query
+        name: tickType
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of MRC20 tokens
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Missing address parameter
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get MRC20 token list
+      tags:
+      - Tokens
+  /host/block/mdv:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve MDV (Miner Data Verification) information for blocks with
+        pagination
+      parameters:
+      - description: Block height
+        in: query
+        name: height
+        required: true
+        type: integer
+      - description: Miner address filter
+        in: query
+        name: address
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      - description: Sorting field
+        in: query
+        name: orderby
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: MDV data for requested block
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get block MDV data
+      tags:
+      - Statistics
+  /host/block/ndv:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve NDV (Node Data Verification) information for blocks with
+        pagination
+      parameters:
+      - description: Block height
+        in: query
+        name: height
+        required: true
+        type: integer
+      - description: Host filter
+        in: query
+        name: host
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      - description: Sorting field
+        in: query
+        name: orderby
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: NDV data for requested block
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get block NDV data
+      tags:
+      - Statistics
+  /host/info:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve block information for a specific host
+      parameters:
+      - description: Host identifier
+        in: query
+        name: host
+        required: true
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      - description: Sorting field
+        in: query
+        name: orderby
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Host block information
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get host information
+      tags:
+      - Host
+  /metaso/settings/blocked/add:
+    get:
+      consumes:
+      - application/json
+      description: Add new item to the blocked items list
+      parameters:
+      - description: Type of item to block
+        in: query
+        name: blockType
+        required: true
+        type: string
+      - description: Content to block
+        in: query
+        name: blockContent
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Missing required parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Add item to blocked list
+      tags:
+      - Settings
+  /metaso/settings/blocked/delete:
+    get:
+      consumes:
+      - application/json
+      description: Remove item from the blocked items list
+      parameters:
+      - description: Type of blocked item
+        in: query
+        name: blockType
+        required: true
+        type: string
+      - description: Content to unblock
+        in: query
+        name: blockContent
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Missing required parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Remove item from blocked list
+      tags:
+      - Settings
+  /metaso/settings/blocked/list:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of blocked items
+      parameters:
+      - description: Type of blocked items (host/pinid/etc)
+        in: query
+        name: blockType
+        required: true
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Blocked items list with total count
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Missing or invalid parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get blocked items list
+      tags:
+      - Settings
+  /social/buzz/follow:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve follow data for a specific meta ID including mempool status
+      parameters:
+      - description: Meta ID to query follow data
+        in: query
+        name: metaid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Follow information
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    list:
+                      items:
+                        $ref: '#/definitions/metaso.followItem'
+                      type: array
+                  type: object
+              type: object
+        "400":
+          description: Missing metaid parameter
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get follow information
+      tags:
+      - Buzz
+  /social/buzz/hot:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of hottest buzz items ranked by popularity
+      parameters:
+      - description: Last record ID for pagination (cursor-based)
+        in: query
+        name: lastId
+        type: string
+      - description: 'Number of items per page (default: 10, max: 50)'
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved hot buzz list
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    lastId:
+                      type: string
+                    list:
+                      items:
+                        $ref: '#/definitions/metaso.TweetWithLike'
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid size parameter
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get hot buzz feed
+      tags:
+      - Buzz
+  /social/buzz/info:
+    get:
+      consumes:
+      - application/json
+      description: Get complete information about a specific buzz item including comments,
+        likes and donations
+      parameters:
+      - description: ID of the buzz item to retrieve
+        in: query
+        name: pinId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Buzz item details
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    blocked:
+                      type: boolean
+                    comments:
+                      items:
+                        $ref: '#/definitions/metaso.TweetComment'
+                      type: array
+                    donates:
+                      items:
+                        $ref: '#/definitions/metaso.MetasoDonate'
+                      type: array
+                    like:
+                      type: integer
+                    tweet:
+                      $ref: '#/definitions/metaso.Tweet'
+                  type: object
+              type: object
+        "400":
+          description: Missing pinId parameter
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get buzz item details
+      tags:
+      - Buzz
+  /social/buzz/newest:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of newest buzz items with filtering options
+      parameters:
+      - description: Last record ID for pagination (cursor)
+        in: query
+        name: lastId
+        type: string
+      - description: 'Items per page (default: 10)'
+        in: query
+        name: size
+        type: integer
+      - description: Filter by meta ID
+        in: query
+        name: metaid
+        type: string
+      - description: Filter followed content only (true/false)
+        in: query
+        name: followed
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved buzz list
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    lastId:
+                      type: string
+                    list:
+                      items:
+                        $ref: '#/definitions/metaso.TweetWithLike'
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get latest buzz feed
+      tags:
+      - Buzz
+  /social/buzz/search:
+    get:
+      consumes:
+      - application/json
+      description: Search buzz items by keyword with pagination support
+      parameters:
+      - description: Last record ID for pagination
+        in: query
+        name: lastId
+        type: string
+      - description: 'Number of items per page (default: 10)'
+        in: query
+        name: size
+        type: integer
+      - description: Search keyword
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Search results
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    lastId:
+                      type: string
+                    list:
+                      items:
+                        $ref: '#/definitions/metaso.TweetWithLike'
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Search buzz items
+      tags:
+      - Buzz
+  /social/buzz/updater:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves current and latest version information along with server
+        details
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully retrieved update information
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    curNo:
+                      type: string
+                    curVer:
+                      type: string
+                    lastNo:
+                      type: string
+                    lastVer:
+                      type: string
+                    mandatory:
+                      type: boolean
+                    serverUrl:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: Error retrieving update information
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get update information
+      tags:
+      - Updater
+  /statistics/host/metablock/info:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of NDV (Node Data Verification) blocks
+      parameters:
+      - description: Block height
+        in: query
+        name: height
+        required: true
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: NDV block list with metadata
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    info:
+                      type: object
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated NDV block list
+      tags:
+      - Statistics
+  /statistics/host/metablock/sync-newest:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the current synchronization status of meta blocks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Block synchronization status
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    currentBlockHeight:
+                      type: integer
+                    currentMetaBlockHeight:
+                      type: integer
+                    initBlockHeight:
+                      type: integer
+                    progressEndBlock:
+                      type: integer
+                    progressStartBlock:
+                      type: integer
+                    syncMetaBlockHeight:
+                      type: integer
+                  type: object
+              type: object
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get latest block sync status
+      tags:
+      - Statistics
+  /statistics/mdv:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of MDV (Miner Data Verification) records
+      parameters:
+      - description: Miner address filter
+        in: query
+        name: address
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      - description: Sorting field
+        in: query
+        name: orderby
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of MDV records
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated MDV list
+      tags:
+      - Statistics
+  /statistics/metablock/address/info:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of MDV (Miner Data Verification) blocks
+      parameters:
+      - description: Block height
+        in: query
+        name: height
+        required: true
+        type: integer
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: MDV block list with metadata
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    info:
+                      type: object
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated MDV block list
+      tags:
+      - Statistics
+  /statistics/metablock/host/address/list:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of host address values with filtering
+      parameters:
+      - description: Starting block height filter
+        in: query
+        name: heightBegin
+        type: integer
+      - description: Ending block height filter
+        in: query
+        name: heightEnd
+        type: integer
+      - description: Starting timestamp filter
+        in: query
+        name: timeBegin
+        type: integer
+      - description: Ending timestamp filter
+        in: query
+        name: timeEnd
+        type: integer
+      - description: Host filter
+        in: query
+        name: host
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Host address values with total count
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated host address values
+      tags:
+      - Statistics
+  /statistics/metablock/host/address/value:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve values for specific host address with filtering
+      parameters:
+      - description: Starting block height filter
+        in: query
+        name: heightBegin
+        type: integer
+      - description: Ending block height filter
+        in: query
+        name: heightEnd
+        type: integer
+      - description: Starting timestamp filter
+        in: query
+        name: timeBegin
+        type: integer
+      - description: Ending timestamp filter
+        in: query
+        name: timeEnd
+        type: integer
+      - description: Host filter
+        in: query
+        name: host
+        type: string
+      - description: Address filter
+        in: query
+        name: address
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Host address values with total count
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get host address values
+      tags:
+      - Statistics
+  /statistics/metablock/host/value:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of host values with filtering options
+      parameters:
+      - description: Starting block height filter
+        in: query
+        name: heightBegin
+        type: integer
+      - description: Ending block height filter
+        in: query
+        name: heightEnd
+        type: integer
+      - description: Starting timestamp filter
+        in: query
+        name: timeBegin
+        type: integer
+      - description: Ending timestamp filter
+        in: query
+        name: timeEnd
+        type: integer
+      - description: Host filter
+        in: query
+        name: host
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Host value list with total count
+          schema:
+            allOf:
+            - $ref: '#/definitions/metaso.ApiResponse'
+            - properties:
+                data:
+                  properties:
+                    list:
+                      type: array
+                    total:
+                      type: integer
+                  type: object
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated host value list
+      tags:
+      - Statistics
+  /statistics/ndv:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of NDV (Node Data Verification) records
+      parameters:
+      - description: Host filter
+        in: query
+        name: host
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: size
+        type: integer
+      - description: Sorting field
+        in: query
+        name: orderby
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of NDV records
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+        "500":
+          description: Service exception
+          schema:
+            $ref: '#/definitions/metaso.ApiResponse'
+      summary: Get paginated NDV list
+      tags:
+      - Statistics
+swagger: "2.0"
