@@ -67,6 +67,9 @@ func (metaso *MetaSo) syncMrc20TickData() (err error) {
 		}
 		insertDocs = append(insertDocs, deploy)
 	}
+	if len(insertDocs) <= 0 {
+		return
+	}
 	insertOpts := options.InsertMany().SetOrdered(false)
 	_, err1 := mongoClient.Collection(MetasoTickCollection).InsertMany(context.TODO(), insertDocs, insertOpts)
 	if err1 != nil {

@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"context"
+	"log"
 	"manindexer/pin"
 	"time"
 
@@ -10,6 +11,10 @@ import (
 )
 
 func FixNullMetaIdPinId() (err error) {
+	fixed, _ := GetSyncLastNumber("fixnullmetaidpinid")
+	if fixed == 1 {
+		return
+	}
 	filter := bson.M{"pinid": nil}
 	find, err := mongoClient.Collection(MetaIdInfoCollection).Find(context.TODO(), filter)
 	if err != nil {
@@ -21,6 +26,8 @@ func FixNullMetaIdPinId() (err error) {
 		updateMetaidPinId(item)
 		time.Sleep(time.Millisecond * 100)
 	}
+	UpdateSyncLastNumber("fixnullmetaidpinid", 1)
+	log.Println("FixNullMetaIdPinId done")
 	return
 }
 func updateMetaidPinId(item *pin.MetaIdDataValue) (err error) {

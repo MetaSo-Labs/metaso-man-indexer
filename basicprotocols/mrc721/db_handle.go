@@ -24,7 +24,7 @@ const (
 	Mrc721Item       string = "mrc721item"
 )
 
-func connectMongoDb() {
+func ConnectMongoDb() {
 	mg := common.Config.MongoDb
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(mg.TimeOut))
 	defer cancel()

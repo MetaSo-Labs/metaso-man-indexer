@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"manindexer/database/mongodb"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -200,8 +202,18 @@ func getUpdaterInfo(last bool) (buildNo int64, ver string, mandatory bool, err e
 	if !last {
 		versionUrl = "http://host.docker.internal:7171/api/checkStatus"
 	}
-	resp, err := http.Get(versionUrl)
+	// resp, err := http.Get(versionUrl)
+	// if err != nil {
+	// 	return
+	// }
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Set timeout to 5 seconds
+	}
+
+	resp, err := client.Get(versionUrl)
 	if err != nil {
+		log.Println("error getUpdaterInfo request:", err)
+		err = fmt.Errorf("error making GET request: %w", err)
 		return
 	}
 	defer resp.Body.Close()

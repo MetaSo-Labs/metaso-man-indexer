@@ -2,6 +2,7 @@ package mrc721
 
 import (
 	"context"
+	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"time"
@@ -13,18 +14,51 @@ import (
 )
 
 func (mrc721 *Mrc721) Synchronization() {
-	connectMongoDb()
-	go func() {
-		for {
-			SyncAddress()
-			time.Sleep(time.Minute * 10)
-		}
-	}()
+	// for {
+	// 	mrc721.sync()
+	// 	mrc721.syncTransfer()
+	// 	time.Sleep(time.Second * 10)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	for {
-		mrc721.sync()
-		mrc721.syncTransfer()
-		time.Sleep(time.Second * 10)
+		select {
+		case <-ticker.C:
+			if err := mrc721.sync(); err != nil {
+				log.Printf("Error mrc721.sync: %v\n", err)
+			}
+			if err := mrc721.syncTransfer(); err != nil {
+				log.Printf("Error mrc721.syncTransfer: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
+	}
+}
+func (mrc721 *Mrc721) SynchronizationAddress() {
+	// for {
+	// 	SyncAddress()
+	// 	time.Sleep(time.Minute * 10)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := SyncAddress(); err != nil {
+				log.Printf("Error mrc721 SyncAddress: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }
 func (mrc721 *Mrc721) sync() (err error) {

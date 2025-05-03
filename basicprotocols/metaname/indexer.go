@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"regexp"
@@ -19,10 +20,30 @@ import (
 
 func (metaName *MetaName) Synchronization() {
 	connectMongoDb()
+
+	// for {
+	// 	metaName.sync()
+	// 	metaName.syncTransfer()
+	// 	time.Sleep(time.Second * 10)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 	for {
-		metaName.sync()
-		metaName.syncTransfer()
-		time.Sleep(time.Second * 10)
+		select {
+		case <-ticker.C:
+			if err := metaName.sync(); err != nil {
+				log.Printf("Error metaName.sync: %v\n", err)
+			}
+			if err := metaName.syncTransfer(); err != nil {
+				log.Printf("Error metaName.syncTransfer: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }
 func (metaName *MetaName) sync() (err error) {

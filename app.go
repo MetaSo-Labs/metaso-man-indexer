@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log"
@@ -26,7 +27,7 @@ var (
 func main() {
 	banner := `
     __  ___  ___     _   __
-   /  |/  / /   |   / | / / v0.4.18
+   /  |/  / /   |   / | / / v0.5.8
   / /|_/ / / /| |  /  |/ / 
  / /  / / / ___ | / /|  /  
 /_/  /_/ /_/  |_|/_/ |_/                   
@@ -39,6 +40,8 @@ func main() {
 		go api.Start(f)
 	}
 	go man.ZmqRun()
+	man.IndexerRun(common.TestNet)
+	man.CheckNewBlock()
 	if common.ModuleExist("metaso") {
 		ms := metaso.MetaSo{}
 		metaso.ConnectMongoDb()
@@ -55,13 +58,30 @@ func main() {
 		go mn.Synchronization()
 	}
 	if common.ModuleExist("mrc721") {
-		mrc721 := mrc721.Mrc721{}
-		go mrc721.Synchronization()
+		mrc721c := mrc721.Mrc721{}
+		mrc721.ConnectMongoDb()
+		go mrc721c.Synchronization()
+		go mrc721c.SynchronizationAddress()
 	}
 	go mongodb.FixNullMetaIdPinId()
+	// for {
+	// 	man.IndexerRun(common.TestNet)
+	// 	man.CheckNewBlock()
+	// 	time.Sleep(time.Second * 10)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	for {
-		man.IndexerRun(common.TestNet)
-		man.CheckNewBlock()
-		time.Sleep(time.Second * 10)
+		select {
+		case <-ticker.C:
+			man.IndexerRun(common.TestNet)
+			man.CheckNewBlock()
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }

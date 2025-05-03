@@ -3,9 +3,9 @@ package metaso
 import (
 	"context"
 	"fmt"
+	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
-	"manindexer/man"
 	"path"
 	"time"
 
@@ -34,23 +34,76 @@ func (metaso *MetaSo) Synchronization() {
 	jiebax = gojieba.NewJieba(jiebaPath, hmmPath, userPath, idfPath, stopPath)
 
 	defer jiebax.Free()
+	// for {
+	// 	metaso.synchTweet()
+	// 	metaso.synchTweetLike()
+	// 	metaso.synchMeatsoDonate()
+	// 	metaso.synchTweetComment()
+	// 	metaso.syncHostData()
+	// 	metaso.syncMrc20TickData()
+	// 	metaso.synchMempoolData()
+	// 	time.Sleep(time.Second * 3)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 	for {
-		metaso.synchTweet()
-		metaso.synchTweetLike()
-		metaso.synchMeatsoDonate()
-		metaso.synchTweetComment()
-		metaso.syncHostData()
-		metaso.syncMrc20TickData()
-		metaso.synchMempoolData()
-		time.Sleep(time.Second * 3)
+		select {
+		case <-ticker.C:
+			if err := metaso.synchTweet(); err != nil {
+				log.Printf("Error synching tweets: %v\n", err)
+			}
+			if err := metaso.synchTweetLike(); err != nil {
+				log.Printf("Error synching tweet likes: %v\n", err)
+			}
+			if err := metaso.synchMeatsoDonate(); err != nil {
+				log.Printf("Error synching Meatso donations: %v\n", err)
+			}
+			if err := metaso.synchTweetComment(); err != nil {
+				log.Printf("Error synching tweet comments: %v\n", err)
+			}
+			if err := metaso.syncHostData(); err != nil {
+				log.Printf("Error syncing host data: %v\n", err)
+			}
+			if err := metaso.syncMrc20TickData(); err != nil {
+				log.Printf("Error syncing MRC20 tick data: %v\n", err)
+			}
+			if err := metaso.synchMempoolData(); err != nil {
+				log.Printf("Error synching mempool data: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }
 func (metaso *MetaSo) SyncPEV() (err error) {
 	fixStatistics()
+	// for {
+	// 	metaso.syncPendingPEV()
+	// 	metaso.syncPEV()
+	// 	time.Sleep(time.Second * 5)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	for {
-		metaso.syncPendingPEV()
-		metaso.syncPEV()
-		time.Sleep(time.Second * 5)
+		select {
+		case <-ticker.C:
+			if err := metaso.syncPendingPEV(); err != nil {
+				log.Printf("Error syncPendingPEV: %v\n", err)
+			}
+			if err := metaso.syncPEV(); err != nil {
+				log.Printf("Error syncPEV: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }
 func fixHost() {
@@ -75,16 +128,16 @@ func fixStatistics() {
 		mongoClient.Collection(TweetCollection).DeleteMany(context.TODO(), bson.D{})
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "metablock"})
 		mongoClient.Collection("sync_lastid_log").DeleteOne(context.TODO(), bson.M{"key": "tweet"})
-		if fixedTarger == 22 {
-			for i := 892312; i <= 894039; i++ {
-				man.DoIndexerRun("btc", int64(i), true)
-				fmt.Println("btc reindex", i)
-			}
-			for i := 117006; i <= 118681; i++ {
-				man.DoIndexerRun("mvc", int64(i), true)
-				fmt.Println("mvc reindex", i)
-			}
-		}
+		// if fixedTarger == 22 {
+		// 	for i := 892312; i <= 894039; i++ {
+		// 		man.DoIndexerRun("btc", int64(i), true)
+		// 		fmt.Println("btc reindex", i)
+		// 	}
+		// 	for i := 117006; i <= 118681; i++ {
+		// 		man.DoIndexerRun("mvc", int64(i), true)
+		// 		fmt.Println("mvc reindex", i)
+		// 	}
+		// }
 	}
 	mongodb.UpdateSyncLastNumber("fixstatistics", fixedTarger)
 }
@@ -95,9 +148,25 @@ func (metaso *MetaSo) SyncPendingPEVF() (err error) {
 	}
 }
 func (metaso *MetaSo) SynchBlockedSettings() (err error) {
+	// for {
+	// 	metaso.synchBlockedSettings()
+	// 	time.Sleep(time.Minute * 3)
+	// }
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 	for {
-		metaso.synchBlockedSettings()
-		time.Sleep(time.Minute * 3)
+		select {
+		case <-ticker.C:
+			if err := metaso.synchBlockedSettings(); err != nil {
+				log.Printf("Error synchBlockedSettings: %v\n", err)
+			}
+		case <-ctx.Done():
+			log.Println("Shutting down...")
+			return
+		}
 	}
 }
 func (metaso *MetaSo) synchBlockedSettings() (err error) {

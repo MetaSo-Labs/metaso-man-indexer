@@ -13,6 +13,7 @@ import (
 	"manindexer/man"
 	"net/http"
 	"strconv"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -72,21 +73,23 @@ func (metaso *MetaSo) SyncPEVTest(height int64) {
 	fmt.Printf("%+v", hostMap)
 	UpdateDataValue(&hostMap, &addressMap)
 	log.Println("count metaBlock:", metaBlock.MetablockHeight)
-	//mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
+	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
 }
-func (metaso *MetaSo) syncPEV() {
+func (metaso *MetaSo) syncPEV() (err error) {
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
+		err = fmt.Errorf("config error")
 		return
 	}
 	metaBlock, _ := metaso.getLastMetaBlock(1)
 	if metaBlock == nil {
+		err = fmt.Errorf("metaBlock is nil")
 		return
 	}
 	if metaBlock.Header == "" {
+		err = fmt.Errorf("metaBlock.Header is empty")
 		return
 	}
 
-	var err error
 	for _, chain := range metaBlock.Chains {
 		endBlock := int64(0)
 		maxBlock := int64(0)
@@ -101,7 +104,7 @@ func (metaso *MetaSo) syncPEV() {
 		endBlock, err = strconv.ParseInt(chain.EndBlock, 10, 64)
 		if err != nil || endBlock <= 0 || endBlock > maxBlock {
 			//if err != nil || endBlock <= 0 {
-			log.Println(">>", chain.Chain, err, endBlock, maxBlock)
+			log.Println("SyncPEV error:", chain.Chain, err, endBlock, maxBlock)
 			return
 		}
 	}
@@ -136,26 +139,35 @@ func (metaso *MetaSo) syncPEV() {
 
 	err = UpdateBlockValue(metaBlock.MetablockHeight, totalPevList, metaBlock.Timestamp)
 	if err != nil {
-		log.Println("UpdateBlockValue:", err)
+		log.Println("UpdateBlockValue error:", err)
+		return
 	}
 	err = UpdateDataValue(&hostMap, &addressMap)
 	if err != nil {
-		log.Println("UpdateDataValue:", err)
+		log.Println("UpdateDataValue error:", err)
+		return
 	}
 	log.Println("count metaBlock:", metaBlock.MetablockHeight)
-	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
-
+	err = mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
+	if err != nil {
+		log.Println("UpdateSyncLastNumber error:", err)
+		return
+	}
+	return
 }
 
-func (metaso *MetaSo) syncPendingPEV() {
+func (metaso *MetaSo) syncPendingPEV() (err error) {
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
+		err = fmt.Errorf("config error")
 		return
 	}
 	lastMetaBlock, _ := metaso.getLastMetaBlock(0)
 	if lastMetaBlock == nil {
+		err = fmt.Errorf("lastMetaBlock is nil")
 		return
 	}
 	if lastMetaBlock.Header == "" {
+		err = fmt.Errorf("lastMetaBlock.Header is empty")
 		return
 	}
 	log.Println("last metaBlock:", lastMetaBlock.MetablockHeight)
@@ -224,10 +236,16 @@ func (metaso *MetaSo) syncPendingPEV() {
 	blockInfoData.AddressNumber = int64(len(addressMap))
 	blockInfoData.HostNumber = int64(len(hostMap))
 	//blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
-	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": pendingBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
-
-	UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList, pendingBlock.Timestamp)
-	UpdateDataValue(&hostMap, &addressMap)
+	_, err = mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": pendingBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
+	if err != nil {
+		return
+	}
+	err = UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList, pendingBlock.Timestamp)
+	if err != nil {
+		return
+	}
+	err = UpdateDataValue(&hostMap, &addressMap)
+	return
 }
 
 func (metaso *MetaSo) getLastMetaBlock(addNum int64) (metaBlock *MetaBlockData, err error) {
@@ -253,9 +271,19 @@ type lastMetaBlockRes struct {
 
 func getMetaBlock(height int64) (metaBlock *MetaBlockData) {
 	url := fmt.Sprintf("%s/api/block/info?number=%d", common.Config.Statistics.MetaChainHost, height)
-	resp, err := http.Get(url)
+	// resp, err := http.Get(url)
+	// if err != nil {
+	// 	//fmt.Println("Error making GET request:", err)
+	// 	return
+	// }
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Set timeout to 5 seconds
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
-		//fmt.Println("Error making GET request:", err)
+		log.Println("error getMetaBlock request:", err)
+		err = fmt.Errorf("error making GET request: %w", err)
 		return
 	}
 	defer resp.Body.Close()
@@ -275,9 +303,19 @@ func getMetaBlock(height int64) (metaBlock *MetaBlockData) {
 }
 func getLastMetaBlock() (info *LastMetaBlockData) {
 	url := fmt.Sprintf("%s/api/block/latest", common.Config.Statistics.MetaChainHost)
-	resp, err := http.Get(url)
+	// resp, err := http.Get(url)
+	// if err != nil {
+	// 	fmt.Println("Error making GET request:", err)
+	// 	return
+	// }
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Set timeout to 5 seconds
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
-		fmt.Println("Error making GET request:", err)
+		log.Println("error getLastMetaBlock request:", err)
+		err = fmt.Errorf("error making GET request: %w", err)
 		return
 	}
 	defer resp.Body.Close()

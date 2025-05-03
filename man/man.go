@@ -274,7 +274,7 @@ func IndexerRun(test string) {
 		step := to - from
 		if step == 1 {
 			for x := to - 4; x <= to-1; x++ {
-				go DoIndexerRun(chainName, x, false)
+				go DoIndexerRun(chainName, x, true)
 			}
 		}
 	}
@@ -282,6 +282,7 @@ func IndexerRun(test string) {
 
 }
 func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
+	//fmt.Println("DoIndexerRun", chainName, height, reIndex)
 	//bT := time.Now()
 	//bar := progressbar.Default(to - from)
 	//for i := from + 1; i <= to; i++ {
