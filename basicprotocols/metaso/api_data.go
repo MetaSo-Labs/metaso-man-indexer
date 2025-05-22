@@ -85,8 +85,8 @@ func textSearch(lastId string, size int64, key string) (listData []*TweetWithLik
 }
 func getNewest(lastId string, size int64, listType string, metaid string, followed string) (listData []*TweetWithLike, total int64, err error) {
 	var list []*Tweet
-	filter := bson.D{}
-	totalFilter := bson.D{}
+	filter := bson.D{{Key: "blocked", Value: false}}
+	totalFilter := bson.D{{Key: "blocked", Value: false}}
 	if lastId != "" {
 		var objectId primitive.ObjectID
 		objectId, err = primitive.ObjectIDFromHex(lastId)

@@ -11,13 +11,15 @@ import (
 )
 
 var (
-	Config      *AllConfig
-	configMutex sync.Mutex
-	Chain       string
-	Db          string
-	Server      string
-	TestNet     string
-	ConfigFile  string
+	Config            *AllConfig
+	configMutex       sync.Mutex
+	Chain             string
+	Db                string
+	Server            string
+	TestNet           string
+	ConfigFile        string
+	BlockedData       map[string]struct{}
+	RecommendedAuthor map[string]struct{}
 )
 
 type AllConfig struct {
@@ -38,6 +40,8 @@ type syncConfig struct {
 	SyncProtocols []string `toml:"syncProtocols"`
 	SyncBeginTime string   `toml:"syncBeginTime"`
 	SyncEndTime   string   `toml:"syncEndTime"`
+	ReSyncNum     int      `toml:"reSyncNum"`
+	IsFullNode    bool     `toml:"isFullNode"`
 }
 type Statistics struct {
 	MetaChainHost  string   `toml:"metaChainHost"`
@@ -103,11 +107,13 @@ type pebble struct {
 	Dir string `toml:"dir"`
 }
 
-func InitConfig() {
+func InitConfig(filePath string) {
 	configMutex.Lock()
 	defer configMutex.Unlock()
+	BlockedData = map[string]struct{}{}
+	RecommendedAuthor = map[string]struct{}{}
 	flagConfig, configFile := GetFlagConfig()
-	filePath := "./config.toml"
+	//filePath := "./config.toml"
 	if configFile != "" {
 		filePath = configFile
 	}
@@ -161,6 +167,8 @@ func InitConfig() {
 			Config.MetaSo.OnlyHost = *v
 		case "meta_chain":
 			Config.Statistics.MetaChainHost = *v
+		case "is_full_node":
+			Config.Sync.IsFullNode = *v == "1"
 		}
 
 	}
@@ -212,6 +220,8 @@ func GetFlagConfig() (flagConfig map[string]*string, configFile string) {
 	flagConfig["mongo_node_uri"] = flag.String("mongo_node_uri", "", "mongo node uri")
 	flagConfig["only_host"] = flag.String("only_host", "", "metaso only_host")
 	flagConfig["meta_chain"] = flag.String("meta_chain", "", "metachain host")
+	flagConfig["is_full_node"] = flag.String("is_full_node", "0", "is full node")
+
 	//reindex := flag.String("reindex", "", "reindex block height,from:to")
 	if !flag.Parsed() {
 		flag.Parse()

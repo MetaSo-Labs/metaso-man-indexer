@@ -1,6 +1,7 @@
 package microvisionchain
 
 import (
+	"log"
 	"manindexer/common"
 	"manindexer/pin"
 	"time"
@@ -37,7 +38,7 @@ func (chain *MicroVisionChain) InitChain() {
 	if err != nil {
 		panic(err)
 	}
-	//fmt.Println("mvc rpc  connect")
+	log.Println("mvc rpc  connect")
 }
 func (chain *MicroVisionChain) GetBlock(blockHeight int64) (block interface{}, err error) {
 	blockhash, err := client.GetBlockHash(blockHeight)
@@ -84,6 +85,7 @@ func (chain *MicroVisionChain) GetInitialHeight() (height int64) {
 func (chain *MicroVisionChain) GetBestHeight() (height int64) {
 	blockhash, err := client.GetBestBlockHash()
 	if err != nil {
+		log.Println("GetBestHeight err:", err)
 		return
 	}
 	block, err := client.GetBlockVerbose(blockhash)

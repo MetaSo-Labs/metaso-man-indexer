@@ -42,6 +42,7 @@ const (
 	MetaSoHostAddressData   string = "metaso_host_address"
 	MetaSoDonateData        string = "metaso_donate_data"
 	BlockedSettingData      string = "metaso_blocked_settings"
+	RecommendedAuthors      string = "metaso_recommended_authors"
 )
 
 var DataFilter = bson.D{
@@ -95,7 +96,9 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "creatormetaid_1", bson.D{{Key: "creatormetaid", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "number_1", bson.D{{Key: "number", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "operation_1", bson.D{{Key: "operation", Value: 1}}, false)
+	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "blocked_1", bson.D{{Key: "blocked", Value: 1}}, false)
 	mongo_util.CreateTextIndexIfNotExists(mongoClient, TweetCollection, "tweet_text_1", []string{"keywords"})
+	mongo_util.CreateIndexIfNotExists(mongoClient, TweetCollection, "isrecommended_1", bson.D{{Key: "isrecommended", Value: 1}}, false)
 	//payLike
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetLikeCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, true)
 	mongo_util.CreateIndexIfNotExists(mongoClient, TweetLikeCollection, "liketopinid_1", bson.D{{Key: "liketopinid", Value: 1}}, false)
@@ -153,6 +156,8 @@ func createIndex(mongoClient *mongo.Database) {
 	//BlockedSettingData
 	mongo_util.CreateIndexIfNotExists(mongoClient, BlockedSettingData, "blockedtype_1", bson.D{{Key: "blockedtype", Value: 1}}, false)
 	mongo_util.CreateIndexIfNotExists(mongoClient, BlockedSettingData, "blockedtype_blockedcontent_1", bson.D{{Key: "blockedtype", Value: 1}, {Key: "blockedcontent", Value: 1}}, true)
+	//RecommendedAuthors
+	mongo_util.CreateIndexIfNotExists(mongoClient, RecommendedAuthors, "author_id_1", bson.D{{Key: "author_id", Value: 1}}, true)
 }
 func createBuzzView() {
 	views, err := mongoClient.ListCollectionNames(context.Background(), bson.M{"name": BuzzView})

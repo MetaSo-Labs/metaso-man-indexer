@@ -12,6 +12,11 @@ var validator = MetaAccessValidator{}
 func (ma *MetaAccess) PinHandle(pinList []*pin.PinInscription, mempool bool) {
 	var controlList []*metaaccess.AccessControl
 	var passList []*metaaccess.AccessPassData
+	defer func() {
+		controlList = controlList[:0]
+		passList = passList[:0]
+		pinList = pinList[:0]
+	}()
 	for _, pinNode := range pinList {
 		switch pinNode.Path {
 		case "/metaaccess/accesscontrol":

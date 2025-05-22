@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -59,6 +60,8 @@ type Tweet struct {
 	DonateCount        int                `json:"donateCount" bson:"donatecount"`
 	Host               string             `json:"host"`
 	Keywords           []string           `json:"keywords"`
+	Blocked            bool               `json:"blocked"`
+	IsRecommended      bool               `json:"is_recommended"`
 }
 type SyncLastId struct {
 	Tweet        primitive.ObjectID `bson:"tweet"`
@@ -305,4 +308,24 @@ type BlockedSetting struct {
 	BlockedContent  string `json:"blockedContent"`
 	Timestamp       int64  `json:"timestamp"`
 	OriginalContent string `json:"originalContent"`
+}
+
+// RecommendedAuthor represents an author who is recommended
+type RecommendedAuthor struct {
+	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	AuthorID   string             `bson:"author_id" json:"authorId"` // ID of the recommended author
+	AuthorName string             `bson:"author_name" json:"authorName"`
+	CreatedAt  time.Time          `bson:"created_at" json:"createdAt"`
+	UpdatedAt  time.Time          `bson:"updated_at" json:"updatedAt"`
+}
+type PostBase struct {
+	MongoId       primitive.ObjectID `bson:"_id,omitempty" json:"mongoId"`
+	Id            string             `json:"id"`
+	Number        int64              `json:"number"`
+	MetaId        string             `json:"metaid"`
+	Address       string             `json:"address"`
+	CreateAddress string             `json:"creator"`
+	CreateMetaId  string             `json:"createMetaId"`
+	Blocked       bool               `json:"blocked"`
+	IsRecommended bool               `json:"is_recommended"`
 }

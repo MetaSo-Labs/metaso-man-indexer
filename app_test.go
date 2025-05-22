@@ -23,7 +23,7 @@ import (
 )
 
 func TestGetBlock(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	chain := &bitcoin.BitcoinChain{}
 	block, err := chain.GetBlock(1)
 	fmt.Println(err)
@@ -49,7 +49,7 @@ func TestGetBlock(t *testing.T) {
 	}
 }
 func TestGetPin(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	txId := "95abc6fda259c4700d19897d4fd2f2b686504f7fa0a3bb224af743e0473df64a"
 	chain := &bitcoin.BitcoinChain{}
@@ -74,7 +74,7 @@ func TestAddMempoolPin(t *testing.T) {
 	fmt.Println(err)
 }
 func TestDelMempoolPin(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	man.DeleteMempoolData(2572919, "btc")
 }
@@ -89,7 +89,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestGetDbPin(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	p, err := man.DbAdapter.GetPinByNumberOrId("999")
 	fmt.Println(err)
@@ -122,9 +122,9 @@ func TestMongoGeneratorFind(t *testing.T) {
 	}
 }
 func TestGetSaveData(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
-	pinList, _, _, _, _, mrc20List, _, _, _, _, err := man.GetSaveData("btc", 2868996)
+	pinList, _, _, _, _, mrc20List, _, _, _, err := man.GetSaveData("btc", 2868996)
 	fmt.Println(err, len(pinList), len(mrc20List))
 	// var testList []*pin.PinInscription
 	// for _, mrc20 := range mrc20List {
@@ -136,7 +136,7 @@ func TestGetSaveData(t *testing.T) {
 	//man.Mrc20Handle(mrc20List)
 }
 func TestCatchData(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	//from := 2870989
 	//to := 2870990
@@ -147,14 +147,14 @@ func TestCatchData(t *testing.T) {
 
 }
 func TestHash(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	add := "tb1qtjqupfjej6a9wu94g374fvnlq6ks9v4am7hwtz"
 	h := common.GetMetaIdByAddress(add)
 	fmt.Println(add)
 	fmt.Println(h)
 }
 func TestGetOwner(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	//txResult, err := man.ChainAdapter.GetTransaction("d8373e66a6852331c667c94bdccdac94b4908b7ca47b35a00d90a76ae29eb015")
 	//fmt.Println(err)
@@ -185,12 +185,12 @@ func TestRarityScoreBinary(t *testing.T) {
 }
 
 func TestMrc721Save(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	man.DoIndexerRun("btc", int64(2874040), false)
 }
 func TestMempoolTransfer(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	man.InitAdapter("btc", "mongo", "1", "1")
 	txId := "d076a9f456535b82cf2c8f9c9c59a7516dc040652f8ef41acd7c839bb98fdd4b"
 	chain := &bitcoin.BitcoinChain{}
@@ -284,7 +284,7 @@ func TestMrc721SysnAddress(t *testing.T) {
 	fmt.Println(ip, err)
 }
 func TestPevCount(t *testing.T) {
-	common.InitConfig()
+	common.InitConfig("./config.toml")
 	dbAdapter := &mongodb.Mongodb{}
 	dbAdapter.InitDatabase()
 	metaso.ConnectMongoDb()

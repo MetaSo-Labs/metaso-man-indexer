@@ -284,7 +284,10 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 				pop, _ = common.GenPop(id, merkleRoot, blockHash)
 			}
 			popLv, _ := pin.PopLevelCount(indexer.ChainName, pop)
-			creator := chain.GetCreatorAddress(msgTx.TxIn[0].PreviousOutPoint.Hash.String(), msgTx.TxIn[0].PreviousOutPoint.Index, indexer.ChainParams)
+			creator := address
+			if common.Config.Sync.IsFullNode {
+				creator = chain.GetCreatorAddress(msgTx.TxIn[0].PreviousOutPoint.Hash.String(), msgTx.TxIn[0].PreviousOutPoint.Index, indexer.ChainParams)
+			}
 			_, host, path := pin.ValidHostPath(pinInscription.Path)
 			pinInscriptions = append(pinInscriptions, &pin.PinInscription{
 				//Pin:                pinInscription,
@@ -371,7 +374,10 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 
 		}
 		popLv, _ := pin.PopLevelCount(indexer.ChainName, pop)
-		creator := chain.GetCreatorAddress(v.PreviousOutPoint.Hash.String(), v.PreviousOutPoint.Index, indexer.ChainParams)
+		creator := address
+		if common.Config.Sync.IsFullNode {
+			creator = chain.GetCreatorAddress(v.PreviousOutPoint.Hash.String(), v.PreviousOutPoint.Index, indexer.ChainParams)
+		}
 		_, host, path := pin.ValidHostPath(pinInscription.Path)
 		pinInscriptions = append(pinInscriptions, &pin.PinInscription{
 			//Pin:                pinInscription,

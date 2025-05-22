@@ -8,6 +8,7 @@ import (
 	"manindexer/common"
 
 	"manindexer/database"
+
 	"manindexer/database/mongodb"
 	"manindexer/database/pebbledb"
 	"manindexer/database/postgresql"
@@ -34,9 +35,11 @@ var (
 	OptionLimit     []string = []string{"create", "modify", "revoke", "hide"}
 	BarMap          map[string]*progressbar.ProgressBar
 	FirstCompleted  bool
+	IsSync          bool
 	IsTestNet       bool = false
 )
 
+const DefaultBatchSize = 1000
 const (
 	StatusBlockHeightLower      = -101
 	StatusPinIsTransfered       = -102
@@ -264,23 +267,68 @@ func IndexerRun(test string) {
 	for chainName := range ChainAdapter {
 		from, to := getSyncHeight(chainName, test)
 		if from >= to {
+			FirstCompleted = true
 			continue
 		}
-		BarMap[chainName] = progressbar.Default(to-from, "["+chainName+"]")
+		barinfo := fmt.Sprintf("[%s %d-%d]", chainName, from, to)
+		BarMap[chainName] = progressbar.Default(to-from, barinfo)
 		for i := from + 1; i <= to; i++ {
 			DoIndexerRun(chainName, i, false)
 			BarMap[chainName].Add(1)
 		}
 		step := to - from
+		reSyncNum := common.Config.Sync.ReSyncNum
+		if reSyncNum == 0 {
+			reSyncNum = 1
+		}
 		if step == 1 {
-			for x := to - 4; x <= to-1; x++ {
-				go DoIndexerRun(chainName, x, false)
+			for x := to - int64(reSyncNum); x <= to-1; x++ {
+				DoIndexerRun(chainName, x, true)
 			}
+		}
+		if chainName == "btc" {
+			mongodb.UpdateSyncLastNumber("btcChainSyncHeight", to)
+		}
+		if chainName == "mvc" {
+			mongodb.UpdateSyncLastNumber("mvcChainSyncHeight", to)
 		}
 	}
 	FirstCompleted = true
 
 }
+func batchProcessPins(pinList []interface{}, batchSize int) error {
+	total := len(pinList)
+	for i := 0; i < total; i += batchSize {
+		end := i + batchSize
+		if end > total {
+			end = total
+		}
+		batch := pinList[i:end]
+		if err := DbAdapter.BatchAddPins(batch); err != nil {
+			return fmt.Errorf("batch process failed at index %d: %v", i, err)
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
+	pinList = pinList[:0]
+	return nil
+}
+func batchProcessProtocolsData(protocolsData []*pin.PinInscription, batchSize int) error {
+	total := len(protocolsData)
+	for i := 0; i < total; i += batchSize {
+		end := i + batchSize
+		if end > total {
+			end = total
+		}
+		batch := protocolsData[i:end]
+		if err := DbAdapter.BatchAddProtocolData(batch); err != nil {
+			return fmt.Errorf("batch process failed at index %d: %v", i, err)
+		}
+		time.Sleep(time.Millisecond * 100)
+	}
+	protocolsData = protocolsData[:0]
+	return nil
+}
+
 func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	//bT := time.Now()
 	//bar := progressbar.Default(to - from)
@@ -289,7 +337,7 @@ func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	if !reIndex {
 		MaxHeight[chainName] = height
 	}
-	pinList, protocolsData, metaIdData, pinTreeData,
+	pinList, protocolsData, metaIdData,
 		updatedData, mrc20List, txInList, mrc20TransferPinTx,
 		followData, infoAdditional, _ := GetSaveData(chainName, height)
 	//pinList, protocolsData, metaIdData, pinTreeData, updatedData, _, followData, infoAdditional, _ := GetSaveData(chainName, height)
@@ -297,38 +345,56 @@ func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	if len(metaIdData) > 0 {
 		err = DbAdapter.BatchUpsertMetaIdInfo(metaIdData)
 		//metaIdData = metaIdData[0:0]
+		metaIdData = nil
 	}
 	var pinNodeList []*pin.PinInscription
 	if len(pinList) > 0 {
-		DbAdapter.BatchAddPins(pinList)
+		//DbAdapter.BatchAddPins(pinList)
+		if err := batchProcessPins(pinList, DefaultBatchSize); err != nil {
+			return fmt.Errorf("failed to process pins: %v", err)
+		}
 		//check transfer in this block
 		var idList []string
 		for _, item := range pinList {
 			p := item.(*pin.PinInscription)
 			idList = append(idList, p.Output)
-			pinNodeList = append(pinNodeList, p)
+			if p.Path == "/metaaccess/accesscontrol" || p.Path == "/metaaccess/accesspass" {
+				pinNodeList = append(pinNodeList, p)
+			}
 		}
-		handleTransfer(chainName, idList, height)
+		if common.Config.Sync.IsFullNode {
+			handleTransfer(chainName, idList, height)
+			idList = idList[:0]
+		}
 	}
-
-	if len(pinTreeData) > 0 {
-		DbAdapter.BatchAddPinTree(pinTreeData)
-	}
+	pinList = pinList[:0]
+	// if len(pinTreeData) > 0 {
+	// 	DbAdapter.BatchAddPinTree(pinTreeData)
+	// }
 	if len(protocolsData) > 0 {
-		DbAdapter.BatchAddProtocolData(protocolsData)
+		//DbAdapter.BatchAddProtocolData(protocolsData)
+		if err := batchProcessProtocolsData(protocolsData, DefaultBatchSize); err != nil {
+			return fmt.Errorf("failed to process protocols data: %v", err)
+		}
 	}
+	protocolsData = protocolsData[:0]
 	if len(updatedData) > 0 {
 		DbAdapter.BatchUpdatePins(updatedData)
+		updatedData = updatedData[:0]
 	}
 	if len(followData) > 0 {
 		DbAdapter.BatchUpsertFollowData(followData)
+		followData = followData[:0]
 	}
 	if len(infoAdditional) > 0 {
 		DbAdapter.BatchUpsertMetaIdInfoAddition(infoAdditional)
+		infoAdditional = infoAdditional[:0]
 	}
 	//Handle MRC20 last.
 	if height >= Mrc20HeightLimit[chainName] && common.ModuleExist("mrc20") {
 		Mrc20Handle(chainName, height, mrc20List, mrc20TransferPinTx, txInList, false)
+		mrc20List = mrc20List[:0]
+		mrc20TransferPinTx = make(map[string]struct{})
 	}
 	// if len(pinNodeList) > 0 && height >= Mrc20HeightLimit[chainName] {
 	// 	m721 := Mrc721{}
@@ -338,6 +404,7 @@ func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	if len(pinNodeList) > 0 {
 		access := MetaAccess{}
 		access.PinHandle(pinNodeList, false)
+		pinNodeList = pinNodeList[:0]
 	}
 	//}
 	//bar.Finish()
@@ -352,7 +419,6 @@ func GetSaveData(chainName string, blockHeight int64) (
 	pinList []interface{},
 	protocolsData []*pin.PinInscription,
 	metaIdData map[string]*pin.MetaIdInfo,
-	pinTreeData []interface{},
 	updatedData []*pin.PinInscription,
 	mrc20List []*pin.PinInscription,
 	txInList []string,
@@ -364,7 +430,10 @@ func GetSaveData(chainName string, blockHeight int64) (
 	var pins []*pin.PinInscription
 	pins, txInList = IndexerAdapter[chainName].CatchPins(blockHeight)
 	//check transfer
-	handleTransfer(chainName, txInList, blockHeight)
+	if common.Config.Sync.IsFullNode {
+		handleTransfer(chainName, txInList, blockHeight)
+		txInList = txInList[:0]
+	}
 	// transferCheck, err := DbAdapter.GetPinListByOutPutList(txInList)
 	// if err == nil && len(transferCheck) > 0 {
 	// 	idMap := make(map[string]struct{})
@@ -406,13 +475,15 @@ func GetSaveData(chainName string, blockHeight int64) (
 	// 		DbAdapter.UpdateMrc20Utxo(mrc20TrasferList, false)
 	// 	}
 	// }
-
-	handlePathAndOperation(&pinList, &metaIdData, &pinTreeData, &updatedData, &followData, &infoAdditional)
+	handlePathAndOperation(&pinList, &metaIdData, &updatedData, &followData, &infoAdditional)
 	createPinNumber(&pinList)
 	createMetaIdNumber(metaIdData)
 	return
 }
 func handleTransfer(chainName string, outputList []string, blockHeight int64) {
+	defer func() {
+		outputList = outputList[:0]
+	}()
 	transferCheck, err := DbAdapter.GetPinListByOutPutList(outputList)
 	if err == nil && len(transferCheck) > 0 {
 		idMap := make(map[string]string)
@@ -435,6 +506,9 @@ func handleTransfer(chainName string, outputList []string, blockHeight int64) {
 			})
 		}
 		DbAdapter.AddTransferHistory(transferHistoryList)
+		idMap = nil
+		trasferMap = nil
+		transferHistoryList = transferHistoryList[:0]
 	}
 }
 func handleProtocolsData(pinNode *pin.PinInscription) int {
@@ -484,12 +558,22 @@ func createMetaIdNumber(metaIdData map[string]*pin.MetaIdInfo) {
 func handlePathAndOperation(
 	pinList *[]interface{},
 	metaIdData *map[string]*pin.MetaIdInfo,
-	pinTreeData *[]interface{},
 	updatedData *[]*pin.PinInscription,
 	followData *[]*pin.FollowData,
 	infoAdditional *[]*pin.MetaIdInfoAdditional) {
 	var modifyPinIdList []string
 	newPinMap := make(map[string]*pin.PinInscription)
+	originalPinMap := make(map[string]*pin.PinInscription)
+
+	defer func() {
+		if newPinMap != nil {
+			newPinMap = nil
+		}
+		if originalPinMap != nil {
+			originalPinMap = nil
+		}
+	}()
+
 	for _, p := range *pinList {
 		pinNode := p.(*pin.PinInscription)
 		if pinNode.MetaId == "" {
@@ -522,8 +606,8 @@ func handlePathAndOperation(
 		if len(pathArray) > 1 && path != "/" {
 			path = strings.Join(pathArray[0:len(pathArray)-1], "/")
 		}
-		pinTree := pin.PinTreeCatalog{RootTxId: common.GetMetaIdByAddress(pinNode.Address), TreePath: path}
-		*pinTreeData = append(*pinTreeData, pinTree)
+		//pinTree := pin.PinTreeCatalog{RootTxId: common.GetMetaIdByAddress(pinNode.Address), TreePath: path}
+		//*pinTreeData = append(*pinTreeData, pinTree)
 		//follow
 		if pinNode.Path == "/follow" {
 			*followData = append(*followData, creatFollowData(pinNode, true))
@@ -541,7 +625,7 @@ func handlePathAndOperation(
 	if err != nil {
 		return
 	}
-	originalPinMap := make(map[string]*pin.PinInscription)
+
 	for _, mp := range originalPins {
 		originalPinMap[mp.Id] = mp
 	}

@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"manindexer/common"
 	"manindexer/pin"
@@ -44,15 +45,49 @@ func (mg *Mongodb) GetMaxNumber() (number int64) {
 }
 
 func (mg *Mongodb) BatchAddPins(pins []interface{}) (err error) {
-	ordered := false
-	option := options.InsertManyOptions{Ordered: &ordered}
-	_, err = mongoClient.Collection(PinsCollection).InsertMany(context.TODO(), pins, &option)
-	if err != nil {
-		return
+	// ordered := false
+	// option := options.InsertManyOptions{Ordered: &ordered}
+	// _, err = mongoClient.Collection(PinsCollection).InsertMany(context.TODO(), pins, &option)
+	// if err != nil {
+	// 	return
+	// }
+	var operations []mongo.WriteModel
+	opts := options.BulkWrite().SetOrdered(false)
+	for _, doc := range pins {
+		op := mongo.NewInsertOneModel().SetDocument(doc)
+		operations = append(operations, op)
+		if len(operations) == 500 {
+			_, err := mongoClient.Collection(PinsCollection).BulkWrite(context.TODO(), operations, opts)
+			if err != nil {
+				if bulkErr, ok := err.(mongo.BulkWriteException); ok {
+					for _, writeErr := range bulkErr.WriteErrors {
+						if writeErr.Code == 11000 {
+							continue
+						}
+						log.Printf("BatchAddPins err: %v", writeErr)
+					}
+				}
+			}
+			operations = operations[:0]
+		}
 	}
+	if len(operations) > 0 {
+		_, err := mongoClient.Collection(PinsCollection).BulkWrite(context.TODO(), operations, opts)
+		if err != nil {
+			if bulkErr, ok := err.(mongo.BulkWriteException); ok {
+				for _, writeErr := range bulkErr.WriteErrors {
+					if writeErr.Code == 11000 {
+						continue
+					}
+					log.Printf("BatchAddPins err: %v", writeErr)
+				}
+			}
+		}
+	}
+	// !! TODO This is a miscalculation with significant performance drawbacks.
 	//add PDV & FDV
-	addPDV(pins)
-	addFDV(pins)
+	//addPDV(pins)
+	//addFDV(pins)
 	return
 }
 
@@ -108,6 +143,22 @@ func (mg *Mongodb) BatchUpdatePins(pins []*pin.PinInscription) (err error) {
 	return
 }
 func (mg *Mongodb) AddMempoolPin(pin *pin.PinInscription) (err error) {
+	hostKey := fmt.Sprintf("host_%s", pin.Host)
+	metaidKey := fmt.Sprintf("metaid_%s", pin.CreateMetaId)
+	pinidKey := fmt.Sprintf("pinid_%s", pin.Id)
+	if _, ok := common.BlockedData[hostKey]; ok {
+		pin.Blocked = true
+	}
+	if _, ok := common.BlockedData[metaidKey]; ok {
+		pin.Blocked = true
+	}
+	if _, ok := common.BlockedData[pinidKey]; ok {
+		pin.Blocked = true
+	}
+	//fmt.Println("AddMempoolPin:", pin.Address)
+	if _, ok := common.RecommendedAuthor[pin.Address]; ok {
+		pin.IsRecommended = true
+	}
 	_, err = mongoClient.Collection(MempoolPinsCollection).InsertOne(context.TODO(), pin)
 	return
 }
@@ -152,17 +203,40 @@ func (mg *Mongodb) GetMempoolPinPageList(page int64, size int64) (pins []*pin.Pi
 	return
 }
 func deleteMetaSoMempool(txIds []string) (err error) {
-	filter := bson.M{"pinid": bson.M{"$in": txIds}}
-	_, err = mongoClient.Collection("metaso_mempool").DeleteMany(context.TODO(), filter)
+	// filter := bson.M{"pinid": bson.M{"$in": txIds}}
+	// _, err = mongoClient.Collection("metaso_mempool").DeleteMany(context.TODO(), filter)
+	var operations []mongo.WriteModel
+	for _, id := range txIds {
+		filter := bson.M{"pinid": id}
+		op := mongo.NewDeleteOneModel().SetFilter(filter)
+		operations = append(operations, op)
+		if len(operations) == 1000 {
+			_, err := mongoClient.Collection("metaso_mempool").BulkWrite(context.Background(), operations)
+			if err != nil {
+				log.Printf("deleteMetaSoMempool fail %v\n", err)
+			}
+			operations = operations[:0]
+		}
+	}
+	if len(operations) > 0 {
+		_, err := mongoClient.Collection("metaso_mempool").BulkWrite(context.Background(), operations)
+		if err != nil {
+			log.Printf("deleteMetaSoMempool fail: %v\n", err)
+		}
+	}
 	return
 }
 func (mg *Mongodb) DeleteMempoolInscription(txIds []string) (err error) {
-	go deleteMetaSoMempool(txIds)
-	filter := bson.M{"id": bson.M{"$in": txIds}}
-	_, err = mongoClient.Collection(MempoolPinsCollection).DeleteMany(context.TODO(), filter)
-	if err != nil {
-		log.Println("DeleteMempoolInscription err", err)
+	if len(txIds) <= 0 {
+		return
 	}
+	deleteMetaSoMempool(txIds)
+	// filter := bson.M{"id": bson.M{"$in": txIds}}
+	// _, err = mongoClient.Collection(MempoolPinsCollection).DeleteMany(context.TODO(), filter)
+	// if err != nil {
+	// 	log.Println("DeleteMempoolInscription err", err)
+	// }
+	doDeleteMempoolPins(txIds)
 	var ts []string
 	for _, id := range txIds {
 		index := strings.LastIndex(id, "i")
@@ -171,13 +245,57 @@ func (mg *Mongodb) DeleteMempoolInscription(txIds []string) (err error) {
 		}
 		ts = append(ts, id[:index])
 	}
-	filter2 := bson.M{"txhash": bson.M{"$in": ts}}
-	_, err = mongoClient.Collection(MempoolTransferPinsCollection).DeleteMany(context.TODO(), filter2)
-	if err != nil {
-		log.Println("DeleteMempoolTransfer err", err)
-	}
+	// filter2 := bson.M{"txhash": bson.M{"$in": ts}}
+	// _, err = mongoClient.Collection(MempoolTransferPinsCollection).DeleteMany(context.TODO(), filter2)
+	// if err != nil {
+	// 	log.Println("DeleteMempoolTransfer err", err)
+	// }
+	doDeleteMempoolTransfer(ts)
 	return
 }
+func doDeleteMempoolTransfer(txIds []string) {
+	var operations []mongo.WriteModel
+	for _, id := range txIds {
+		filter := bson.M{"txhash": id}
+		op := mongo.NewDeleteOneModel().SetFilter(filter)
+		operations = append(operations, op)
+		if len(operations) == 1000 {
+			_, err := mongoClient.Collection(MempoolTransferPinsCollection).BulkWrite(context.Background(), operations)
+			if err != nil {
+				log.Printf("doDeleteMempoolTransfer fail %v\n", err)
+			}
+			operations = operations[:0]
+		}
+	}
+	if len(operations) > 0 {
+		_, err := mongoClient.Collection(MempoolTransferPinsCollection).BulkWrite(context.Background(), operations)
+		if err != nil {
+			log.Printf("doDeleteMempoolTransfer fail: %v\n", err)
+		}
+	}
+}
+func doDeleteMempoolPins(txIds []string) {
+	var operations []mongo.WriteModel
+	for _, id := range txIds {
+		filter := bson.M{"id": id}
+		op := mongo.NewDeleteOneModel().SetFilter(filter)
+		operations = append(operations, op)
+		if len(operations) == 1000 {
+			_, err := mongoClient.Collection(MempoolPinsCollection).BulkWrite(context.Background(), operations)
+			if err != nil {
+				log.Printf("doDeleteMempoolPins fail %v\n", err)
+			}
+			operations = operations[:0]
+		}
+	}
+	if len(operations) > 0 {
+		_, err := mongoClient.Collection(MempoolPinsCollection).BulkWrite(context.Background(), operations)
+		if err != nil {
+			log.Printf("doDeleteMempoolPins fail: %v\n", err)
+		}
+	}
+}
+
 func (mg *Mongodb) GetPinListByAddress(address string, addressType string, cursor int64, size int64, cnt string, path string) (pins []*pin.PinInscription, total int64, err error) {
 	opts := options.Find().SetSort(bson.D{{Key: "timestamp", Value: -1}}).SetSkip(cursor).SetLimit(size)
 	addStr := "address"

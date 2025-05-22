@@ -17,6 +17,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+func GetPevDataByMetaBlock(blockHeight int64) (pevList []PEVData, err error) {
+	result, err := mongoClient.Collection(MetaSoPEVData).Find(context.TODO(), bson.M{"metablockheight": blockHeight})
+	if err == nil {
+		result.All(context.TODO(), &pevList)
+	}
+	return
+}
 func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []interface{}, err error) {
 	if block.StartBlock == "" || block.EndBlock == "" {
 		return
@@ -415,7 +422,7 @@ func countFollowPDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.P
 	var toPIN pin.PinInscription
 	err = mongoClient.Collection(mongodb.PinsCollection).FindOne(context.TODO(), filter, findOptions).Decode(&toPIN)
 	if err != nil {
-		return
+		toPIN = *pinNode
 	}
 	data = createPDV(blockHeight, block, pinNode, &toPIN, decimal.NewFromInt(1*8))
 	return
@@ -433,7 +440,7 @@ func countDonatePDV(blockHeight int64, block *MetaBlockChainData, pinNode *pin.P
 	}
 	toPIN, err := getPINbyId(dataMap["toPin"].(string))
 	if err != nil {
-		return
+		toPIN = pinNode
 	}
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
@@ -444,12 +451,14 @@ func countPayLike(blockHeight int64, block *MetaBlockChainData, pinNode *pin.Pin
 	if err != nil {
 		return
 	}
+	var toPIN *pin.PinInscription
 	if dataMap["likeTo"].(string) == "" || dataMap["isLike"].(string) != "1" {
-		return
-	}
-	toPIN, err := getPINbyId(dataMap["likeTo"].(string))
-	if err != nil {
-		return
+		toPIN = pinNode
+	} else {
+		toPIN, err = getPINbyId(dataMap["likeTo"].(string))
+		if err != nil {
+			toPIN = pinNode
+		}
 	}
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
@@ -460,13 +469,16 @@ func countPaycomment(blockHeight int64, block *MetaBlockChainData, pinNode *pin.
 	if err != nil {
 		return
 	}
+	var toPIN *pin.PinInscription
 	if dataMap["commentTo"].(string) == "" {
-		return
+		toPIN = pinNode
+	} else {
+		toPIN, err = getPINbyId(dataMap["commentTo"].(string))
+		if err != nil {
+			toPIN = pinNode
+		}
 	}
-	toPIN, err := getPINbyId(dataMap["commentTo"].(string))
-	if err != nil {
-		return
-	}
+
 	data = createPDV(blockHeight, block, pinNode, toPIN, decimal.NewFromInt(1*8))
 	return
 }

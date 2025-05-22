@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"manindexer/common"
 	"manindexer/database/mongodb"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +21,7 @@ func Api(r *gin.Engine) {
 	accessGroup := r.Group("/social/buzz")
 	accessGroup.Use(CorsMiddleware())
 	accessGroup.GET("/newest", newest)
+	accessGroup.GET("/recommended", recommended)
 	accessGroup.GET("/updater", updater)
 	accessGroup.GET("/hot", hot)
 	accessGroup.GET("/search", search)
@@ -38,6 +41,9 @@ func Api(r *gin.Engine) {
 	settingGroup.GET("/blocked/list", blockedList)
 	settingGroup.GET("/blocked/add", blockedAdd)
 	settingGroup.GET("/blocked/delete", blockedDelete)
+	settingGroup.GET("/recommended/list", listRecommendedAuthor)
+	settingGroup.GET("/recommended/add", addRecommendedAuthor)
+	settingGroup.GET("/recommended/delete", deleteRecommendedAuthor)
 }
 func CorsMiddleware() gin.HandlerFunc {
 	return func(context *gin.Context) {
@@ -104,24 +110,60 @@ func newest(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception."))
 		return
 	}
-	var newList []*TweetWithLike
-	for _, item := range list {
-		hostKey := fmt.Sprintf("host_%s", item.Host)
-		metaidKey := fmt.Sprintf("metaid_%s", item.CreateMetaId)
-		pinidKey := fmt.Sprintf("pinid_%s", item.Id)
-		if _, ok := BlockedData[hostKey]; ok {
-			item.Blocked = true
-		}
-		if _, ok := BlockedData[metaidKey]; ok {
-			item.Blocked = true
-		}
-		if _, ok := BlockedData[pinidKey]; ok {
-			item.Blocked = true
-		}
-		newList = append(newList, item)
-	}
+	// var newList []*TweetWithLike
+	// for _, item := range list {
+	// 	hostKey := fmt.Sprintf("host_%s", item.Host)
+	// 	metaidKey := fmt.Sprintf("metaid_%s", item.CreateMetaId)
+	// 	pinidKey := fmt.Sprintf("pinid_%s", item.Id)
+	// 	if _, ok := BlockedData[hostKey]; ok {
+	// 		item.Blocked = true
+	// 	}
+	// 	if _, ok := BlockedData[metaidKey]; ok {
+	// 		item.Blocked = true
+	// 	}
+	// 	if _, ok := BlockedData[pinidKey]; ok {
+	// 		item.Blocked = true
+	// 	}
+	// 	newList = append(newList, item)
+	// }
 
-	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": newList, "total": total, "lastId": lastId}))
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
+}
+
+// @Summary      Get recommended buzz feed
+// @Description  Retrieve paginated list of recommended buzz items with filtering options
+// @Tags         Buzz
+// @Accept       json
+// @Produce      json
+// @Param        lastId    query    string  false  "Last record ID for pagination (cursor)"
+// @Param        size      query    int     false  "Items per page (default: 10)"
+// @Param        userAddress  query    string  false  "Filter by userAddress"
+// @Success      200  {object}  ApiResponse{data=object{list=[]TweetWithLike,total=int,lastId=string}}  "Successfully retrieved buzz list"
+// @Failure      400  {object}  ApiResponse  "Invalid parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /social/buzz/recommended [get]
+func recommended(ctx *gin.Context) {
+	userAddress := ctx.Query("userAddress")
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "size error"))
+		return
+	}
+	if size == 0 {
+		size = 10
+	}
+	ms := &MetaSo{}
+	list, total, err := ms.GetRecommendedPosts(ctx, ctx.Query("lastId"), userAddress, size)
+	lastId := ""
+	if len(list) > 0 {
+		lastId = list[len(list)-1].MogoID.Hex()
+	}
+	if err != nil {
+		fmt.Println(err)
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception."))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total, "lastId": lastId}))
 }
 
 type updaterRes struct {
@@ -200,7 +242,10 @@ func getUpdaterInfo(last bool) (buildNo int64, ver string, mandatory bool, err e
 	if !last {
 		versionUrl = "http://host.docker.internal:7171/api/checkStatus"
 	}
-	resp, err := http.Get(versionUrl)
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Get(versionUrl)
 	if err != nil {
 		return
 	}
@@ -297,7 +342,7 @@ func search(ctx *gin.Context) {
 // @Router       /social/buzz/info [get]
 func info(ctx *gin.Context) {
 	tweet, comments, like, donates, err := getInfo(ctx.Query("pinId"))
-	if err != nil {
+	if err != nil || tweet == nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
 	}
@@ -305,13 +350,13 @@ func info(ctx *gin.Context) {
 	hostKey := fmt.Sprintf("host_%s", tweet.Host)
 	metaidKey := fmt.Sprintf("metaid_%s", tweet.CreateMetaId)
 	pinidKey := fmt.Sprintf("pinid_%s", tweet.Id)
-	if _, ok := BlockedData[hostKey]; ok {
+	if _, ok := common.BlockedData[hostKey]; ok {
 		blocked = true
 	}
-	if _, ok := BlockedData[metaidKey]; ok {
+	if _, ok := common.BlockedData[metaidKey]; ok {
 		blocked = true
 	}
-	if _, ok := BlockedData[pinidKey]; ok {
+	if _, ok := common.BlockedData[pinidKey]; ok {
 		blocked = true
 	}
 
@@ -684,6 +729,93 @@ func blockedDelete(ctx *gin.Context) {
 		return
 	}
 	err := deleteBlockedList(blockType, blockContent)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
+}
+
+// @Summary      Get recommended author list
+// @Description  Retrieve paginated list of recommended author
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        cursor    query  int     false  "Pagination cursor"
+// @Param        size      query  int     false  "Number of items per page"
+// @Success      200  {object}  ApiResponse{data=object{list=array,total=int}}  "recommended author list with total count"
+// @Failure      400  {object}  ApiResponse  "Missing or invalid parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/recommended/list [get]
+func listRecommendedAuthor(ctx *gin.Context) {
+	cursor, err := strconv.ParseInt(ctx.Query("cursor"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query cursor error"))
+		return
+	}
+	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "query size error"))
+		return
+	}
+	ms := &MetaSo{}
+	list, total, err := ms.GetRecommendedAuthors(ctx, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", gin.H{"list": list, "total": total}))
+}
+
+// @Summary      Add item to RecommendedAuthor list
+// @Description  Add new item to the RecommendedAuthor items list
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        authorAddress      query  string  true  "Address of author to list"
+// @Param        authorNmae      query  string  true  "Name of author to list"
+// @Success      200  {object}  ApiResponse  "Success response"
+// @Failure      400  {object}  ApiResponse  "Missing required parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/recommended/add [get]
+func addRecommendedAuthor(ctx *gin.Context) {
+	authorAddress := ctx.Query("authorAddress")
+	if authorAddress == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "authorAddress is null"))
+		return
+	}
+	authorName := ctx.Query("authorName")
+	if authorName == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "authorName is null"))
+		return
+	}
+	ms := &MetaSo{}
+	err := ms.AddRecommendedAuthor(ctx, authorAddress, authorName)
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
+}
+
+// @Summary      Remove item from RecommendedAuthor list
+// @Description  Remove item from the RecommendedAuthor items list
+// @Tags         Settings
+// @Accept       json
+// @Produce      json
+// @Param        authorAddress      query  string  true  "Address of author to list"
+// @Success      200  {object}  ApiResponse  "Success response"
+// @Failure      400  {object}  ApiResponse  "Missing required parameters"
+// @Failure      500  {object}  ApiResponse  "Service exception"
+// @Router       /metaso/settings/recommended/delete [get]
+func deleteRecommendedAuthor(ctx *gin.Context) {
+	authorAddress := ctx.Query("authorAddress")
+	if authorAddress == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "authorAddress is null"))
+		return
+	}
+	ms := &MetaSo{}
+	err := ms.RemoveRecommendedAuthor(ctx, authorAddress)
 	if err != nil {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return

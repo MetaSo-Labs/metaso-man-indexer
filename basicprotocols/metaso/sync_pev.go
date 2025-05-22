@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"manindexer/adapter/bitcoin"
-	"manindexer/adapter/microvisionchain"
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
 	"net/http"
 	"strconv"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -147,7 +146,10 @@ func (metaso *MetaSo) syncPEV() {
 
 }
 
-func (metaso *MetaSo) syncPendingPEV() {
+func (metaso *MetaSo) SyncPendingPEV() {
+	if man.IsSync {
+		return
+	}
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
 		return
 	}
@@ -158,20 +160,25 @@ func (metaso *MetaSo) syncPendingPEV() {
 	if lastMetaBlock.Header == "" {
 		return
 	}
-	log.Println("last metaBlock:", lastMetaBlock.MetablockHeight)
-	mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.M{"metablockheight": -1})
-	btc := bitcoin.BitcoinChain{}
-	mvc := microvisionchain.MicroVisionChain{}
-	btcLastBlockHeight := btc.GetBestHeight()
+	//log.Println("last metaBlock:", lastMetaBlock.MetablockHeight)
+	//mongoClient.Collection(MetaSoPEVData).DeleteMany(context.TODO(), bson.M{"metablockheight": -1})
+	//btc := bitcoin.BitcoinChain{}
+	//mvc := microvisionchain.MicroVisionChain{}
+	//btcLastBlockHeight := btc.GetBestHeight()
+	btcLastBlockHeight, _ := mongodb.GetSyncLastNumber("btcChainSyncHeight")
 
 	btcBeginBlockHeight := int64(0)
 	mvcLastBlockHeight := int64(0)
 	mvcBeginBlockHeight := int64(0)
 	if man.ChainAdapter["mvc"] != nil {
-		mvcLastBlockHeight = mvc.GetBestHeight()
-		//mvcBeginBlockHeight = mvcLastBlockHeight
+		//mvcLastBlockHeight = mvc.GetBestHeight()
+		mvcLastBlockHeight, _ = mongodb.GetSyncLastNumber("mvcChainSyncHeight")
 	}
-
+	btcPendingPevHeight, _ := mongodb.GetSyncLastNumber("btcPendingPevHeight")
+	mvcPendingPevHeight, _ := mongodb.GetSyncLastNumber("mvcPendingPevHeight")
+	if btcPendingPevHeight >= btcLastBlockHeight && mvcPendingPevHeight >= mvcLastBlockHeight {
+		return
+	}
 	for _, c := range lastMetaBlock.Chains {
 		if c.Chain == "Bitcoin" {
 			btcBeginBlockHeight, _ = strconv.ParseInt(c.PreEndBlock, 10, 64)
@@ -181,6 +188,14 @@ func (metaso *MetaSo) syncPendingPEV() {
 			mvcBeginBlockHeight, _ = strconv.ParseInt(c.PreEndBlock, 10, 64)
 			mvcBeginBlockHeight += 1
 		}
+	}
+	btcSyncHeight := btcBeginBlockHeight
+	mvcSyncHeight := mvcBeginBlockHeight
+	if btcPendingPevHeight > 0 {
+		btcSyncHeight = btcPendingPevHeight + 1
+	}
+	if mvcPendingPevHeight > 0 {
+		mvcSyncHeight = mvcPendingPevHeight + 1
 	}
 	pendingBlock := &MetaBlockData{
 		Header:          "",
@@ -199,20 +214,48 @@ func (metaso *MetaSo) syncPendingPEV() {
 			},
 		},
 	}
-
-	var totalPevList []interface{}
-	for _, chain := range pendingBlock.Chains {
-		pevList, _ := CountBlockPEV(pendingBlock.MetablockHeight, &chain)
-		if len(pevList) > 0 {
-			totalPevList = append(totalPevList, pevList...)
+	syncBlock := &MetaBlockData{
+		Header:          "",
+		PreHeader:       lastMetaBlock.Header,
+		MetablockHeight: -1,
+		Chains: []MetaBlockChainData{
+			{
+				Chain:      "Bitcoin",
+				StartBlock: strconv.FormatInt(btcSyncHeight, 10),
+				EndBlock:   strconv.FormatInt(btcLastBlockHeight, 10),
+			},
+			{
+				Chain:      "MVC",
+				StartBlock: strconv.FormatInt(mvcSyncHeight, 10),
+				EndBlock:   strconv.FormatInt(mvcLastBlockHeight, 10),
+			},
+		},
+	}
+	log.Println("btcPendingPevHeight:", btcPendingPevHeight, "btcLastBlockHeight:", btcLastBlockHeight, "mvcPendingPevHeight:", mvcPendingPevHeight, "mvcLastBlockHeight:", mvcLastBlockHeight)
+	log.Println("syncPendingPev metaBlock:", lastMetaBlock.MetablockHeight)
+	for _, chain := range syncBlock.Chains {
+		// pevList, _ := CountBlockPEV(pendingBlock.MetablockHeight, &chain)
+		// if len(pevList) > 0 {
+		// 	totalPevList = append(totalPevList, pevList...)
+		// }
+		CountBlockPEV(syncBlock.MetablockHeight, &chain)
+		if chain.Chain == "MVC" {
+			mongodb.UpdateSyncLastNumber("mvcPendingPevHeight", mvcLastBlockHeight)
 		}
-
+		if chain.Chain == "Bitcoin" {
+			mongodb.UpdateSyncLastNumber("btcPendingPevHeight", btcLastBlockHeight)
+		}
 	}
 	hostMap := make(map[string]struct{})
 	addressMap := make(map[string]struct{})
 	blockInfoData := &MetaSoBlockInfo{Block: pendingBlock.MetablockHeight, MetaBlock: *pendingBlock}
-	for _, item := range totalPevList {
-		pev := item.(PEVData)
+	totalPevList, err := GetPevDataByMetaBlock(-1)
+	var totalPevList2 []interface{}
+	if err != nil {
+		log.Println("GetPevDataByMetaBlock:", err)
+		return
+	}
+	for _, pev := range totalPevList {
 		hostMap[pev.Host] = struct{}{}
 		addressMap[pev.Address] = struct{}{}
 		blockInfoData.DataValue = blockInfoData.DataValue.Add(pev.IncrementalValue)
@@ -220,13 +263,14 @@ func (metaso *MetaSo) syncPendingPEV() {
 		if pev.Host != "metabitcoin.unknown" {
 			blockInfoData.PinNumberHasHost += 1
 		}
+		totalPevList2 = append(totalPevList2, pev)
 	}
 	blockInfoData.AddressNumber = int64(len(addressMap))
 	blockInfoData.HostNumber = int64(len(hostMap))
 	//blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
 	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": pendingBlock.MetablockHeight}, bson.M{"$set": blockInfoData}, options.Update().SetUpsert(true))
 
-	UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList, pendingBlock.Timestamp)
+	UpdateBlockValue(pendingBlock.MetablockHeight, totalPevList2, pendingBlock.Timestamp)
 	UpdateDataValue(&hostMap, &addressMap)
 }
 
@@ -253,7 +297,10 @@ type lastMetaBlockRes struct {
 
 func getMetaBlock(height int64) (metaBlock *MetaBlockData) {
 	url := fmt.Sprintf("%s/api/block/info?number=%d", common.Config.Statistics.MetaChainHost, height)
-	resp, err := http.Get(url)
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		//fmt.Println("Error making GET request:", err)
 		return
@@ -275,7 +322,10 @@ func getMetaBlock(height int64) (metaBlock *MetaBlockData) {
 }
 func getLastMetaBlock() (info *LastMetaBlockData) {
 	url := fmt.Sprintf("%s/api/block/latest", common.Config.Statistics.MetaChainHost)
-	resp, err := http.Get(url)
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		fmt.Println("Error making GET request:", err)
 		return

@@ -50,8 +50,10 @@ type PinInscription struct {
 	DataValue          int    `json:"dataValue"`
 	//Mrc20Minted        bool   `json:"mrc20Minted"`  //true Consumed
 	//Mrc20MintPin       string `json:"mrc20MintPin"` //mrc20 mint pin id
-	Mrc20MintId []string `json:"mrc20MintId"`
-	Host        string   `json:"host"`
+	Mrc20MintId   []string `json:"mrc20MintId"`
+	Host          string   `json:"host"`
+	Blocked       bool     `json:"blocked"`
+	IsRecommended bool     `json:"is_recommended"`
 }
 type PinTransferInfo struct {
 	Address     string `json:"address"`

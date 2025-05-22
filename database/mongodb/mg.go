@@ -97,6 +97,8 @@ func connectMongoDb() {
 	createIndexIfNotExists(mongoClient, MetaIdInfoCollection, "pinid_1", bson.D{{Key: "pinid", Value: 1}}, false)
 
 	createIndexIfNotExists(mongoClient, MempoolPinsCollection, "id_1", bson.D{{Key: "id", Value: 1}}, true)
+	createIndexIfNotExists(mongoClient, MempoolPinsCollection, "blocked_1", bson.D{{Key: "blocked", Value: 1}}, false)
+	createIndexIfNotExists(mongoClient, MempoolPinsCollection, "isrecommended_1", bson.D{{Key: "isrecommended", Value: 1}}, false)
 	createIndexIfNotExists(mongoClient, PinTreeCatalogCollection, "treepath_1", bson.D{{Key: "treepath", Value: 1}}, true)
 
 	createIndexIfNotExists(mongoClient, FollowCollection, "metaid_1", bson.D{{Key: "metaid", Value: 1}}, false)

@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"manindexer/api/respond"
-	"manindexer/basicprotocols/metaso"
 	"manindexer/common"
 	"manindexer/database"
 	"manindexer/man"
@@ -384,7 +383,7 @@ func getInfoByAddress(ctx *gin.Context) {
 	}
 	metaidKey := fmt.Sprintf("metaid_%s", metaid.MetaId)
 	blocked := false
-	if _, ok := metaso.BlockedData[metaidKey]; ok {
+	if _, ok := common.BlockedData[metaidKey]; ok {
 		blocked = true
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed, blocked}))
@@ -408,7 +407,7 @@ func getInfoByMetaId(ctx *gin.Context) {
 	}
 	metaidKey := fmt.Sprintf("metaid_%s", metaid.MetaId)
 	blocked := false
-	if _, ok := metaso.BlockedData[metaidKey]; ok {
+	if _, ok := common.BlockedData[metaidKey]; ok {
 		blocked = true
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed, blocked}))
