@@ -153,6 +153,10 @@ func (metaso *MetaSo) SyncPendingPEV() {
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
 		return
 	}
+	metaBlock, _ := metaso.getLastMetaBlock(1)
+	if metaBlock != nil {
+		return
+	}
 	lastMetaBlock, _ := metaso.getLastMetaBlock(0)
 	if lastMetaBlock == nil {
 		return

@@ -341,9 +341,9 @@ func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 		updatedData, mrc20List, txInList, mrc20TransferPinTx,
 		followData, infoAdditional, _ := GetSaveData(chainName, height)
 	//pinList, protocolsData, metaIdData, pinTreeData, updatedData, _, followData, infoAdditional, _ := GetSaveData(chainName, height)
-
+	fmt.Println("PIN NUM:", len(pinList), "PROTOCOLS NUM:", len(protocolsData), "METAID NUM:", len(metaIdData), "PIN TREE NUM:", 0, "UPDATE NUM:", len(updatedData), "FOLLOW NUM:", len(followData), "INFO ADDITIONAL NUM:", len(infoAdditional))
 	if len(metaIdData) > 0 {
-		err = DbAdapter.BatchUpsertMetaIdInfo(metaIdData)
+		DbAdapter.BatchUpsertMetaIdInfo(metaIdData)
 		//metaIdData = metaIdData[0:0]
 		metaIdData = nil
 	}
@@ -429,20 +429,12 @@ func GetSaveData(chainName string, blockHeight int64) (
 	metaIdData = make(map[string]*pin.MetaIdInfo)
 	var pins []*pin.PinInscription
 	pins, txInList = IndexerAdapter[chainName].CatchPins(blockHeight)
+	fmt.Println("PIN NUM:", len(pins), chainName, blockHeight)
 	//check transfer
 	if common.Config.Sync.IsFullNode {
 		handleTransfer(chainName, txInList, blockHeight)
 		txInList = txInList[:0]
 	}
-	// transferCheck, err := DbAdapter.GetPinListByOutPutList(txInList)
-	// if err == nil && len(transferCheck) > 0 {
-	// 	idMap := make(map[string]struct{})
-	// 	for _, t := range transferCheck {
-	// 		idMap[t.Output] = struct{}{}
-	// 	}
-	// 	trasferMap := IndexerAdapter[chainName].CatchTransfer(idMap)
-	// 	DbAdapter.UpdateTransferPin(trasferMap)
-	// }
 
 	//pin validator
 	mrc20TransferPinTx = make(map[string]struct{})
@@ -452,12 +444,14 @@ func GetSaveData(chainName string, blockHeight int64) (
 			continue
 		}
 		//save all data or protocols data
-		s := handleProtocolsData(pinNode)
-		if s == -1 {
-			continue
-		} else if s == 1 {
-			protocolsData = append(protocolsData, pinNode)
-		}
+		//=============Temporary comment, performance optimization.=========
+		// s := handleProtocolsData(pinNode)
+		// if s == -1 {
+		// 	continue
+		// } else if s == 1 {
+		// 	protocolsData = append(protocolsData, pinNode)
+		// }
+		//==================================================================
 		pinList = append(pinList, pinNode)
 		//mrc20 pin
 		if len(pinNode.Path) > 10 && pinNode.Path[0:10] == "/ft/mrc20/" {

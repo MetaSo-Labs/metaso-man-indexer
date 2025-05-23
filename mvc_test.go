@@ -6,6 +6,7 @@ import (
 	"manindexer/common"
 	"manindexer/man"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -55,21 +56,24 @@ func TestGetBestHeight(t *testing.T) {
 func TestMvcGetBlock(t *testing.T) {
 	common.InitConfig("./config_mvc.toml")
 	man.InitAdapter("mvc", "mongo", "0", "1")
-	blockMsg, err := man.ChainAdapter["mvc"].GetBlock(25862)
+	blockMsg, err := man.ChainAdapter["mvc"].GetBlock(122654)
 	block := blockMsg.(*wire.MsgBlock)
-	for i, tx := range block.Transactions {
-		for _, in := range tx.TxIn {
-			fmt.Println(i, in.PreviousOutPoint.Hash.String())
-		}
-		for _, in := range tx.TxIn {
-			fmt.Println(i, in.PreviousOutPoint.Hash.String())
-		}
-	}
+	// for i, tx := range block.Transactions {
+	// 	for _, in := range tx.TxIn {
+	// 		fmt.Println(i, in.PreviousOutPoint.Hash.String())
+	// 	}
+	// 	for _, in := range tx.TxIn {
+	// 		fmt.Println(i, in.PreviousOutPoint.Hash.String())
+	// 	}
+	// }
 	fmt.Println(err)
 	fmt.Println(len(block.Transactions))
 }
 func TestMvcDoIndexerRun(t *testing.T) {
 	common.InitConfig("./config_mvc.toml")
 	man.InitAdapter("mvc", "mongo", "0", "1")
-	man.DoIndexerRun("mvc", 122574, false)
+	startTime := time.Now()
+	man.DoIndexerRun("mvc", 122654, true)
+	elapsed := time.Since(startTime)
+	fmt.Printf("执行耗时: %s\n", elapsed)
 }
