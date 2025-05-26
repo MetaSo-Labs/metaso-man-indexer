@@ -37,6 +37,7 @@ var (
 	FirstCompleted  bool
 	IsSync          bool
 	IsTestNet       bool = false
+	PebbleStore     *PebbleData
 )
 
 const DefaultBatchSize = 1000
@@ -57,6 +58,8 @@ const (
 )
 
 func InitAdapter(chainType, dbType, test, server string) {
+	PebbleStore = &PebbleData{}
+	PebbleStore.Init(20)
 	ChainAdapter = make(map[string]adapter.Chain)
 	ChainParams = make(map[string]*chaincfg.Params)
 	IndexerAdapter = make(map[string]adapter.Indexer)
@@ -273,7 +276,8 @@ func IndexerRun(test string) {
 		barinfo := fmt.Sprintf("[%s %d-%d]", chainName, from, to)
 		BarMap[chainName] = progressbar.Default(to-from, barinfo)
 		for i := from + 1; i <= to; i++ {
-			DoIndexerRun(chainName, i, false)
+			//DoIndexerRun(chainName, i, false)
+			PebbleStore.DoIndexerRun(chainName, i, false)
 			BarMap[chainName].Add(1)
 		}
 		step := to - from
@@ -283,7 +287,8 @@ func IndexerRun(test string) {
 		}
 		if step == 1 {
 			for x := to - int64(reSyncNum); x <= to-1; x++ {
-				DoIndexerRun(chainName, x, true)
+				//DoIndexerRun(chainName, x, true)
+				PebbleStore.DoIndexerRun(chainName, x, true)
 			}
 		}
 		if chainName == "btc" {
@@ -350,9 +355,9 @@ func DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
 	var pinNodeList []*pin.PinInscription
 	if len(pinList) > 0 {
 		//DbAdapter.BatchAddPins(pinList)
-		if err := batchProcessPins(pinList, DefaultBatchSize); err != nil {
-			return fmt.Errorf("failed to process pins: %v", err)
-		}
+		// if err := batchProcessPins(pinList, DefaultBatchSize); err != nil {
+		// 	return fmt.Errorf("failed to process pins: %v", err)
+		// }
 		//check transfer in this block
 		var idList []string
 		for _, item := range pinList {

@@ -56,16 +56,17 @@ func TestGetBestHeight(t *testing.T) {
 func TestMvcGetBlock(t *testing.T) {
 	common.InitConfig("./config_mvc.toml")
 	man.InitAdapter("mvc", "mongo", "0", "1")
-	blockMsg, err := man.ChainAdapter["mvc"].GetBlock(122654)
+	//122654
+	blockMsg, err := man.ChainAdapter["mvc"].GetBlock(123014)
 	block := blockMsg.(*wire.MsgBlock)
-	// for i, tx := range block.Transactions {
-	// 	for _, in := range tx.TxIn {
-	// 		fmt.Println(i, in.PreviousOutPoint.Hash.String())
-	// 	}
-	// 	for _, in := range tx.TxIn {
-	// 		fmt.Println(i, in.PreviousOutPoint.Hash.String())
-	// 	}
-	// }
+	for i, tx := range block.Transactions {
+		for _, in := range tx.TxIn {
+			fmt.Println(i, in.PreviousOutPoint.Hash.String())
+		}
+		for _, in := range tx.TxIn {
+			fmt.Println(i, in.PreviousOutPoint.Hash.String())
+		}
+	}
 	fmt.Println(err)
 	fmt.Println(len(block.Transactions))
 }
@@ -73,7 +74,17 @@ func TestMvcDoIndexerRun(t *testing.T) {
 	common.InitConfig("./config_mvc.toml")
 	man.InitAdapter("mvc", "mongo", "0", "1")
 	startTime := time.Now()
-	man.DoIndexerRun("mvc", 122654, true)
+	//122999
+	//122654
+	//120000
+	man.PebbleStore.DoIndexerRun("mvc", 120002, false)
 	elapsed := time.Since(startTime)
 	fmt.Printf("执行耗时: %s\n", elapsed)
+}
+func TestMvcPebble(t *testing.T) {
+	common.InitConfig("./config_mvc.toml")
+	man.InitAdapter("mvc", "mongo", "0", "1")
+	pinNode, err := man.PebbleStore.GetPinById("a28bcbf40a2307283ae2580874bc6ec95c88582f1ca800e92eeb4cb34959dcb6i0")
+	fmt.Println(err)
+	fmt.Println(pinNode)
 }

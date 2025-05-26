@@ -144,3 +144,19 @@ func BtcParseWitnessScript(witness [][]byte) (data [][]string, err error) {
 	}
 	return
 }
+func ConcatBytesOptimized(values []string, sep string) string {
+	switch len(values) {
+	case 0:
+		return ""
+	case 1:
+		return values[0]
+	}
+	var b strings.Builder
+	b.Grow(len(sep) * (len(values) - 1))
+	b.WriteString(values[0])
+	for _, s := range values[1:] {
+		b.WriteString(sep)
+		b.WriteString(s)
+	}
+	return b.String()
+}

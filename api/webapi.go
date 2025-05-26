@@ -12,6 +12,7 @@ import (
 	"manindexer/basicprotocols/mrc721"
 	"manindexer/common"
 	"manindexer/man"
+	"manindexer/pebblestore"
 	"manindexer/pin"
 	"net/http"
 	"strconv"
@@ -147,7 +148,8 @@ func Start(f embed.FS) {
 
 // index page
 func home(ctx *gin.Context) {
-	list, err := man.DbAdapter.GetPinPageList(1, 100)
+	//list, err := man.DbAdapter.GetPinPageList(1, 100)
+	list, lastId, err := man.PebbleStore.PinPageList(0, 100, "")
 	if err != nil {
 		ctx.String(200, "fail")
 	}
@@ -156,16 +158,20 @@ func home(ctx *gin.Context) {
 		pmsg := &pin.PinMsg{Content: p.ContentSummary, Number: p.Number, Operation: p.Operation, Id: p.Id, Type: p.ContentTypeDetect, Path: p.Path, Pop: p.Pop, MetaId: p.MetaId, ChainName: p.ChainName}
 		msg = append(msg, pmsg)
 	}
-	count := man.DbAdapter.Count()
-	ctx.HTML(200, "home/index.html", gin.H{"Pins": msg, "Count": &count, "Active": "index", "NextPage": 2, "PrePage": 0})
+	//count := man.DbAdapter.Count()
+	count := man.PebbleStore.GetAllCount()
+	ctx.HTML(200, "home/index.html", gin.H{"Pins": msg, "Count": &count, "Active": "index", "NextPage": 2, "PrePage": 0, "LastId": lastId})
 }
 func pinPageList(ctx *gin.Context) {
-	page, err := strconv.ParseInt(ctx.Param("page"), 10, 64)
+	page, err := strconv.Atoi(ctx.Param("page"))
 	if err != nil {
+		fmt.Println(err)
 		ctx.String(200, "fail")
 		return
 	}
-	list, err := man.DbAdapter.GetPinPageList(page, 100)
+
+	//list, err := man.DbAdapter.GetPinPageList(page, 100)
+	list, lastId, err := man.PebbleStore.PinPageList(page-1, 100, ctx.Query("lastId"))
 	if err != nil {
 		ctx.String(200, "fail")
 	}
@@ -174,7 +180,8 @@ func pinPageList(ctx *gin.Context) {
 		pmsg := &pin.PinMsg{Content: p.ContentSummary, Number: p.Number, Operation: p.Operation, Id: p.Id, Type: p.ContentTypeDetect, Path: p.Path, Pop: p.Pop, ChainName: p.ChainName}
 		msg = append(msg, pmsg)
 	}
-	count := man.DbAdapter.Count()
+	//count := man.DbAdapter.Count()
+	count := man.PebbleStore.GetAllCount()
 	prePage := page - 1
 	nextPage := page + 1
 	if len(msg) == 0 {
@@ -183,7 +190,7 @@ func pinPageList(ctx *gin.Context) {
 	if prePage <= 0 {
 		prePage = 0
 	}
-	ctx.HTML(200, "home/index.html", gin.H{"Pins": msg, "Count": &count, "Active": "index", "NextPage": nextPage, "PrePage": prePage})
+	ctx.HTML(200, "home/index.html", gin.H{"Pins": msg, "Count": &count, "Active": "index", "NextPage": nextPage, "PrePage": prePage, "LastId": lastId})
 }
 
 func mempool(ctx *gin.Context) {
@@ -239,8 +246,9 @@ func metaid(ctx *gin.Context) {
 
 // pinshow
 func pinshow(ctx *gin.Context) {
-	pinMsg, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
-	if err != nil || pinMsg == nil {
+	//pinMsg, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
+	pinMsg, err := man.PebbleStore.GetPinById(ctx.Param("number"))
+	if err != nil || pinMsg.Id == "" {
 		ctx.String(200, "fail")
 		return
 	}
@@ -292,20 +300,24 @@ func blocks(ctx *gin.Context) {
 		ctx.String(200, "fail")
 		return
 	}
-	list, err := man.DbAdapter.GetPinPageList(page, 100)
+	//list, err := man.DbAdapter.GetPinPageList(page, 100)
+	q := pebblestore.PageQuery{Type: "pin", Page: 0, Size: 10, LastId: ""}
+	list, err := man.PebbleStore.QueryPageBlock(q)
 	if err != nil {
 		ctx.String(200, "fail")
 		return
 	}
 	msgMap := make(map[int64][]*pin.PinMsg)
 	var msgList []int64
-	for _, p := range list {
-		pmsg := &pin.PinMsg{Content: p.ContentSummary, Number: p.Number, Id: p.Id, Type: p.ContentTypeDetect, Height: p.GenesisHeight}
-		if _, ok := msgMap[pmsg.Height]; ok {
-			msgMap[pmsg.Height] = append(msgMap[pmsg.Height], pmsg)
-		} else {
-			msgMap[pmsg.Height] = []*pin.PinMsg{pmsg}
-			msgList = append(msgList, pmsg.Height)
+	for _, x := range list {
+		for _, p := range x.PinList {
+			pmsg := &pin.PinMsg{Content: p.ContentSummary, Number: p.Number, Id: p.Id, Type: p.ContentTypeDetect, Height: p.GenesisHeight}
+			if _, ok := msgMap[pmsg.Height]; ok {
+				msgMap[pmsg.Height] = append(msgMap[pmsg.Height], pmsg)
+			} else {
+				msgMap[pmsg.Height] = []*pin.PinMsg{pmsg}
+				msgList = append(msgList, pmsg.Height)
+			}
 		}
 	}
 	prePage := page - 1

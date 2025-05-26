@@ -120,13 +120,13 @@
         {{if eq .PrePage 0}}
         Prev
         {{else}}
-        <a href="/pin/list/{{.PrePage}}" class="link">Prev</a>
+        <a href="/pin/list/{{.PrePage}}?lastId={{.LastId}}" class="link">Prev</a>
         {{end}}
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
         {{if eq .NextPage 0}}
         Next
         {{else}}
-        <a href="/pin/list/{{.NextPage}}" class="link">Next</a>
+        <a href="/pin/list/{{.NextPage}}?lastId={{.LastId}}" class="link">Next</a>
         {{end}}
       </div>
       <!-- Footer -->

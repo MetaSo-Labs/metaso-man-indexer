@@ -53,7 +53,8 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 	merkleRoot := block.Header.MerkleRoot.String()
 	for i, tx := range block.Transactions {
 		for _, in := range tx.TxIn {
-			id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
+			//id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
+			id := common.ConcatBytesOptimized([]string{in.PreviousOutPoint.Hash.String(), ":", strconv.FormatUint(uint64(in.PreviousOutPoint.Index), 10)}, "")
 			txInList = append(txInList, id)
 		}
 		txPins := indexer.CatchPinsByTx(tx, blockHeight, timestamp, blockHash, merkleRoot, i)

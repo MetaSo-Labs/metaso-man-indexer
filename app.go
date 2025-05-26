@@ -11,10 +11,10 @@ import (
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
+	"time"
 
 	"net/http"
 	_ "net/http/pprof"
-	"time"
 )
 
 // @title           Metaso API
@@ -47,11 +47,16 @@ func main() {
 	if common.Server == "1" {
 		go api.Start(f)
 	}
-	if common.ModuleExist("metaso") {
+	// for {
+	// 	time.Sleep(time.Minute * 10)
+	// }
+	if common.ModuleExist("metaso") && !common.Config.Sync.IsFullNode {
 		ms := metaso.MetaSo{}
 		metaso.ConnectMongoDb()
 		ms.SaveSynchBlockedSetting()
 		ms.SaveRecommendedAuthor()
+		go ms.SynchBlockedSettings()
+		go ms.Synchronization()
 	}
 	go man.ZmqRun()
 	if common.ModuleExist("metaso") {
@@ -59,8 +64,6 @@ func main() {
 		if common.Config.MetaSo.SyncMode == "db" {
 			ms.SyncPin(500)
 		}
-		go ms.SynchBlockedSettings()
-		go ms.Synchronization()
 		if common.Config.Sync.IsFullNode {
 			go ms.SyncPEV()
 		}

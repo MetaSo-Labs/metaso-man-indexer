@@ -58,8 +58,6 @@ func CountBlockPEV(blockHeight int64, block *MetaBlockChainData) (pevList []inte
 	}
 	var pinList []*pin.PinInscription
 	err = results.All(context.TODO(), &pinList)
-	//fmt.Println("count pinList:", chainName, startHeight, endHeight, len(pinList))
-	//var pevList []interface{}
 	allowProtocols := common.Config.Statistics.AllowProtocols
 	allowHost := common.Config.Statistics.AllowHost
 
