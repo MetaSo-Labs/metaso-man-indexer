@@ -51,12 +51,14 @@ func (metaso *MetaSo) SyncPEV() (err error) {
 	for {
 		if !man.FirstCompleted {
 			time.Sleep(time.Minute * 1)
+			log.Println("waiting for first completed...")
 			continue
 		}
-		metaso.SyncPendingPEV()
 		metaso.syncPEV()
-		time.Sleep(time.Minute * 1)
+		metaso.SyncPendingPEV()
+		time.Sleep(time.Second * 10)
 	}
+	//return
 }
 func fixHost() {
 	fixed, _ := mongodb.GetSyncLastNumber("fixhost")

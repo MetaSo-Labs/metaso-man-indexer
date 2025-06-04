@@ -39,7 +39,7 @@ func (indexer *Indexer) GetAddress(pkScript []byte) (address string) {
 	}
 	return
 }
-func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string) {
+func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string) {
 	chain := MicroVisionChain{}
 	blockMsg, err := chain.GetBlock(blockHeight)
 	if err != nil {
@@ -51,6 +51,7 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 	timestamp := block.Header.Timestamp.Unix()
 	blockHash := block.BlockHash().String()
 	merkleRoot := block.Header.MerkleRoot.String()
+	creatorMap = make(map[string]string)
 	for i, tx := range block.Transactions {
 		for _, in := range tx.TxIn {
 			//id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
@@ -62,6 +63,7 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 			pinInscriptions = append(pinInscriptions, txPins...)
 		}
 	}
+
 	return
 }
 func (indexer *Indexer) CatchMempoolPins(txList []interface{}) (pinInscriptions []*pin.PinInscription, txInList []string) {
@@ -89,7 +91,8 @@ func (indexer *Indexer) GetOWnerAddress(inputId string, tx *wire.MsgTx) (info *p
 	//fmt.Println("tx:", tx.TxHash().String(), inputId)
 	info = &pin.PinTransferInfo{}
 	firstInputId := fmt.Sprintf("%s:%d", tx.TxIn[0].PreviousOutPoint.Hash, tx.TxIn[0].PreviousOutPoint.Index)
-	if len(tx.TxIn) == 1 || firstInputId == inputId {
+	//!!!加速索引，都给第一个
+	if len(tx.TxIn) == 1 || firstInputId == inputId || 1 == 1 {
 		class, addresses, _, _ := txscript.ExtractPkScriptAddrs(tx.TxOut[0].PkScript, indexer.ChainParams)
 		if len(addresses) > 0 {
 			info.Address = addresses[0].String()
@@ -146,7 +149,7 @@ func (indexer *Indexer) GetOWnerAddress(inputId string, tx *wire.MsgTx) (info *p
 func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, timestamp int64, blockHash string, merkleRoot string, txIndex int) (pinInscriptions []*pin.PinInscription) {
 	//check OpReturn data
 	haveOpReturn := false
-	chain := MicroVisionChain{}
+	//chain := MicroVisionChain{}
 	for i, out := range msgTx.TxOut {
 		class, _, _, _ := txscript.ExtractPkScriptAddrs(out.PkScript, indexer.ChainParams)
 		//fmt.Println(class.String())
@@ -172,7 +175,10 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			popLv, _ := pin.PopLevelCount(indexer.ChainName, pop)
 			creator := address
 			if common.Config.Sync.IsFullNode {
-				creator = chain.GetCreatorAddress(msgTx.TxIn[0].PreviousOutPoint.Hash.String(), msgTx.TxIn[0].PreviousOutPoint.Index, indexer.ChainParams)
+				//creator = chain.GetCreatorAddress(msgTx.TxIn[0].PreviousOutPoint.Hash.String(), msgTx.TxIn[0].PreviousOutPoint.Index, indexer.ChainParams)
+				// if v, ok := pin.AllCreatorAddress.Load(msgTx.TxIn[0].PreviousOutPoint.Hash.String()); ok {
+				// 	creator = v.(string)
+				// }
 			}
 			_, host, path := pin.ValidHostPath(pinInscription.Path)
 			pinInscriptions = append(pinInscriptions, &pin.PinInscription{
@@ -207,6 +213,8 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 				ContentSummary:     getContentSummary(pinInscription, id, contentTypeDetect),
 				Pop:                pop,
 				PopLv:              popLv,
+				PoPScore:           pin.GetPoPScore(pop, int64(popLv), common.Config.Mvc.PopCutNum),
+				PoPScoreV1:         pin.GetPoPScoreV1(pop, popLv),
 				DataValue:          pin.RarityScoreBinary(indexer.ChainName, pop),
 				Mrc20MintId:        []string{},
 				Host:               host,

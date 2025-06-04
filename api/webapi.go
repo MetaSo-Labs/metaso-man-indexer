@@ -127,7 +127,7 @@ func Start(f embed.FS) {
 	mrc20JsonApi(r)
 	metaAccessJsonApi(r)
 	mrc721JsonApi(r)
-	if common.ModuleExist("metaso") {
+	if common.ModuleExist("metaso") || common.ModuleExist("metaso_pev") {
 		log.Println("use metaso api")
 		metaso.Api(r)
 		metaso.StatisticsApi(r)
@@ -267,8 +267,9 @@ func searchshow(ctx *gin.Context) {
 	ctx.HTML(200, "home/search.html", gin.H{"Key": ctx.Param("key"), "Data": pinMsg})
 }
 func content(ctx *gin.Context) {
-	p, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
-	if err != nil || p == nil {
+	//p, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
+	p, err := man.PebbleStore.GetPinById(ctx.Param("number"))
+	if err != nil || p.Id == "" {
 		ctx.String(200, "fail")
 		return
 	}

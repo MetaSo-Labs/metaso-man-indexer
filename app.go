@@ -12,9 +12,6 @@ import (
 	"manindexer/database/mongodb"
 	"manindexer/man"
 	"time"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 // @title           Metaso API
@@ -28,46 +25,34 @@ var (
 func main() {
 	banner := `
     __  ___  ___     _   __
-   /  |/  / /   |   / | / / v0.4.18
+   /  |/  / /   |   / | / / v0.5.0
   / /|_/ / / /| |  /  |/ / 
  / /  / / / ___ | / /|  /  
 /_/  /_/ /_/  |_|/_/ |_/                   
  `
 	fmt.Println(banner)
-	// start pprof
-	go func() {
-		log.Println("Starting pprof server on :6061")
-		if err := http.ListenAndServe(":6061", nil); err != nil {
-			log.Fatalf("Pprof server failed to start: %v", err)
-		}
-	}()
 	common.InitConfig("./config.toml")
+	cmd := common.Cmd
+	fmt.Println("cmd:", cmd)
 	man.InitAdapter(common.Chain, common.Db, common.TestNet, common.Server)
 	log.Printf("ManIndex,chain=%s,fullnode=%v,test=%s,db=%s,server=%s,config=%s,metaChain=%s", common.Chain, common.Config.Sync.IsFullNode, common.TestNet, common.Db, common.Server, common.ConfigFile, common.Config.Statistics.MetaChainHost)
 	if common.Server == "1" {
 		go api.Start(f)
 	}
-	// for {
-	// 	time.Sleep(time.Minute * 10)
-	// }
-	if common.ModuleExist("metaso") && !common.Config.Sync.IsFullNode {
-		ms := metaso.MetaSo{}
+	ms := metaso.MetaSo{}
+	if common.ModuleExist("metaso") || common.ModuleExist("metaso_pev") {
 		metaso.ConnectMongoDb()
+	}
+	if common.ModuleExist("metaso") {
 		ms.SaveSynchBlockedSetting()
 		ms.SaveRecommendedAuthor()
 		go ms.SynchBlockedSettings()
 		go ms.Synchronization()
 	}
 	go man.ZmqRun()
-	if common.ModuleExist("metaso") {
-		ms := metaso.MetaSo{}
-		if common.Config.MetaSo.SyncMode == "db" {
-			ms.SyncPin(500)
-		}
-		if common.Config.Sync.IsFullNode {
-			go ms.SyncPEV()
-		}
-		//go ms.SyncPendingPEVF()
+	if common.ModuleExist("metaso_pev") {
+		metaso.PebblePevInit()
+		go ms.SyncPEV()
 	}
 	if common.ModuleExist("metaname") {
 		mn := metaname.MetaName{}

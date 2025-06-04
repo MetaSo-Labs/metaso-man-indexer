@@ -69,15 +69,16 @@ zmqHost = "tcp://127.0.0.1:15555"
 popCutNum = 8
 [mvc]
 #initialHeight = 91797
-initialHeight = 86500
+initialHeight = 120831
 mrc20Height = 101630
-rpcHost = "192.168.1.30:9882"
+#rpcHost = "192.168.1.30:9882"
+rpcHost = "47.242.24.63:9882"
 rpcUser = "showpay"
 rpcPass = "showpay88.."
 rpcHttpPostMode = true
 rpcDisableTLS = true
 zmqHost = "tcp://127.0.0.1:25555"
-popCutNum = 8
+popCutNum = 21
 [mongodb]
 mongoURI = "mongodb://test:12345678@127.0.0.1:27017"
 dbName = "man_mvc"

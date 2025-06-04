@@ -3,3 +3,6 @@ data/
 mvc_del_mempool_height.txt
 man_base_data_pebble/
 config_mvc.toml
+manindexer
+.DS_Store
+pev_data_pebble/

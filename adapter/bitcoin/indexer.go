@@ -40,7 +40,7 @@ func (indexer *Indexer) GetAddress(pkScript []byte) (address string) {
 	}
 	return
 }
-func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string) {
+func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string) {
 	chain := BitcoinChain{}
 	blockMsg, err := chain.GetBlock(blockHeight)
 	if err != nil {
@@ -51,6 +51,7 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 	timestamp := block.Header.Timestamp.Unix()
 	blockHash := block.BlockHash().String()
 	merkleRoot := block.Header.MerkleRoot.String()
+	creatorMap = make(map[string]string)
 	for i, tx := range block.Transactions {
 		for _, in := range tx.TxIn {
 			//id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
@@ -287,6 +288,9 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			creator := address
 			if common.Config.Sync.IsFullNode {
 				creator = chain.GetCreatorAddress(msgTx.TxIn[0].PreviousOutPoint.Hash.String(), msgTx.TxIn[0].PreviousOutPoint.Index, indexer.ChainParams)
+				// if v, ok := pin.AllCreatorAddress.Load(msgTx.TxIn[0].PreviousOutPoint.Hash.String()); ok {
+				// 	creator = v.(string)
+				// }
 			}
 			_, host, path := pin.ValidHostPath(pinInscription.Path)
 			pinInscriptions = append(pinInscriptions, &pin.PinInscription{
@@ -321,6 +325,8 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 				ContentSummary:     getContentSummary(pinInscription, id, contentTypeDetect),
 				Pop:                pop,
 				PopLv:              popLv,
+				PoPScore:           pin.GetPoPScore(pop, int64(popLv), common.Config.Btc.PopCutNum),
+				PoPScoreV1:         pin.GetPoPScoreV1(pop, popLv),
 				DataValue:          pin.RarityScoreBinary(indexer.ChainName, pop),
 				Mrc20MintId:        []string{},
 				Host:               host,
@@ -377,6 +383,9 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 		creator := address
 		if common.Config.Sync.IsFullNode {
 			creator = chain.GetCreatorAddress(v.PreviousOutPoint.Hash.String(), v.PreviousOutPoint.Index, indexer.ChainParams)
+			// if val, ok := pin.AllCreatorAddress.Load(v.PreviousOutPoint.Hash.String()); ok {
+			// 	creator = val.(string)
+			// }
 		}
 		_, host, path := pin.ValidHostPath(pinInscription.Path)
 		pinInscriptions = append(pinInscriptions, &pin.PinInscription{
@@ -411,6 +420,8 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			ContentSummary:     getContentSummary(pinInscription, id, contentTypeDetect),
 			Pop:                pop,
 			PopLv:              popLv,
+			PoPScore:           pin.GetPoPScore(pop, int64(popLv), common.Config.Btc.PopCutNum),
+			PoPScoreV1:         pin.GetPoPScoreV1(pop, popLv),
 			DataValue:          pin.RarityScoreBinary(indexer.ChainName, pop),
 			Mrc20MintId:        []string{},
 			Host:               host,

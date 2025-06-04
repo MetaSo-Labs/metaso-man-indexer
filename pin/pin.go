@@ -2,6 +2,9 @@ package pin
 
 import (
 	"strings"
+	"sync"
+
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -10,44 +13,49 @@ const (
 	CompliantPath string = "info;file;protocols;nft;ft;mrc20;follow;metaaccess;metaname"
 )
 
+var AllCreatorAddress sync.Map
+var AllMrcPinId sync.Map
+
 type PinInscription struct {
-	Id                 string `json:"id"`
-	Number             int64  `json:"number"`
-	MetaId             string `json:"metaid"`
-	Address            string `json:"address"`
-	CreateAddress      string `json:"creator"`
-	CreateMetaId       string `json:"createMetaId"`
-	InitialOwner       string `json:"initialOwner"`
-	Output             string `json:"output"`
-	OutputValue        int64  `json:"outputValue"`
-	Timestamp          int64  `json:"timestamp"`
-	GenesisFee         int64  `json:"genesisFee"`
-	GenesisHeight      int64  `json:"genesisHeight"`
-	GenesisTransaction string `json:"genesisTransaction"`
-	TxIndex            int    `json:"txIndex"`
-	TxInIndex          uint32 `json:"txInIndex"`
-	Offset             uint64 `json:"offset"`
-	Location           string `json:"location"`
-	Operation          string `json:"operation"`
-	Path               string `json:"path"`
-	ParentPath         string `json:"parentPath"`
-	OriginalPath       string `json:"originalPath"`
-	Encryption         string `json:"encryption"`
-	Version            string `json:"version"`
-	ContentType        string `json:"contentType"`
-	ContentTypeDetect  string `json:"contentTypeDetect"`
-	ContentBody        []byte `json:"contentBody"`
-	ContentLength      uint64 `json:"contentLength"`
-	ContentSummary     string `json:"contentSummary"`
-	Status             int    `json:"status"`
-	OriginalId         string `json:"originalId"`
-	IsTransfered       bool   `json:"isTransfered"`
-	Preview            string `json:"preview"`
-	Content            string `json:"content"`
-	Pop                string `json:"pop"`
-	PopLv              int    `json:"popLv"`
-	ChainName          string `json:"chainName"`
-	DataValue          int    `json:"dataValue"`
+	Id                 string          `json:"id"`
+	Number             int64           `json:"number"`
+	MetaId             string          `json:"metaid"`
+	Address            string          `json:"address"`
+	CreateAddress      string          `json:"creator"`
+	CreateMetaId       string          `json:"createMetaId"`
+	InitialOwner       string          `json:"initialOwner"`
+	Output             string          `json:"output"`
+	OutputValue        int64           `json:"outputValue"`
+	Timestamp          int64           `json:"timestamp"`
+	GenesisFee         int64           `json:"genesisFee"`
+	GenesisHeight      int64           `json:"genesisHeight"`
+	GenesisTransaction string          `json:"genesisTransaction"`
+	TxIndex            int             `json:"txIndex"`
+	TxInIndex          uint32          `json:"txInIndex"`
+	Offset             uint64          `json:"offset"`
+	Location           string          `json:"location"`
+	Operation          string          `json:"operation"`
+	Path               string          `json:"path"`
+	ParentPath         string          `json:"parentPath"`
+	OriginalPath       string          `json:"originalPath"`
+	Encryption         string          `json:"encryption"`
+	Version            string          `json:"version"`
+	ContentType        string          `json:"contentType"`
+	ContentTypeDetect  string          `json:"contentTypeDetect"`
+	ContentBody        []byte          `json:"contentBody"`
+	ContentLength      uint64          `json:"contentLength"`
+	ContentSummary     string          `json:"contentSummary"`
+	Status             int             `json:"status"`
+	OriginalId         string          `json:"originalId"`
+	IsTransfered       bool            `json:"isTransfered"`
+	Preview            string          `json:"preview"`
+	Content            string          `json:"content"`
+	Pop                string          `json:"pop"`
+	PopLv              int             `json:"popLv"`
+	PoPScore           decimal.Decimal `json:"popScore"`
+	PoPScoreV1         decimal.Decimal `json:"popScoreV1"`
+	ChainName          string          `json:"chainName"`
+	DataValue          int             `json:"dataValue"`
 	//Mrc20Minted        bool   `json:"mrc20Minted"`  //true Consumed
 	//Mrc20MintPin       string `json:"mrc20MintPin"` //mrc20 mint pin id
 	Mrc20MintId   []string `json:"mrc20MintId"`

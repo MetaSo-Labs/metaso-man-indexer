@@ -2,11 +2,14 @@ package pebblestore
 
 import (
 	"fmt"
+	"log"
 	"manindexer/common"
 	"manindexer/pin"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/bytedance/sonic"
 	"github.com/cespare/xxhash/v2"
@@ -26,11 +29,13 @@ var noopLogger = &customLogger{}
 // AddressDB: 按地址存储的PIN ID列表，key是address转换后的metaid,value是[]pinId&path&outputValue
 type Database struct {
 	PinsDBs   []*pebble.DB
-	PagesDB   *pebble.DB
+	PinSort   *pebble.DB
 	BlocksDB  *pebble.DB
 	CountDB   *pebble.DB
 	PathPinDB *pebble.DB
 	AddressDB *pebble.DB
+	CreatorDb *pebble.DB
+	MrcDb     *pebble.DB
 }
 type customLogger struct{}
 
@@ -40,24 +45,28 @@ func (l *customLogger) Errorf(format string, args ...interface{}) {}
 
 // NewDataBase 创建索引器，自动创建分片db、pages、blocks独立db
 func NewDataBase(basePath string, shardNum int) (*Database, error) {
+	log.Println("=========NEW PEBBLE DATABASE========")
 	pinsDBs := make([]*pebble.DB, shardNum)
 	for i := 0; i < shardNum; i++ {
 		dir := fmt.Sprintf("%s/pins_%d", basePath, i)
 		os.MkdirAll(dir, 0755)
 		db, err := pebble.Open(fmt.Sprintf("%s/db", dir), &pebble.Options{Logger: noopLogger})
 		if err != nil {
+			log.Println(err)
 			return nil, err
 		}
 		pinsDBs[i] = db
 	}
-	os.MkdirAll(fmt.Sprintf("%s/pages", basePath), 0755)
-	pagesDB, err := pebble.Open(fmt.Sprintf("%s/pages/db", basePath), &pebble.Options{Logger: noopLogger})
+	os.MkdirAll(fmt.Sprintf("%s/pinsort", basePath), 0755)
+	pinSortDb, err := pebble.Open(fmt.Sprintf("%s/pinsort/db", basePath), &pebble.Options{Logger: noopLogger})
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
 	blocksDB, err := pebble.Open(fmt.Sprintf("%s/blocks/db", basePath), &pebble.Options{Logger: noopLogger})
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
@@ -68,14 +77,22 @@ func NewDataBase(basePath string, shardNum int) (*Database, error) {
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
 	pathPinDB, err := pebble.Open(fmt.Sprintf("%s/path/db", basePath), &pebble.Options{Logger: noopLogger})
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
 	addressDB, err := pebble.Open(fmt.Sprintf("%s/address/db", basePath), &pebble.Options{Logger: noopLogger})
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
-	return &Database{PinsDBs: pinsDBs, PagesDB: pagesDB, BlocksDB: blocksDB, CountDB: countDB, PathPinDB: pathPinDB, AddressDB: addressDB}, nil
+	os.MkdirAll(fmt.Sprintf("%s/creator", basePath), 0755)
+	creatorDb, err := pebble.Open(fmt.Sprintf("%s/creator/db", basePath), &pebble.Options{Logger: noopLogger})
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	return &Database{PinsDBs: pinsDBs, PinSort: pinSortDb, BlocksDB: blocksDB, CountDB: countDB, PathPinDB: pathPinDB, AddressDB: addressDB, CreatorDb: creatorDb}, nil
 }
 
 // Close 关闭所有数据库
@@ -83,8 +100,12 @@ func (idx *Database) Close() error {
 	for _, db := range idx.PinsDBs {
 		db.Close()
 	}
-	idx.PagesDB.Close()
+	idx.PinSort.Close()
 	idx.BlocksDB.Close()
+	idx.PathPinDB.Close()
+	idx.AddressDB.Close()
+	idx.CountDB.Close()
+	idx.CreatorDb.Close()
 	return nil
 }
 
@@ -121,15 +142,30 @@ func (idx *Database) BatchInsertPins(pins []pin.PinInscription) error {
 	}
 	return nil
 }
-func (idx *Database) BatchInsertPathPins(data map[string]string) {
+func (idx *Database) BatchInsertPathPins(data map[string]string) error {
+	batch := idx.PathPinDB.NewBatch()
 	for k, v := range data {
-		idx.PathPinDB.Set([]byte(k), []byte(v), pebble.Sync)
+		batch.Set([]byte(k), []byte(v), nil)
 	}
+	if err := batch.Commit(nil); err != nil {
+		batch.Close()
+		return err
+	}
+	batch.Close()
+	return nil
+
 }
-func (idx *Database) BatchMergeAddressData(data map[string]string) {
+func (idx *Database) BatchMergeAddressData(data map[string]string) error {
+	batch := idx.AddressDB.NewBatch()
 	for k, v := range data {
-		idx.AddressDB.Merge([]byte(k), []byte(v), pebble.Sync)
+		batch.Merge([]byte(k), []byte(v), nil)
 	}
+	if err := batch.Commit(nil); err != nil {
+		batch.Close()
+		return err
+	}
+	batch.Close()
+	return nil
 }
 
 // PageInfo 分页信息
@@ -145,31 +181,23 @@ type PageInfo struct {
 	Keys        []string // txid:outputindex 列表
 }
 
-// InsertPageInfo 插入分页信息及二级索引
-func (idx *Database) InsertPageInfo(db *pebble.DB, page PageInfo) error {
-	// keyS := fmt.Sprintf("%s_s_%d_%d", page.Type, page.BlockTime, page.BlockHeight)
-	keyS := common.ConcatBytesOptimized([]string{page.Type, "_s_", fmt.Sprint(page.BlockTime), "_", fmt.Sprint(page.BlockHeight), "_", page.ChainName}, "")
-	// keyN := fmt.Sprintf("%s_n_%d_%d", page.Type, page.BlockTime, page.BlockHeight)
-	keyN := common.ConcatBytesOptimized([]string{page.Type, "_n_", fmt.Sprint(page.BlockTime), "_", fmt.Sprint(page.BlockHeight), "_", page.ChainName}, "")
-	keyT := common.ConcatBytesOptimized([]string{page.Type, "_t_", fmt.Sprint(page.BlockHeight), "_", page.ChainName}, "")
-	valS := []byte(common.ConcatBytesOptimized(page.Keys, "|"))
-	valN := []byte(fmt.Sprintf("%d", page.Num))
-	valT := []byte(fmt.Sprint(page.BlockTime))
+// InsertPinSort 插入pin的排序
+func (idx *Database) InsertPinSort(db *pebble.DB, sortLsit []string) error {
 	batch := db.NewBatch()
-	batch.Set([]byte(keyS), valS, nil)
-	batch.Set([]byte(keyN), valN, nil)
-	batch.Set([]byte(keyT), valT, nil)
-	err := batch.Commit(nil)
+	for _, key := range sortLsit {
+		batch.Set([]byte(key), nil, nil)
+	}
+	if err := batch.Commit(nil); err != nil {
+		batch.Close()
+		return err
+	}
 	batch.Close()
-	return err
+	return nil
 }
 
 // InsertBlockTxs 插入区块交易表
-func (idx *Database) InsertBlockTxs(chainName string, blockHeight int64, keys []string) error {
-	// key := fmt.Sprintf("%s_block_%d", chainName, blockHeight)
-	key := common.ConcatBytesOptimized([]string{chainName, "_block_", fmt.Sprint(blockHeight)}, "")
-	val := []byte(common.ConcatBytesOptimized(keys, "|"))
-	return idx.BlocksDB.Set([]byte(key), val, nil)
+func (idx *Database) InsertBlockTxs(blockKey string, data string) error {
+	return idx.BlocksDB.Set([]byte(blockKey), []byte(data), pebble.Sync)
 }
 
 // PageQuery 分页查询参数
@@ -187,100 +215,74 @@ type PageResult struct {
 }
 
 // QueryPageKeys 通用分页key查询，pages.db
-func (idx *Database) QueryPageKeys(db *pebble.DB, q PageQuery) (PageResult, error) {
-	prefix := fmt.Sprintf("%s_n_", q.Type)
-	it, _ := idx.PagesDB.NewIter(nil)
+func (idx *Database) QueryPinPageList(db *pebble.DB, q PageQuery) (PageResult, error) {
+	it, _ := idx.PinSort.NewIter(nil)
 	defer it.Close()
-	var (
-		pageKeys []string
-	)
+	var keys []string
+	skip := q.Page * q.Size
+	count := 0
+	// 从最后一个 key 开始倒序遍历
 	for it.Last(); it.Valid(); it.Prev() {
-		key := string(it.Key())
-		if len(key) < len(prefix) || key[:len(prefix)] != prefix {
+		if skip > 0 {
+			skip--
 			continue
 		}
-		pageKeys = append(pageKeys, key)
-	}
-	if len(pageKeys) == 0 {
-		return PageResult{}, nil
-	}
-	var allKeys []string
-	for _, k := range pageKeys {
-		k2 := k[:len(q.Type)] + "_s" + k[len(q.Type)+2:]
-		val, closer, err := idx.PagesDB.Get([]byte(k2))
-		if err == nil {
-			keys := SplitBytesOptimized(string(val), "|")
-			allKeys = append(allKeys, keys...)
-			closer.Close()
+		arr := strings.Split(string(it.Key()), "&")
+		key := "err"
+		if len(arr) >= 4 {
+			key = arr[3]
 		}
-	}
-	start := q.Page * q.Size
-	if q.LastId != "" {
-		for i, v := range allKeys {
-			if v == q.LastId {
-				start = i + 1
-				break
-			}
+		keys = append(keys, key)
+		count++
+		if count >= q.Size {
+			break
 		}
-	}
-	end := start + q.Size
-	if start > len(allKeys) {
-		start = len(allKeys)
-	}
-	if end > len(allKeys) {
-		end = len(allKeys)
 	}
 	res := PageResult{
-		List:   allKeys[start:end],
+		List:   keys,
 		NextId: "",
 	}
-	if end < len(allKeys) {
-		res.NextId = allKeys[end-1]
+	if len(keys) > 0 {
+		res.NextId = keys[len(keys)-1]
 	}
 	return res, nil
 }
 
-// QueryAllPinKeysByPageIndex 按PagesDB中的二级索引分页查询，返回所有一级索引key（按时间排序）
-func (idx *Database) QueryAllPinKeysByPageIndex(db *pebble.DB, q PageQuery) ([]string, error) {
-	prefix := fmt.Sprintf("%s_n_", q.Type)
-	it, _ := idx.PagesDB.NewIter(nil)
+func (idx *Database) GetBlockPageList(page int, size int, limit int) (PageResult []PageBlock, err error) {
+	it, _ := idx.BlocksDB.NewIter(nil)
 	defer it.Close()
-	var (
-		pageKeys []string
-	)
-	// 倒序遍历二级索引，收集所有主索引key（如 pin_s_...），最新在前
+	skip := page * size
+	count := 0
+	// 从最后一个 key 开始倒序遍历
 	for it.Last(); it.Valid(); it.Prev() {
-		key := string(it.Key())
-		if len(key) < len(prefix) || key[:len(prefix)] != prefix {
+		if skip > 0 {
+			skip--
 			continue
 		}
-		mainKey := key[:len(q.Type)] + "_s" + key[len(q.Type)+2:]
-		pageKeys = append(pageKeys, mainKey)
-	}
-	return pageKeys, nil
-}
-func (idx *Database) GetBlockLimitPins(pagekey string, size int) (list []pin.PinInscription, err error) {
-	val, closer, err := idx.PagesDB.Get([]byte(pagekey))
-	if err != nil {
-		return
-	}
-	defer closer.Close()
-	keys := SplitBytesOptimized(string(val), "|")
-	var pinIdList []string
-	if len(keys) > size {
-		pinIdList = keys[0 : size-1]
-	} else {
-		pinIdList = keys
-	}
-	if len(pinIdList) <= 0 {
-		return
-	}
-	result := idx.BatchGetPinListByKeys(pinIdList, false)
-	for _, val := range result {
-		var item pin.PinInscription
-		err := sonic.Unmarshal(val, &item)
-		if err == nil {
-			list = append(list, item)
+		pinIdList := strings.Split(string(it.Value()), ",")
+		if len(pinIdList) < 0 {
+			continue
+		}
+		if len(pinIdList) > limit {
+			pinIdList = pinIdList[0:limit]
+		}
+		result := idx.BatchGetPinListByKeys(pinIdList, false)
+		blockData := PageBlock{}
+		keyArr := strings.Split(string(it.Key()), "&")
+		blockData.BlockTime = keyArr[0]
+		blockData.ChainName = keyArr[1]
+		blockData.BlockHeight = keyArr[2]
+		for _, val := range result {
+			var item pin.PinInscription
+			err := sonic.Unmarshal(val, &item)
+			if err == nil {
+				blockData.PinList = append(blockData.PinList, item)
+			}
+		}
+		PageResult = append(PageResult, blockData)
+		count++
+		if count >= size {
+			break
 		}
 	}
 	return
@@ -303,6 +305,19 @@ func (idx *Database) GetPinByKey(key string) ([]byte, error) {
 	}
 	closer.Close() // 直接调用，避免 defer 带来的性能损耗
 	return val, nil
+}
+func (idx *Database) GetPinInscriptionByKey(key string) (pinNode pin.PinInscription, err error) {
+	db := idx.getShard(key)
+	val, closer, err := db.Get([]byte(key))
+	if err != nil {
+		return
+	}
+	closer.Close() // 直接调用，避免 defer 带来的性能损耗
+	if val != nil && len(val) == 0 {
+		return
+	}
+	err = sonic.Unmarshal(val, &pinNode)
+	return
 }
 
 // BatchGetPinByKeys 批量查询主键，返回 map[key]value 只包含查到的key
@@ -332,7 +347,7 @@ func (idx *Database) BatchGetPinByKeys(keys []string, replace bool) map[string][
 	}
 	return results
 }
-func (idx *Database) BatchGetPinListByKeys(keys []string, replace bool) [][]byte {
+func (idx *Database) BatchGetPinListByKeys_bak(keys []string, replace bool) [][]byte {
 	shardMap := make(map[*pebble.DB][]int)
 	for i, key := range keys {
 		if key == "" {
@@ -357,6 +372,62 @@ func (idx *Database) BatchGetPinListByKeys(keys []string, replace bool) [][]byte
 		}
 	}
 	return results
+}
+
+func (idx *Database) BatchGetPinListByKeys(keys []string, replace bool) [][]byte {
+	shardMap := make(map[*pebble.DB][]int)
+	for i, key := range keys {
+		if key == "" {
+			continue
+		}
+		if replace {
+			key = strings.Replace(key, ":", "i", -1)
+		}
+		db := idx.getShard(key)
+		shardMap[db] = append(shardMap[db], i)
+	}
+	results := make([][]byte, len(keys))
+	var wg sync.WaitGroup
+
+	for db, idxs := range shardMap {
+		wg.Add(1)
+		go func(db *pebble.DB, idxs []int) {
+			defer wg.Done()
+			// 分片内再并发
+			const innerBatch = 32 // 可根据实际情况调整，32，64，128
+			var innerWg sync.WaitGroup
+			for i := 0; i < len(idxs); i += innerBatch {
+				end := i + innerBatch
+				if end > len(idxs) {
+					end = len(idxs)
+				}
+				innerWg.Add(1)
+				go func(batchIdxs []int) {
+					defer innerWg.Done()
+					for _, idx := range batchIdxs {
+						val, closer, err := db.Get([]byte(keys[idx]))
+						if err == nil {
+							buf := make([]byte, len(val))
+							copy(buf, val)
+							results[idx] = buf
+							closer.Close()
+						}
+					}
+				}(idxs[i:end])
+			}
+			innerWg.Wait()
+		}(db, idxs)
+	}
+	wg.Wait()
+
+	// 去除未命中的 nil
+	final := make([][]byte, 0, len(keys))
+	for _, v := range results {
+		if v != nil {
+			final = append(final, v)
+		}
+	}
+	return final
 }
 
 // 统一主键生成函数，保证写入和查询一致
@@ -392,4 +463,71 @@ func splitFast(s, sep string) []string {
 	}
 	res = append(res, s[start:])
 	return res
+}
+func CountKeys(db *pebble.DB, prefix []byte) (int, error) {
+	it, err := db.NewIter(nil)
+	if err != nil {
+		return 0, err
+	}
+	defer it.Close()
+	count := 0
+	for it.First(); it.Valid(); it.Next() {
+		if prefix == nil || len(prefix) == 0 || strings.HasPrefix(string(it.Key()), string(prefix)) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func CountAllShards(dbs []*pebble.DB, prefix []byte) (int, error) {
+	var total int64
+	var wg sync.WaitGroup
+	var errOnce sync.Once
+	var firstErr error
+	for _, db := range dbs {
+		wg.Add(1)
+		go func(db *pebble.DB) {
+			defer wg.Done()
+			n, err := CountKeys(db, prefix)
+			if err != nil {
+				errOnce.Do(func() { firstErr = err })
+				return
+			}
+			atomic.AddInt64(&total, int64(n))
+		}(db)
+	}
+	wg.Wait()
+	return int(total), firstErr
+}
+func GetAllPinId(dbs []*pebble.DB, allPinIdMap *sync.Map) error {
+	var wg sync.WaitGroup
+	var errOnce sync.Once
+	var firstErr error
+	ch := make(chan map[string]struct{}, len(dbs))
+
+	for _, db := range dbs {
+		wg.Add(1)
+		go func(db *pebble.DB) {
+			defer wg.Done()
+			localMap := make(map[string]struct{})
+			it, err := db.NewIter(nil)
+			if err != nil {
+				errOnce.Do(func() { firstErr = err })
+				return
+			}
+			defer it.Close()
+			for it.First(); it.Valid(); it.Next() {
+				localMap[string(it.Key())] = struct{}{}
+			}
+			ch <- localMap
+		}(db)
+	}
+	wg.Wait()
+	close(ch)
+	for m := range ch {
+		for k := range m {
+			allPinIdMap.Store(k, struct{}{})
+		}
+	}
+	return firstErr
 }

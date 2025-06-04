@@ -1,8 +1,12 @@
 package man
 
 import (
+	"fmt"
+	"log"
 	"manindexer/common"
+	"manindexer/database/mongodb"
 	"manindexer/pebblestore"
+
 	"manindexer/pin"
 	"os"
 	"path/filepath"
@@ -13,7 +17,7 @@ import (
 )
 
 type PebbleData struct {
-	database *pebblestore.Database
+	Database *pebblestore.Database
 }
 
 func (pd *PebbleData) Init(shardNum int) (err error) {
@@ -22,7 +26,7 @@ func (pd *PebbleData) Init(shardNum int) (err error) {
 	if err != nil {
 		return
 	}
-	pd.database, err = pebblestore.NewDataBase(dbPath, shardNum)
+	pd.Database, err = pebblestore.NewDataBase(dbPath, shardNum)
 	return
 }
 
@@ -31,42 +35,60 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 	if !reIndex {
 		MaxHeight[chainName] = height
 	}
+	log.Println("GetSaveData===>")
+	startTime := time.Now()
 	pinList, _, metaIdData,
 		updatedData, mrc20List, txInList, mrc20TransferPinTx,
 		followData, infoAdditional, _ := pd.GetSaveData(chainName, height)
+	log.Println("GetSaveData:", time.Since(startTime), "Num:", len(pinList))
 	//pinList, protocolsData, metaIdData, pinTreeData, updatedData, _, followData, infoAdditional, _ := GetSaveData(chainName, height)
 	//fmt.Println("PIN NUM:", len(pinList), "PROTOCOLS NUM:", len(protocolsData), "METAID NUM:", len(metaIdData), "PIN TREE NUM:", 0, "UPDATE NUM:", len(updatedData), "FOLLOW NUM:", len(followData), "INFO ADDITIONAL NUM:", len(infoAdditional))
+	startTime = time.Now()
 	if len(metaIdData) > 0 {
 		DbAdapter.BatchUpsertMetaIdInfo(metaIdData)
 		if !reIndex {
-			pd.database.CountAdd("metaids", int64(len(metaIdData)))
+			cnt, err := mongodb.CountMetaid()
+			if err == nil {
+				pd.Database.CountSet("metaids", cnt)
+			}
 		}
 		//metaIdData = metaIdData[0:0]
 		metaIdData = nil
 	}
+	log.Println("BatchUpsertMetaIdInfo:", time.Since(startTime))
 	var pinNodeList []*pin.PinInscription
 	if len(pinList) > 0 {
 		//DbAdapter.BatchAddPins(pinList)
 		// if err := batchProcessPins(pinList, DefaultBatchSize); err != nil {
 		// 	return fmt.Errorf("failed to process pins: %v", err)
 		// }
-		pd.database.SetAllPins(height, pinList, 1000)
+		startTime = time.Now()
+		pd.Database.SetAllPins(height, pinList, 1000)
+		log.Println("SetAllPins:", time.Since(startTime))
 		//check transfer in this block
-		var idList []string
+		//var idList []string
+		tmp := pinList[0].(*pin.PinInscription)
+		blockKey := fmt.Sprintf("blocktime_mvc_%d", height)
+		pd.Database.CountSet(blockKey, tmp.Timestamp)
 		for _, item := range pinList {
 			p := item.(*pin.PinInscription)
-			idList = append(idList, p.Output)
+			//idList = append(idList, p.Output)
 			if p.Path == "/metaaccess/accesscontrol" || p.Path == "/metaaccess/accesspass" {
 				pinNodeList = append(pinNodeList, p)
 			}
 		}
-		if common.Config.Sync.IsFullNode {
-			pd.handleTransfer(chainName, idList, height)
-			idList = idList[:0]
-		}
+		//先不检查转移
+		//startTime = time.Now()
+		// if common.Config.Sync.IsFullNode {
+		// 	pd.handleTransfer(chainName, idList, height)
+		// }
+		//idList = idList[:0]
+		//log.Println("handleTransfer:", time.Since(startTime))
 		if !reIndex {
-			pd.database.CountAdd("pins", int64(len(pinList)))
-			pd.database.CountAdd("blocks", int64(1))
+			num := int64(len(pinList))
+			log.Println("Height:", height, "Pin:", num)
+			pd.Database.CountAdd("pins", num)
+			pd.Database.CountAdd("blocks", int64(1))
 		}
 	}
 	pinList = pinList[:0]
@@ -81,23 +103,31 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 	// }
 	// protocolsData = protocolsData[:0]
 	if len(updatedData) > 0 {
+		startTime = time.Now()
 		//DbAdapter.BatchUpdatePins(updatedData)
-		pd.database.BatchUpdatePins(updatedData)
+		pd.Database.BatchUpdatePins(updatedData)
 		updatedData = updatedData[:0]
+		log.Println("BatchUpdatePins:", time.Since(startTime))
 	}
 	if len(followData) > 0 {
+		startTime = time.Now()
 		DbAdapter.BatchUpsertFollowData(followData)
 		followData = followData[:0]
+		log.Println("BatchUpsertFollowData:", time.Since(startTime))
 	}
 	if len(infoAdditional) > 0 {
+		startTime = time.Now()
 		DbAdapter.BatchUpsertMetaIdInfoAddition(infoAdditional)
 		infoAdditional = infoAdditional[:0]
+		log.Println("BatchUpsertMetaIdInfoAddition:", time.Since(startTime))
 	}
 	//Handle MRC20 last.
 	if height >= Mrc20HeightLimit[chainName] && common.ModuleExist("mrc20") {
+		startTime = time.Now()
 		Mrc20Handle(chainName, height, mrc20List, mrc20TransferPinTx, txInList, false)
 		mrc20List = mrc20List[:0]
 		mrc20TransferPinTx = make(map[string]struct{})
+		log.Println("Mrc20Handle:", time.Since(startTime))
 	}
 	// if len(pinNodeList) > 0 && height >= Mrc20HeightLimit[chainName] {
 	// 	m721 := Mrc721{}
@@ -132,12 +162,15 @@ func (pd *PebbleData) GetSaveData(chainName string, blockHeight int64) (
 	err error) {
 	metaIdData = make(map[string]*pin.MetaIdInfo)
 	var pins []*pin.PinInscription
-	pins, txInList = IndexerAdapter[chainName].CatchPins(blockHeight)
-	//fmt.Println("PIN NUM:", len(pins), chainName, blockHeight)
+	st := time.Now()
+	//var creatorMap map[string]string
+	pins, txInList, _ = IndexerAdapter[chainName].CatchPins(blockHeight)
+	log.Println("CatchPins time:", time.Since(st), "PIN NUM:", len(pins), chainName, blockHeight)
 	//check transfer
 	if common.Config.Sync.IsFullNode {
-		pd.handleTransfer(chainName, txInList, blockHeight)
-		txInList = txInList[:0]
+		//pd.Database.BatchInsertCreator(creatorMap, &pin.AllCreatorAddress)
+		// 先不检查转移
+		//pd.handleTransfer(chainName, txInList, blockHeight)
 	}
 
 	//pin validator
@@ -182,14 +215,14 @@ func (pd *PebbleData) handleTransfer(chainName string, outputList []string, bloc
 	defer func() {
 		outputList = outputList[:0]
 	}()
-	transferCheck, err := pd.database.GetPinListByIdList(outputList, 1000, true)
+	transferCheck, err := pd.Database.GetPinListByIdList(outputList, 1000, true)
 	if err == nil && len(transferCheck) > 0 {
 		idMap := make(map[string]string)
 		for _, t := range transferCheck {
 			idMap[t.Output] = t.Address
 		}
 		trasferMap := IndexerAdapter[chainName].CatchTransfer(idMap)
-		pd.database.UpdateTransferPin(trasferMap)
+		pd.Database.UpdateTransferPin(trasferMap)
 		var transferHistoryList []*pin.PinTransferHistory
 		tranferTime := time.Now().Unix()
 		for pinid, info := range trasferMap {
@@ -276,7 +309,7 @@ func (pd *PebbleData) handlePathAndOperation(
 	if len(modifyPinIdList) <= 0 {
 		return
 	}
-	originalPins, err := pd.database.GetPinListByIdList(modifyPinIdList, 1000, false)
+	originalPins, err := pd.Database.GetPinListByIdList(modifyPinIdList, 1000, false)
 	if err != nil {
 		return
 	}
@@ -335,7 +368,7 @@ func (pd *PebbleData) handlePathAndOperation(
 	}
 }
 func (pd *PebbleData) GetPinById(pinid string) (pinNode pin.PinInscription, err error) {
-	result, err := pd.database.GetPinByKey(pinid)
+	result, err := pd.Database.GetPinByKey(pinid)
 	if err != nil {
 		return
 	}

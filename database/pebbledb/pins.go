@@ -419,7 +419,7 @@ func upsertProtocolData(data []map[string]interface{}, collectionName string) (e
 		key.WriteString(strconv.FormatInt(n, 10))
 		batch.Set([]byte(key.String()), bytes, opts)
 	}
-	if err = batch.Commit(pebble.Sync); err != nil {
+	if err = batch.Commit(nil); err != nil {
 		log.Printf("Error committing batch: %v", err)
 		return
 	}

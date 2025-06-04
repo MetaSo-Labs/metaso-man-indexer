@@ -73,17 +73,20 @@ func metaidList(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"list": list, "count": &count}))
 }
 func pinList(ctx *gin.Context) {
-	page, err := strconv.ParseInt(ctx.Query("page"), 10, 64)
+	//page, err := strconv.ParseInt(ctx.Query("page"), 10, 64)
+	page, err := strconv.Atoi(ctx.Query("page"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, respond.ErrParameterError)
 		return
 	}
-	size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	//size, err := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	size, err := strconv.Atoi(ctx.Query("size"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, respond.ErrParameterError)
 		return
 	}
-	list, err := man.DbAdapter.GetPinPageList(page, size)
+	//list, err := man.DbAdapter.GetPinPageList(page, size)
+	list, lastId, err := man.PebbleStore.PinPageList(page-1, size, ctx.Query("lastId"))
 	if err != nil || list == nil {
 		if err == mongo.ErrNoDocuments {
 			ctx.JSON(http.StatusOK, respond.ErrNoDataFound)
@@ -103,8 +106,9 @@ func pinList(ctx *gin.Context) {
 		}
 		msg = append(msg, pmsg)
 	}
-	count := man.DbAdapter.Count()
-	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"Pins": msg, "Count": &count, "Active": "index"}))
+	//count := man.DbAdapter.Count()
+	count := man.PebbleStore.GetAllCount()
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"Pins": msg, "Count": &count, "Active": "index", "LastId": lastId}))
 }
 func mempoolList(ctx *gin.Context) {
 	page, err := strconv.ParseInt(ctx.Query("page"), 10, 64)

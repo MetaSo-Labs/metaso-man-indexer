@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"manindexer/common"
+	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/pebblestore"
 	"testing"
@@ -13,6 +14,8 @@ func TestPinPageList(t *testing.T) {
 	man.InitAdapter("mvc", "mongo", "0", "1")
 	list, nextId, err := man.PebbleStore.PinPageList(0, 1, "")
 	fmt.Println(err, len(list), nextId)
+	cnt, err := mongodb.CountMetaid()
+	fmt.Println(err, cnt)
 	//fmt.Println(list, nextId)
 }
 func TestQueryPageBlock(t *testing.T) {

@@ -153,7 +153,9 @@ func (mg *Mongodb) Count() (count pin.PinCount) {
 	count.MetaId, _ = mongoClient.Collection(MetaIdInfoCollection).CountDocuments(context.TODO(), bson.M{})
 	return
 }
-
+func CountMetaid() (int64, error) {
+	return mongoClient.Collection(MetaIdInfoCollection).CountDocuments(context.TODO(), bson.M{})
+}
 func (mg *Mongodb) GeneratorFind(generator database.Generator) (data []map[string]interface{}, err error) {
 	var opts *options.FindOptions
 	if generator.Action == "get" {

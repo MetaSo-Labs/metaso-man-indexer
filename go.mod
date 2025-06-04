@@ -98,7 +98,7 @@ require (
 	github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/pebbe/zmq4 v1.2.10
+	github.com/pebbe/zmq4 v1.4.0
 	github.com/schollz/progressbar/v3 v3.14.2
 	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/cobra v1.8.1

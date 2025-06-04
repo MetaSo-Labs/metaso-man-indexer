@@ -20,6 +20,7 @@ var (
 	ConfigFile        string
 	BlockedData       map[string]struct{}
 	RecommendedAuthor map[string]struct{}
+	Cmd               string
 )
 
 type AllConfig struct {
@@ -114,6 +115,7 @@ func InitConfig(filePath string) {
 	RecommendedAuthor = map[string]struct{}{}
 	flagConfig, configFile := GetFlagConfig()
 	//filePath := "./config.toml"
+	flag.StringVar(&Cmd, "cmd", "", "count-pins/count-pages/count-blocks")
 	if configFile != "" {
 		filePath = configFile
 	}

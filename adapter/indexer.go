@@ -7,7 +7,7 @@ import (
 
 type Indexer interface {
 	InitIndexer()
-	CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string)
+	CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string)
 	CatchMempoolPins(txList []interface{}) (pinInscriptions []*pin.PinInscription, txInList []string)
 	CatchTransfer(idMap map[string]string) (trasferMap map[string]*pin.PinTransferInfo)
 	GetAddress(pkScript []byte) (address string)

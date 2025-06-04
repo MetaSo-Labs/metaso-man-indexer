@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"manindexer/adapter/microvisionchain"
+	"manindexer/basicprotocols/metaso"
 	"manindexer/common"
 	"manindexer/man"
+	"manindexer/pin"
 	"testing"
 	"time"
 
@@ -43,8 +46,13 @@ func TestCatchMvcData(t *testing.T) {
 
 }
 func TestMvcGetSaveData(t *testing.T) {
+	common.InitConfig("./config_mvc.toml")
 	man.InitAdapter("mvc", "mongo", "1", "1")
-	pinList, _, _, _, _, _, _, _, _, err := man.GetSaveData("mvc", 91722)
+	pinList, _, _, _, _, _, _, _, _, err := man.PebbleStore.GetSaveData("mvc", 120000)
+	for _, pinNode := range pinList {
+		p := pinNode.(*pin.PinInscription)
+		fmt.Println(p.Id, p.PopLv, p.PoPScore)
+	}
 	fmt.Println(err, len(pinList))
 }
 func TestGetBestHeight(t *testing.T) {
@@ -77,7 +85,10 @@ func TestMvcDoIndexerRun(t *testing.T) {
 	//122999
 	//122654
 	//120000
-	man.PebbleStore.DoIndexerRun("mvc", 120002, false)
+	//120941 61936 Pins
+	//122314 210000 Pins
+	//122563 350094 Pins
+	man.PebbleStore.DoIndexerRun("mvc", 120671, false)
 	elapsed := time.Since(startTime)
 	fmt.Printf("执行耗时: %s\n", elapsed)
 }
@@ -87,4 +98,43 @@ func TestMvcPebble(t *testing.T) {
 	pinNode, err := man.PebbleStore.GetPinById("a28bcbf40a2307283ae2580874bc6ec95c88582f1ca800e92eeb4cb34959dcb6i0")
 	fmt.Println(err)
 	fmt.Println(pinNode)
+}
+func TestCountBlockPEV(t *testing.T) {
+	common.InitConfig("./config_mvc.toml")
+	man.InitAdapter("mvc", "mongo", "0", "1")
+	pb := metaso.PevPebbledb{}
+	metaso.PebblePevInit()
+	metaso.ConnectMongoDb()
+	var err error
+	err = pb.NewDataBase("../pev_data_pebble")
+	fmt.Println(err)
+	block := &metaso.MetaBlockChainData{
+		Chain:       "MVC",
+		PreEndBlock: "120669",
+		StartBlock:  "120670",
+		EndBlock:    "120671",
+	}
+	blockInfoData := &metaso.MetaSoBlockInfo{
+		Block: 1,
+		BlockTime: 1672531200, // Example block time
+	}
+		
+	lastData := &metaso.PevHandle{
+		BlockInfoData: blockInfoData,
+		HostMap:       make(map[string]*metaso.MetaSoBlockNDV),
+		AddressMap:    make(map[string]*metaso.MetaSoBlockMDV),
+		HostAddressMap: make(map[string]*metaso.MetaSoHostAddress),
+	}
+
+	 err = pb.CountBlockPEV(1, block,lastData,1672531200)
+	fmt.Println(err)
+	// for _, pinNode := range pinList {
+	// 	p := pinNode.(metaso.PEVData)
+	// 	fmt.Println(p.Poplv, p.IncrementalValue)
+	// }
+	err = pb.UpdateBlockValue(1, lastData, 1672531200)
+	if err != nil {
+		log.Println("UpdateBlockValue:", err)
+		return
+	}
 }

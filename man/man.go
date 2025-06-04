@@ -2,6 +2,7 @@ package man
 
 import (
 	"fmt"
+	"log"
 	"manindexer/adapter"
 	"manindexer/adapter/bitcoin"
 	"manindexer/adapter/microvisionchain"
@@ -60,6 +61,27 @@ const (
 func InitAdapter(chainType, dbType, test, server string) {
 	PebbleStore = &PebbleData{}
 	PebbleStore.Init(20)
+	//pins_num, err := pebblestore.CountAllShards(PebbleStore.database.PinsDBs, nil)
+	// if err == nil && pins_num > 0 {
+	// 	log.Println("init pins num:", pins_num)
+	// 	PebbleStore.database.CountSet("pins", int64(pins_num))
+	// }
+	//if common.Config.Sync.IsFullNode {
+	// pebblestore.GetAllCreator(PebbleStore.Database.CreatorDb, &pin.AllCreatorAddress)
+	// var allCreatorCount int
+	// pin.AllCreatorAddress.Range(func(key, value any) bool {
+	// 	allCreatorCount++
+	// 	return true
+	// })
+	// pebblestore.GetAllMrc(PebbleStore.Database.MrcDb, &pin.AllMrcPinId)
+	// var allMrcCount int
+	// pin.AllMrcPinId.Range(func(key, value any) bool {
+	// 	allCreatorCount++
+	// 	return true
+	// })
+	// log.Println(">>>GetAllCreator:", allCreatorCount)
+	//log.Println(">>>GetAllMrc:", allMrcCount)
+	//}
 	ChainAdapter = make(map[string]adapter.Chain)
 	ChainParams = make(map[string]*chaincfg.Params)
 	IndexerAdapter = make(map[string]adapter.Indexer)
@@ -239,13 +261,18 @@ func getSyncHeight(chainName string, test string) (from, to int64) {
 	} else {
 		initialHeight = ChainAdapter[chainName].GetInitialHeight()
 	}
-
+	btcLastBlockHeight, _ := mongodb.GetSyncLastNumber("btcChainSyncHeight")
+	mvcLastBlockHeight, _ := mongodb.GetSyncLastNumber("mvcChainSyncHeight")
+	dbLast := make(map[string]int64)
+	dbLast["btc"] = btcLastBlockHeight
+	dbLast["mvc"] = mvcLastBlockHeight
 	if MaxHeight[chainName] <= 0 {
-		var err error
-		MaxHeight[chainName], err = DbAdapter.GetMaxHeight(chainName)
-		if err != nil {
-			return
-		}
+		MaxHeight[chainName] = dbLast[chainName]
+		// var err error
+		// MaxHeight[chainName], err = DbAdapter.GetMaxHeight(chainName)
+		// if err != nil {
+		// 	return
+		// }
 	}
 	bestHeight := ChainAdapter[chainName].GetBestHeight()
 	if MaxHeight[chainName] >= bestHeight || initialHeight > bestHeight {
@@ -277,26 +304,30 @@ func IndexerRun(test string) {
 		BarMap[chainName] = progressbar.Default(to-from, barinfo)
 		for i := from + 1; i <= to; i++ {
 			//DoIndexerRun(chainName, i, false)
+			startTime := time.Now()
+			log.Println("=====", chainName, i, "======")
 			PebbleStore.DoIndexerRun(chainName, i, false)
+			log.Println("==========finish use", time.Since(startTime), "=================")
 			BarMap[chainName].Add(1)
-		}
-		step := to - from
-		reSyncNum := common.Config.Sync.ReSyncNum
-		if reSyncNum == 0 {
-			reSyncNum = 1
-		}
-		if step == 1 {
-			for x := to - int64(reSyncNum); x <= to-1; x++ {
-				//DoIndexerRun(chainName, x, true)
-				PebbleStore.DoIndexerRun(chainName, x, true)
+			if chainName == "btc" {
+				mongodb.UpdateSyncLastNumber("btcChainSyncHeight", i)
+			}
+			if chainName == "mvc" {
+				mongodb.UpdateSyncLastNumber("mvcChainSyncHeight", i)
 			}
 		}
-		if chainName == "btc" {
-			mongodb.UpdateSyncLastNumber("btcChainSyncHeight", to)
-		}
-		if chainName == "mvc" {
-			mongodb.UpdateSyncLastNumber("mvcChainSyncHeight", to)
-		}
+		// step := to - from
+		// reSyncNum := common.Config.Sync.ReSyncNum
+		// if reSyncNum == 0 {
+		// 	reSyncNum = 1
+		// }
+		// if step == 1 {
+		// 	for x := to - int64(reSyncNum); x <= to-1; x++ {
+		// 		//DoIndexerRun(chainName, x, true)
+		// 		PebbleStore.DoIndexerRun(chainName, x, true)
+		// 	}
+		// }
+
 	}
 	FirstCompleted = true
 
@@ -433,7 +464,7 @@ func GetSaveData(chainName string, blockHeight int64) (
 	err error) {
 	metaIdData = make(map[string]*pin.MetaIdInfo)
 	var pins []*pin.PinInscription
-	pins, txInList = IndexerAdapter[chainName].CatchPins(blockHeight)
+	pins, txInList, _ = IndexerAdapter[chainName].CatchPins(blockHeight)
 	fmt.Println("PIN NUM:", len(pins), chainName, blockHeight)
 	//check transfer
 	if common.Config.Sync.IsFullNode {

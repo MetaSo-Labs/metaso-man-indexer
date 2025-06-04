@@ -5,6 +5,7 @@ import (
 	"manindexer/common"
 	"manindexer/pin"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -38,31 +39,6 @@ func TestBatchInsertPins(t *testing.T) {
 		t.Fatalf("主键查询内容不符: %+v", string(val))
 	}
 
-	// 插入分页信息
-	page := PageInfo{
-		BlockTime:   111,
-		BlockHeight: 1,
-		Type:        "pin",
-		Num:         2,
-		Keys:        []string{"txid1:0", "txid2:1"},
-	}
-	err = idx.InsertPageInfo(idx.PagesDB, page)
-	if err != nil {
-		t.Fatalf("InsertPageInfo err: %v", err)
-	}
-
-	// 分页查询
-	q := PageQuery{Type: "pin", Page: 0, Size: 2, LastId: ""}
-	t.Logf("分页查询条件: %+v", q)
-	res, err := idx.QueryPageKeys(idx.PagesDB, q)
-	if err != nil {
-		t.Fatalf("分页查询失败: %v", err)
-	}
-	t.Logf("分页查询结果: %+v", res)
-	if len(res.List) != 2 || res.List[0] != "txid1:0" {
-		t.Fatalf("分页查询结果不符: %+v", res)
-	}
-
 	// 批量查询主键
 	keys := []string{
 		BuildPinKey("txid1", 0),
@@ -81,7 +57,7 @@ func TestBatchInsertPins(t *testing.T) {
 
 	// 测试区块交易表写入和读取
 	blockKeys := []string{"txid1:0", "txid2:1"}
-	err = idx.InsertBlockTxs("chainA", 1, blockKeys)
+	err = idx.InsertBlockTxs("100&200chainA", strings.Join(blockKeys, ","))
 	if err != nil {
 		t.Fatalf("InsertBlockTxs err: %v", err)
 	}

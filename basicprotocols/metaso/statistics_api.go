@@ -39,6 +39,10 @@ func blockSyncNewest(ctx *gin.Context) {
 	initBlockHeight := int64(0)
 
 	lastBlockInfo := getLastMetaBlock()
+	if lastBlockInfo == nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "no last meta block info"))
+		return
+	}
 	preEnd := int64(0)
 	for _, chain := range lastBlockInfo.BlockData.Chains {
 		if chain.Chain == "Bitcoin" {
