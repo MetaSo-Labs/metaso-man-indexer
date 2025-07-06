@@ -24,17 +24,19 @@ var (
 )
 
 type AllConfig struct {
-	ProtocolID string `toml:"protocolID"`
-	Sync       syncConfig
-	Protocols  map[string]protocols
-	Module     []string `toml:"module"`
-	Btc        btcConfig
-	Mvc        mvcConfig
-	MongoDb    mongoConfig
-	Pebble     pebble
-	Web        webConfig
-	MetaSo     metasoConfig
-	Statistics Statistics
+	ProtocolID  string `toml:"protocolID"`
+	Sync        syncConfig
+	Protocols   map[string]protocols
+	Module      []string `toml:"module"`
+	SyncHost    []string `toml:"syncHost"`
+	BlockedHost []string `toml:"blockedHost"`
+	Btc         btcConfig
+	Mvc         mvcConfig
+	MongoDb     mongoConfig
+	Pebble      pebble
+	Web         webConfig
+	MetaSo      metasoConfig
+	Statistics  Statistics
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
@@ -55,6 +57,8 @@ type metasoConfig struct {
 	MongoNodeURI string `toml:"mongoNodeURI"`
 	SyncMode     string `toml:"syncMode"`
 	OnlyHost     string `toml:"onlyHost"`
+	FeeRateHost  string `toml:"feeRateHost"`
+	FeeLimit     int64  `toml:"feeLimit"`
 }
 type protocols struct {
 	Key     string          `toml:"key"`
@@ -106,6 +110,7 @@ type webConfig struct {
 }
 type pebble struct {
 	Dir string `toml:"dir"`
+	Num int    `toml:"num"`
 }
 
 func InitConfig(filePath string) {
@@ -182,7 +187,7 @@ func InitConfig(filePath string) {
 	} else if TestNet == "2" {
 		Config.Btc.PopCutNum = 0
 		Config.Mvc.PopCutNum = 0
-		Config.ProtocolID = "746573746964"
+		Config.ProtocolID = "6d6574616964"
 		//Config.ProtocolID = "6d6574616964"
 	} else if TestNet == "0" {
 		Config.Btc.PopCutNum = 21
@@ -247,4 +252,23 @@ func ModuleExist(module string) (exist bool) {
 		}
 	}
 	return
+}
+func CheckHost(host string) (ok bool) {
+	for _, item := range Config.SyncHost {
+		if item == "*" {
+			return true
+		}
+		if item == host {
+			return true
+		}
+	}
+	return false
+}
+func CheckBlockedHost(host string) (ok bool) {
+	for _, item := range Config.BlockedHost {
+		if item == host {
+			return true
+		}
+	}
+	return false
 }

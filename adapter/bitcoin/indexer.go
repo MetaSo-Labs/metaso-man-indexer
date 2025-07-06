@@ -272,6 +272,13 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			if pinInscription == nil {
 				continue
 			}
+			_, host, path := pin.ValidHostPath(pinInscription.Path)
+			if common.CheckBlockedHost(host) {
+				continue //blocked host
+			}
+			if !common.CheckHost(host) {
+				continue //not in host list
+			}
 			address, outIdx, locationIdx := indexer.GetOpReturnPinOwner(msgTx)
 			if address == "" {
 				continue
@@ -292,7 +299,7 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 				// 	creator = v.(string)
 				// }
 			}
-			_, host, path := pin.ValidHostPath(pinInscription.Path)
+			//_, host, path := pin.ValidHostPath(pinInscription.Path)
 			pinInscriptions = append(pinInscriptions, &pin.PinInscription{
 				//Pin:                pinInscription,
 				ChainName:          indexer.ChainName,

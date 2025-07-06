@@ -68,7 +68,8 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 		//check transfer in this block
 		//var idList []string
 		tmp := pinList[0].(*pin.PinInscription)
-		blockKey := fmt.Sprintf("blocktime_mvc_%d", height)
+		//blockKey := fmt.Sprintf("blocktime_mvc_%d", height)
+		blockKey := fmt.Sprintf("blocktime_%s_%d", chainName, height)
 		pd.Database.CountSet(blockKey, tmp.Timestamp)
 		for _, item := range pinList {
 			p := item.(*pin.PinInscription)

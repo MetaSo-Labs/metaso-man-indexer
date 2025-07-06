@@ -10,6 +10,7 @@ import (
 	"manindexer/pin"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -39,7 +40,7 @@ func (indexer *Indexer) GetAddress(pkScript []byte) (address string) {
 	}
 	return
 }
-func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string) {
+func (indexer *Indexer) CatchPins_bak(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string) {
 	chain := MicroVisionChain{}
 	blockMsg, err := chain.GetBlock(blockHeight)
 	if err != nil {
@@ -62,6 +63,56 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 		if len(txPins) > 0 {
 			pinInscriptions = append(pinInscriptions, txPins...)
 		}
+	}
+
+	return
+}
+func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.PinInscription, txInList []string, creatorMap map[string]string) {
+	chain := MicroVisionChain{}
+	blockMsg, err := chain.GetBlockVerbose(blockHeight)
+	if err != nil {
+		return
+	}
+	//indexer.Block = blockMsg
+	//block := blockMsg.(*wire.MsgBlock)
+
+	timestamp := blockMsg.Time
+	blockHash := blockMsg.Hash
+	merkleRoot := blockMsg.MerkleRoot
+	creatorMap = make(map[string]string)
+
+	txids := blockMsg.Tx
+
+	batchSize := 1000
+	for i := 0; i < len(txids); i += batchSize {
+		end := i + batchSize
+		if end > len(txids) {
+			end = len(txids)
+		}
+		batch := txids[i:end]
+		// 并发获取这一批原始交易
+		var wg sync.WaitGroup
+		for _, txid := range batch {
+			wg.Add(1)
+			go func(txid string) {
+				defer wg.Done()
+				tx, _ := chain.GetRawTransaction(txid)
+				if tx == nil {
+					return
+				}
+				// 这里直接处理 tx
+				for _, in := range tx.MsgTx().TxIn {
+					//id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
+					id := common.ConcatBytesOptimized([]string{in.PreviousOutPoint.Hash.String(), ":", strconv.FormatUint(uint64(in.PreviousOutPoint.Index), 10)}, "")
+					txInList = append(txInList, id)
+				}
+				txPins := indexer.CatchPinsByTx(tx.MsgTx(), blockHeight, timestamp, blockHash, merkleRoot, i)
+				if len(txPins) > 0 {
+					pinInscriptions = append(pinInscriptions, txPins...)
+				}
+			}(txid)
+		}
+		wg.Wait()
 	}
 
 	return
@@ -158,6 +209,13 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			if pinInscription == nil {
 				continue
 			}
+			_, host, path := pin.ValidHostPath(pinInscription.Path)
+			if common.CheckBlockedHost(host) {
+				continue //blocked host
+			}
+			if !common.CheckHost(host) {
+				continue //not in host list
+			}
 			//address, outIdx, locationIdx := indexer.GetPinOwner(msgTx, i-1)
 			address, outIdx, locationIdx := indexer.GetPinOwner(msgTx, 0)
 			//recalculate txhash
@@ -180,7 +238,7 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 				// 	creator = v.(string)
 				// }
 			}
-			_, host, path := pin.ValidHostPath(pinInscription.Path)
+
 			pinInscriptions = append(pinInscriptions, &pin.PinInscription{
 				//Pin:                pinInscription,
 				ChainName:          indexer.ChainName,

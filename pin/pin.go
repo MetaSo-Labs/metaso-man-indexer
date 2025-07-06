@@ -211,3 +211,12 @@ func ValidHostPath(input string) (bool, string, string) {
 	}
 	return false, "", input
 }
+
+type NotifcationData struct {
+	NotifcationId   int64  `json:"notifcationId"`
+	NotifcationType string `json:"notifcationType"`
+	FromPinId       string `json:"fromPinId"`
+	FromAddress     string `json:"fromAddress"`
+	NotifcationPin  string `json:"notifcationPin"`
+	NotifcationTime int64  `json:"notifcationTime"`
+}

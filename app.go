@@ -52,7 +52,7 @@ func main() {
 	go man.ZmqRun()
 	if common.ModuleExist("metaso_pev") {
 		metaso.PebblePevInit()
-		go ms.SyncPEV()
+		//go ms.SyncPEV()
 	}
 	if common.ModuleExist("metaname") {
 		mn := metaname.MetaName{}
@@ -66,6 +66,9 @@ func main() {
 	for {
 		man.IndexerRun(common.TestNet)
 		man.CheckNewBlock()
+		if common.ModuleExist("metaso_pev") {
+			ms.SyncPEV()
+		}
 		time.Sleep(time.Second * 10)
 	}
 }

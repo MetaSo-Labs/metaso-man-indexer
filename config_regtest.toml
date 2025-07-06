@@ -1,7 +1,7 @@
 version = "0.2"
 net = "mainnet"
 protocolID = "6d6574616964"
-module = ["metaso","metaname","mrc721","mrc20"]
+module = ["metaname","mrc721","mrc20","metaso_notifcation"]
 [metaso]
 feeRateHost = "http://47.238.91.186:8085"
 feeLimit = 5
@@ -59,17 +59,6 @@ rpcHttpPostMode = true
 rpcDisableTLS = true
 zmqHost = "tcp://127.0.0.1:28336"
 popCutNum = 0
-[mvc1]
-#initialHeight = 91797
-initialHeight = 102057
-mrc20Height = 101630
-rpcHost = "127.0.0.1:9882"
-rpcUser = "showpay"
-rpcPass = "showpay88.."
-rpcHttpPostMode = true
-rpcDisableTLS = true
-zmqHost = "tcp://127.0.0.1:15555"
-popCutNum = 8
 [mvc]
 #initialHeight = 91797
 initialHeight = 120831
@@ -83,13 +72,13 @@ rpcDisableTLS = true
 zmqHost = "tcp://127.0.0.1:25555"
 popCutNum = 21
 [mongodb]
-mongoURI = "mongodb://test:12345678@192.168.64.3:27017"
-dbName = "man_mvc"
-#dbName = "man_testnet"
+mongoURI = "mongodb://test:12345678@192.168.64.2:27017"
+dbName = "man_regtest"
 poolSize = 200
 timeOut = 20
 [pebble]
 dir = "./pebble_data"
+num = 1
 [web]
 port = ":7777"
 pemFile = ""

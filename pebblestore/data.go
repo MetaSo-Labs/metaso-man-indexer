@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 func (db *Database) GetPinListByIdList(outputList []string, batchSize int, replace bool) (transferCheck []*pin.PinInscription, err error) {
@@ -187,20 +187,58 @@ func (db *Database) CountAdd(key string, value int64) error {
 	return db.CountDB.Set([]byte(key), []byte(strconv.FormatInt(old+value, 10)), pebble.Sync)
 }
 
-// func (db *Database) CountAdd(key string, value int64) (err error) {
-// 	val, closer, err := db.CountDB.Get([]byte(key))
-// 	if err != nil {
-// 		if err == pebble.ErrNotFound {
-// 			db.CountSet(key, value)
-// 			return
-// 		} else {
-// 			return
-// 		}
-// 	}
-// 	defer closer.Close()
-// 	old, err := strconv.ParseInt(string(val), 10, 64)
-// 	if err != nil {
-// 		return
-// 	}
-// 	return db.CountDB.Set([]byte(key), []byte(strconv.FormatInt(old+value, 10)), pebble.Sync)
-// }
+func (db *Database) SetMempool(key string, value []byte) error {
+	return db.PinsMempoolDb.Set([]byte(key), value, pebble.Sync)
+}
+func (db *Database) GetMempool(key string) ([]byte, error) {
+	result, closer, err := db.PinsMempoolDb.Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetMempool error: %v", err)
+	}
+	defer closer.Close()
+	return result, nil
+}
+func (db *Database) GetMempoolPin(key string) (pinNode pin.PinInscription, err error) {
+	result, err := db.GetMempool(key)
+	if err != nil {
+		return
+	}
+	err = sonic.Unmarshal(result, &pinNode)
+	return
+}
+func (db *Database) DeleteMempool(key string) error {
+	return db.PinsMempoolDb.Delete([]byte(key), pebble.Sync)
+}
+func (db *Database) BatchDeleteMempool(key []string) error {
+	batch := db.PinsMempoolDb.NewBatch()
+	for _, v := range key {
+		batch.Delete([]byte(v), nil)
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		batch.Close()
+		return err
+	}
+	batch.Close()
+	return nil
+}
+func (db *Database) SetNotifcation(key string, value []byte) error {
+	sep := []byte("@*@")
+	return db.NotifcationDb.Merge([]byte(key), append(value, sep...), pebble.Sync)
+}
+func (db *Database) GetNotifcation(key string) ([]byte, error) {
+	result, closer, err := db.NotifcationDb.Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetNotifcation error: %v", err)
+	}
+	defer closer.Close()
+	return result, nil
+}
+func (db *Database) DeleteNotifcation(key string) error {
+	return db.NotifcationDb.Delete([]byte(key), pebble.Sync)
+}

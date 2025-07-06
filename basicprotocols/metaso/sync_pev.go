@@ -79,7 +79,7 @@ func PebblePevInit() {
 	pb = PevPebbledb{}
 	err := pb.NewDataBase("./pev_data_pebble")
 	if err != nil {
-		log.Println("PevPebbledb NewDataBase error:", err)
+		log.Println("PevPebbledb pev_data_pebble error:", err)
 		return
 	}
 }
@@ -120,13 +120,13 @@ func (metaso *MetaSo) syncPEV() {
 	//var totalPevList []PEVData
 	blockInfoData := &MetaSoBlockInfo{Block: metaBlock.MetablockHeight, MetaBlock: *metaBlock}
 	lastData := &PevHandle{
-		BlockInfoData: blockInfoData,
-		HostMap:       make(map[string]*MetaSoBlockNDV),
-		AddressMap:    make(map[string]*MetaSoBlockMDV),
+		BlockInfoData:  blockInfoData,
+		HostMap:        make(map[string]*MetaSoBlockNDV),
+		AddressMap:     make(map[string]*MetaSoBlockMDV),
 		HostAddressMap: make(map[string]*MetaSoHostAddress),
 	}
 	for _, chain := range metaBlock.Chains {
-		err := pb.CountBlockPEV(metaBlock.MetablockHeight, &chain,lastData, metaBlock.Timestamp)
+		err := pb.CountBlockPEV(metaBlock.MetablockHeight, &chain, lastData, metaBlock.Timestamp)
 		// log.Println(err, chain.Chain, len(pevList))
 		// if len(pevList) > 0 {
 		// 	totalPevList = append(totalPevList, pevList...)
@@ -137,7 +137,7 @@ func (metaso *MetaSo) syncPEV() {
 	}
 	// hostMap := make(map[string]struct{})
 	// addressMap := make(map[string]struct{})
-	
+
 	// for _, pev := range totalPevList {
 	// 	//pev := item.(PEVData)
 	// 	hostMap[pev.Host] = struct{}{}
@@ -165,15 +165,29 @@ func (metaso *MetaSo) syncPEV() {
 	// 	return
 	// }
 	log.Println("count metaBlock:", metaBlock.MetablockHeight)
+	ClearMemPool()
 	mongodb.UpdateSyncLastNumber("metablock", metaBlock.MetablockHeight)
-
 }
-
-func (metaso *MetaSo) SyncPendingPEV() {
-	if man.IsSync {
-		return
+func ClearMemPool() {
+	_, err := mongoClient.Collection(MetaSoMDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
+	if err != nil {
+		log.Println("clear MetaSoMDVBlockData mempool err:", err)
 	}
+	_, err = mongoClient.Collection(MetaSoNDVBlockData).DeleteMany(context.TODO(), bson.M{"block": -1})
+	if err != nil {
+		log.Println("clear MetaSoNDVBlockData mempool err:", err)
+	}
+	_, err = mongoClient.Collection(MetaSoHostAddressData).DeleteMany(context.TODO(), bson.M{"block": -1})
+	if err != nil {
+		log.Println("clear MetaSoNDVBlockData mempool err:", err)
+	}
+}
+func (metaso *MetaSo) SyncPendingPEV() {
+	// if man.IsSync {
+	// 	return
+	// }
 	if common.Config.Statistics.MetaChainHost == "" || common.Config.Statistics.AllowHost == nil || common.Config.Statistics.AllowProtocols == nil {
+		log.Println("SyncPendingPEV Config Check Err")
 		return
 	}
 	localHeight, err := mongodb.GetSyncLastNumber("metablock")
@@ -186,21 +200,24 @@ func (metaso *MetaSo) SyncPendingPEV() {
 		log.Println("getLastMetaBlock is nil")
 		return
 	}
-	if lastBlock.LastNumber != localHeight {
+	if lastBlock.LastNumber > localHeight {
+		log.Println("SyncPendingPEV:lastBlock.LastNumber != localHeight")
 		return
 	}
-	metaBlock, _ := metaso.getLastMetaBlock(1)
-	if metaBlock != nil {
-		return
-	}
+	// metaBlock, _ := metaso.getLastMetaBlock(1)
+	// if metaBlock != nil {
+	// 	log.Println("SyncPendingPEV:wait sync latest", metaBlock.MetablockHeight)
+	// 	return
+	// }
 	lastMetaBlock, _ := metaso.getLastMetaBlock(0)
 	if lastMetaBlock == nil {
+		log.Println("SyncPendingPEV:getLastMetaBlock  nil")
 		return
 	}
 	if lastMetaBlock.Header == "" {
 		return
 	}
-	log.Println("===>Begin syncPendingPev metaBlock:", lastMetaBlock.MetablockHeight)
+
 	btcLastBlockHeight, _ := mongodb.GetSyncLastNumber("btcChainSyncHeight")
 
 	btcBeginBlockHeight := int64(0)
@@ -215,6 +232,7 @@ func (metaso *MetaSo) SyncPendingPEV() {
 	if btcPendingPevHeight >= btcLastBlockHeight && mvcPendingPevHeight >= mvcLastBlockHeight {
 		return
 	}
+	log.Println("===>Begin syncPendingPev metaBlock:", lastMetaBlock.MetablockHeight)
 	for _, c := range lastMetaBlock.Chains {
 		if c.Chain == "Bitcoin" {
 			btcBeginBlockHeight, _ = strconv.ParseInt(c.PreEndBlock, 10, 64)
@@ -270,11 +288,11 @@ func (metaso *MetaSo) SyncPendingPEV() {
 	log.Println("btcPendingPevHeight:", btcPendingPevHeight, "btcLastBlockHeight:", btcLastBlockHeight, "mvcPendingPevHeight:", mvcPendingPevHeight, "mvcLastBlockHeight:", mvcLastBlockHeight)
 	log.Println("syncPendingPev metaBlock:", lastMetaBlock.MetablockHeight)
 	blockInfoData := &MetaSoBlockInfo{Block: pendingBlock.MetablockHeight, MetaBlock: *pendingBlock}
-	
+
 	lastData := &PevHandle{
-		BlockInfoData: blockInfoData,
-		HostMap:       make(map[string]*MetaSoBlockNDV),
-		AddressMap:    make(map[string]*MetaSoBlockMDV),
+		BlockInfoData:  blockInfoData,
+		HostMap:        make(map[string]*MetaSoBlockNDV),
+		AddressMap:     make(map[string]*MetaSoBlockMDV),
 		HostAddressMap: make(map[string]*MetaSoHostAddress),
 	}
 	for _, chain := range syncBlock.Chains {
@@ -283,9 +301,9 @@ func (metaso *MetaSo) SyncPendingPEV() {
 		// 	totalPevList = append(totalPevList, pevList...)
 		// }
 		//pb.CountBlockPEV(syncBlock.MetablockHeight, &chain)
-		err := pb.CountBlockPEV(metaBlock.MetablockHeight, &chain,lastData, metaBlock.Timestamp)
+		err := pb.CountBlockPEV(-1, &chain, lastData, time.Now().Unix())
 		if err != nil {
-			log.Println("CountBlockPEV ERR:", err, chain.Chain, "metablock:", metaBlock.MetablockHeight)
+			log.Println("CountBlockPEV ERR:", err, chain.Chain, "metablock:", -1)
 		}
 		if chain.Chain == "MVC" {
 			mongodb.UpdateSyncLastNumber("mvcPendingPevHeight", mvcLastBlockHeight)
@@ -314,8 +332,6 @@ func (metaso *MetaSo) SyncPendingPEV() {
 	// 	totalPevList2 = append(totalPevList2, pev)
 	// }
 
-	
-
 	blockInfoData.AddressNumber = int64(len(lastData.AddressMap))
 	blockInfoData.HostNumber = int64(len(lastData.HostMap))
 	//blockInfoData.HistoryValue, _ = getBlockHistoryValue(metaBlock.MetablockHeight, "", "")
@@ -328,7 +344,7 @@ func (metaso *MetaSo) SyncPendingPEV() {
 		}},
 		{Key: "$setOnInsert", Value: blockInfoData},
 	}
-	
+
 	mongoClient.Collection(MetaSoBlockInfoData).UpdateOne(context.TODO(), bson.M{"block": pendingBlock.MetablockHeight}, update, options.Update().SetUpsert(true))
 
 	pb.UpdateBlockValue(pendingBlock.MetablockHeight, lastData, pendingBlock.Timestamp)

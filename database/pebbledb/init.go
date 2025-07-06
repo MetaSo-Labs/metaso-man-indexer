@@ -9,7 +9,7 @@ import (
 	"manindexer/pin"
 	"strings"
 
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 const (

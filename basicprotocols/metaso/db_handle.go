@@ -144,6 +144,7 @@ func createIndex(mongoClient *mongo.Database) {
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoMDVBlockData, "metaid_block_1", bson.D{{Key: "metaid", Value: 1}, {Key: "block", Value: 1}}, true)
 	//MetaSoNDVBlockData
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoNDVBlockData, "host_block_1", bson.D{{Key: "host", Value: 1}, {Key: "block", Value: 1}}, true)
+	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoNDVBlockData, "host_1", bson.D{{Key: "host", Value: 1}}, false)
 	//MetaSoBlockInfoData
 	mongo_util.CreateIndexIfNotExists(mongoClient, MetaSoBlockInfoData, "block_1", bson.D{{Key: "block", Value: 1}}, true)
 	//MetaSoHostAddressData

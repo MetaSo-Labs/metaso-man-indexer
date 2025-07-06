@@ -43,6 +43,7 @@ const (
 
 var (
 	mongoClient *mongo.Database
+	Client      *mongo.Database
 )
 
 type Mongodb struct{}
@@ -71,6 +72,7 @@ func connectMongoDb() {
 		return
 	}
 	mongoClient = client.Database(mg.DbName)
+	Client = mongoClient
 	createPinsView()
 	createMrc20UtxoView()
 	createIndexIfNotExists(mongoClient, ZmqReciveTx, "tx_1", bson.D{{Key: "tx", Value: 1}}, true)

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 func (pb *Pebble) GetMaxHeight(chainName string) (height int64, err error) {

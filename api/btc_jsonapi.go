@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"manindexer/api/respond"
 	"manindexer/common"
@@ -9,6 +10,7 @@ import (
 	"manindexer/pin"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -30,6 +32,7 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/mempool/list", mempoolList)
 	btcGroup.GET("/node/list", nodeList)
 	btcGroup.GET("/reindex/:chain/:from/:to", reindex)
+	btcGroup.GET("/notifcation/list", notifcationList)
 
 	btcGroup.GET("/pin/:numberOrId", getPinById)
 	btcGroup.GET("/address/pin/utxo/count/:address", getPinUtxoCountByAddress)
@@ -630,4 +633,46 @@ func reindex(ctx *gin.Context) {
 	}
 
 	ctx.String(http.StatusOK, "reindex finish")
+}
+
+// notifcationList address=xx&lastId=100&size=10
+func notifcationList(ctx *gin.Context) {
+	address := ctx.Query("address")
+	lastId, _ := strconv.ParseInt(ctx.Query("lastId"), 10, 64)
+	size, _ := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	result, err := man.PebbleStore.Database.GetNotifcation(address)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+	var list []pin.NotifcationData
+	arr := strings.Split(string(result), "@*@")
+	checkMap := make(map[int64]struct{})
+	for _, item := range arr {
+		if item == "" {
+			continue
+		}
+		var notif pin.NotifcationData
+		if err := json.Unmarshal([]byte(item), &notif); err == nil {
+			if _, ok := checkMap[notif.NotifcationId]; ok {
+				continue
+			}
+			checkMap[notif.NotifcationId] = struct{}{}
+			list = append(list, notif)
+		}
+	}
+	var lastList []pin.NotifcationData
+	for _, notif := range list {
+		if notif.NotifcationId <= lastId {
+			continue
+		}
+		if len(lastList) >= int(size) {
+			break
+		}
+		lastList = append(lastList, notif)
+	}
+	total := int64(len(list))
+	checkMap = nil
+	list = nil
+	ctx.JSON(http.StatusOK, gin.H{"code": 200, "message": "ok", "data": lastList, "total": total})
 }

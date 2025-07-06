@@ -101,7 +101,10 @@ func GetPoPScore(popStr string, lvNum int64, extractCount int) decimal.Decimal {
 	popSub := strings.TrimLeft(popStr, "0")
 
 	// 2. 取前4位，构造小数
-	popSub4 := popSub[:4]
+	popSub4 := popSub
+	if len(popSub) > 4 {
+		popSub4 = popSub[:4]
+	}
 	popDecStr := "0." + popSub4
 
 	// 3. 八进制转十进制，使用octalFractionToUniformDecimal

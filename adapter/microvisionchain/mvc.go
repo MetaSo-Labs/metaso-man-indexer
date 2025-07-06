@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/rpcclient"
@@ -48,6 +49,14 @@ func (chain *MicroVisionChain) GetBlock(blockHeight int64) (block interface{}, e
 	block, err = client.GetBlock(blockhash)
 	return
 }
+func (chain *MicroVisionChain) GetBlockVerbose(blockHeight int64) (block *btcjson.GetBlockVerboseResult, err error) {
+	blockhash, err := client.GetBlockHash(blockHeight)
+	if err != nil {
+		return
+	}
+	block, err = client.GetBlockVerbose(blockhash)
+	return
+}
 func (chain *MicroVisionChain) GetBlockTime(blockHeight int64) (timestamp int64, err error) {
 	block, err := chain.GetBlock(blockHeight)
 	if err != nil {
@@ -67,6 +76,10 @@ func (chain *MicroVisionChain) GetBlockByHash(hash string) (block *btcjson.GetBl
 	return
 }
 func (chain *MicroVisionChain) GetTransaction(txId string) (tx interface{}, err error) {
+	txHash, _ := chainhash.NewHashFromStr(txId)
+	return client.GetRawTransaction(txHash)
+}
+func (chain *MicroVisionChain) GetRawTransaction(txId string) (tx *btcutil.Tx, err error) {
 	txHash, _ := chainhash.NewHashFromStr(txId)
 	return client.GetRawTransaction(txHash)
 }

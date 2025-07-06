@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/bytedance/sonic"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -60,7 +61,7 @@ const (
 
 func InitAdapter(chainType, dbType, test, server string) {
 	PebbleStore = &PebbleData{}
-	PebbleStore.Init(20)
+	PebbleStore.Init(common.Config.Pebble.Num)
 	//pins_num, err := pebblestore.CountAllShards(PebbleStore.database.PinsDBs, nil)
 	// if err == nil && pins_num > 0 {
 	// 	log.Println("init pins num:", pins_num)
@@ -193,6 +194,7 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 		}
 	}
 }
+
 func handleMempoolPin(pinNode *pin.PinInscription) {
 	if pinNode.Operation == "modify" || pinNode.Operation == "revoke" {
 		pinNode.OriginalId = strings.Replace(pinNode.Path, "@", "", -1)
@@ -204,6 +206,12 @@ func handleMempoolPin(pinNode *pin.PinInscription) {
 	pinNode.Timestamp = time.Now().Unix()
 	pinNode.Number = -1
 	pinNode.ContentTypeDetect = common.DetectContentType(&pinNode.ContentBody)
+	//增加到pebble数据库
+	pinNodeJson, err := sonic.Marshal(pinNode)
+	if err == nil {
+		PebbleStore.Database.SetMempool(pinNode.Id, pinNodeJson)
+		handNotifcation(pinNode)
+	}
 	if len(ProtocolsFilter) > 0 && pinNode.Path != "" {
 		p := strings.ToLower(pinNode.Path)
 		if _, protCheck := ProtocolsFilter[p]; protCheck {
@@ -230,16 +238,23 @@ func handleMempoolTransferPin(pinNode *pin.PinInscription) {
 func CheckNewBlock() {
 	for k, chain := range ChainAdapter {
 		bestHeight := chain.GetBestHeight()
-		localLastHeight, err := common.GetLocalLastHeight(fmt.Sprintf("./%s_del_mempool_height.txt", k))
+		sk := k + "_del_mempool_height"
+		localLastHeight, err := mongodb.GetSyncLastNumber(sk)
 		if err != nil {
+			continue
+		}
+		if localLastHeight <= 0 {
+			mongodb.UpdateSyncLastNumber(sk, bestHeight)
 			continue
 		}
 		if localLastHeight >= bestHeight {
 			continue
 		}
 		for i := localLastHeight; i <= bestHeight; i++ {
+			log.Printf("DeleteMempoolData, chain=%s, height=%d", k, i)
 			DeleteMempoolData(i, k)
-			common.UpdateLocalLastHeight(fmt.Sprintf("./%s_del_mempool_height.txt", k), i)
+			mongodb.UpdateSyncLastNumber(sk, i)
+			//common.UpdateLocalLastHeight(fmt.Sprintf("./%s_del_mempool_height.txt", k), i)
 		}
 	}
 }
@@ -296,6 +311,9 @@ func getSyncHeight(chainName string, test string) (from, to int64) {
 func IndexerRun(test string) {
 	for chainName := range ChainAdapter {
 		from, to := getSyncHeight(chainName, test)
+		if from > 0 && to > 0 && from >= to {
+			log.Println("Start IndexerRun for chain:", chainName, "from:", from, "to:", to)
+		}
 		if from >= to {
 			FirstCompleted = true
 			continue

@@ -13,7 +13,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/cespare/xxhash/v2"
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 // ShardConfig 配置分片数量
@@ -28,14 +28,16 @@ var noopLogger = &customLogger{}
 // PathPinDB：按区块存储的pin_path数据，key是 path_blockTime_chainName_height,value是[]pinId
 // AddressDB: 按地址存储的PIN ID列表，key是address转换后的metaid,value是[]pinId&path&outputValue
 type Database struct {
-	PinsDBs   []*pebble.DB
-	PinSort   *pebble.DB
-	BlocksDB  *pebble.DB
-	CountDB   *pebble.DB
-	PathPinDB *pebble.DB
-	AddressDB *pebble.DB
-	CreatorDb *pebble.DB
-	MrcDb     *pebble.DB
+	PinsDBs       []*pebble.DB
+	PinSort       *pebble.DB
+	BlocksDB      *pebble.DB
+	CountDB       *pebble.DB
+	PathPinDB     *pebble.DB
+	AddressDB     *pebble.DB
+	CreatorDb     *pebble.DB
+	MrcDb         *pebble.DB
+	PinsMempoolDb *pebble.DB // 用于存储mempool中的pins数据
+	NotifcationDb *pebble.DB // 用于存储通知数据
 }
 type customLogger struct{}
 
@@ -46,11 +48,25 @@ func (l *customLogger) Errorf(format string, args ...interface{}) {}
 // NewDataBase 创建索引器，自动创建分片db、pages、blocks独立db
 func NewDataBase(basePath string, shardNum int) (*Database, error) {
 	log.Println("=========NEW PEBBLE DATABASE========")
+	dbOptions := &pebble.Options{
+		//Logger: noopLogger,
+		Levels: []pebble.LevelOptions{
+			{
+				Compression: pebble.NoCompression,
+			},
+		},
+		MemTableSize:                32 << 20, // 降低为32MB (默认64MB)
+		MemTableStopWritesThreshold: 2,        // 默认4
+		// 限制 block cache 大小（比如 128MB，可根据机器内存调整）
+		Cache: pebble.NewCache(128 << 20), // 128MB
+		// 限制 table cache 数量（比如 64）
+		MaxOpenFiles: 64,
+	}
 	pinsDBs := make([]*pebble.DB, shardNum)
 	for i := 0; i < shardNum; i++ {
 		dir := fmt.Sprintf("%s/pins_%d", basePath, i)
 		os.MkdirAll(dir, 0755)
-		db, err := pebble.Open(fmt.Sprintf("%s/db", dir), &pebble.Options{Logger: noopLogger})
+		db, err := pebble.Open(fmt.Sprintf("%s/db", dir), dbOptions)
 		if err != nil {
 			log.Println(err)
 			return nil, err
@@ -58,41 +74,55 @@ func NewDataBase(basePath string, shardNum int) (*Database, error) {
 		pinsDBs[i] = db
 	}
 	os.MkdirAll(fmt.Sprintf("%s/pinsort", basePath), 0755)
-	pinSortDb, err := pebble.Open(fmt.Sprintf("%s/pinsort/db", basePath), &pebble.Options{Logger: noopLogger})
+	pinSortDb, err := pebble.Open(fmt.Sprintf("%s/pinsort/db", basePath), dbOptions)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
-	blocksDB, err := pebble.Open(fmt.Sprintf("%s/blocks/db", basePath), &pebble.Options{Logger: noopLogger})
+	blocksDB, err := pebble.Open(fmt.Sprintf("%s/blocks/db", basePath), dbOptions)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
-	countDB, err := pebble.Open(fmt.Sprintf("%s/count/db", basePath), &pebble.Options{Logger: noopLogger})
+	countDB, err := pebble.Open(fmt.Sprintf("%s/count/db", basePath), dbOptions)
 	if err != nil {
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
-	pathPinDB, err := pebble.Open(fmt.Sprintf("%s/path/db", basePath), &pebble.Options{Logger: noopLogger})
+	pathPinDB, err := pebble.Open(fmt.Sprintf("%s/path/db", basePath), dbOptions)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/blocks", basePath), 0755)
-	addressDB, err := pebble.Open(fmt.Sprintf("%s/address/db", basePath), &pebble.Options{Logger: noopLogger})
+	addressDB, err := pebble.Open(fmt.Sprintf("%s/address/db", basePath), dbOptions)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 	os.MkdirAll(fmt.Sprintf("%s/creator", basePath), 0755)
-	creatorDb, err := pebble.Open(fmt.Sprintf("%s/creator/db", basePath), &pebble.Options{Logger: noopLogger})
+	creatorDb, err := pebble.Open(fmt.Sprintf("%s/creator/db", basePath), dbOptions)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
-	return &Database{PinsDBs: pinsDBs, PinSort: pinSortDb, BlocksDB: blocksDB, CountDB: countDB, PathPinDB: pathPinDB, AddressDB: addressDB, CreatorDb: creatorDb}, nil
+	os.MkdirAll(fmt.Sprintf("%s/mempool", basePath), 0755)
+	mempoolDb, err := pebble.Open(fmt.Sprintf("%s/mempool/db", basePath), dbOptions)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	os.MkdirAll(fmt.Sprintf("%s/notifcation", basePath), 0755)
+	notifcationDb, err := pebble.Open(fmt.Sprintf("%s/notifcation/db", basePath), dbOptions)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	return &Database{PinsDBs: pinsDBs, PinSort: pinSortDb, BlocksDB: blocksDB,
+		CountDB: countDB, PathPinDB: pathPinDB, AddressDB: addressDB,
+		CreatorDb: creatorDb, PinsMempoolDb: mempoolDb, NotifcationDb: notifcationDb}, nil
 }
 
 // Close 关闭所有数据库

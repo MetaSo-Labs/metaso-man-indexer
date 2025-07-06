@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/pin"
@@ -13,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 	"github.com/shopspring/decimal"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -68,7 +69,7 @@ func (pb *PevPebbledb) GetPevDataByMetaBlock(blockHeight int64) (pevList []PEVDa
 	return
 }
 func (pb *PevPebbledb) SaveBlockPevData(blockHeight int64, pevList *[]PEVData) (err error) {
-	key := fmt.Sprintf("block%d_%d", blockHeight,time.Now().Unix())
+	key := fmt.Sprintf("block%d_%d", blockHeight, time.Now().Unix())
 	val, err := sonic.Marshal(pevList)
 	if err != nil {
 		return fmt.Errorf("failed to marshal pevList: %w", err)
@@ -76,7 +77,7 @@ func (pb *PevPebbledb) SaveBlockPevData(blockHeight int64, pevList *[]PEVData) (
 	return pb.Database.PevDataDB.Set([]byte(key), val, pebble.Sync)
 }
 
-func (pb *PevPebbledb) CountBlockPEV(blockHeight int64, block *MetaBlockChainData,data *PevHandle,metaBlockTime int64) (err error) {
+func (pb *PevPebbledb) CountBlockPEV(blockHeight int64, block *MetaBlockChainData, data *PevHandle, metaBlockTime int64) (err error) {
 	if block.StartBlock == "" || block.EndBlock == "" {
 		return
 	}
@@ -101,18 +102,18 @@ func (pb *PevPebbledb) CountBlockPEV(blockHeight int64, block *MetaBlockChainDat
 	}
 	ch := make(chan []pin.PinInscription)
 	go func() {
-		err := man.PebbleStore.Database.GetMetaBlockData(startHeight, endHeight, chainName, 10000, ch)
+		err := man.PebbleStore.Database.GetMetaBlockData(blockHeight, startHeight, endHeight, chainName, 10000, ch)
 		close(ch)
 		if err != nil {
 			log.Println("Error getting meta block data:", err)
 		}
 	}()
 	for batch := range ch {
-		HandlePevSlice(batch,data, block, blockHeight, metaBlockTime, false)
+		HandlePevSlice(batch, data, block, blockHeight, metaBlockTime, false)
 		log.Println("Processed batch of pins for block", blockHeight, "chain", chainName, "batch size:", len(batch))
 	}
 	//pinList, err := man.PebbleStore.Database.GetMetaBlockData(startHeight, endHeight, chainName)
-	
+
 	// if len(pevList) <= 0 {
 	// 	return
 	// }
@@ -238,7 +239,7 @@ func (pb *PevPebbledb) UpdateBlockValue(blockHeight int64, lastData *PevHandle, 
 		models = append(models, m)
 	}
 	bulkWriteOptions := options.BulkWrite().SetOrdered(false)
-	_,err = mongoClient.Collection(MetaSoNDVBlockData).BulkWrite(context.Background(), models, bulkWriteOptions)
+	_, err = mongoClient.Collection(MetaSoNDVBlockData).BulkWrite(context.Background(), models, bulkWriteOptions)
 	log.Println("MetaSoNDVBlockData bulk write error:", err)
 
 	var models2 []mongo.WriteModel
@@ -263,7 +264,7 @@ func (pb *PevPebbledb) UpdateBlockValue(blockHeight int64, lastData *PevHandle, 
 		m.SetFilter(filter).SetUpdate(update).SetUpsert(true)
 		models2 = append(models2, m)
 	}
-	_,err = mongoClient.Collection(MetaSoMDVBlockData).BulkWrite(context.Background(), models2, bulkWriteOptions)
+	_, err = mongoClient.Collection(MetaSoMDVBlockData).BulkWrite(context.Background(), models2, bulkWriteOptions)
 	log.Println("MetaSoMDVBlockData bulk write error:", err)
 
 	var models3 []mongo.WriteModel
@@ -289,7 +290,7 @@ func (pb *PevPebbledb) UpdateBlockValue(blockHeight int64, lastData *PevHandle, 
 		m.SetFilter(filter).SetUpdate(update).SetUpsert(true)
 		models3 = append(models3, m)
 	}
-	_,err = mongoClient.Collection(MetaSoHostAddressData).BulkWrite(context.Background(), models3, bulkWriteOptions)
+	_, err = mongoClient.Collection(MetaSoHostAddressData).BulkWrite(context.Background(), models3, bulkWriteOptions)
 	log.Println("MetaSoHostAddressData bulk write error:", err)
 	return
 }
@@ -413,12 +414,16 @@ func (pb *PevPebbledb) createPDV(blockHeight int64, block *MetaBlockChainData, f
 	// if dv != nil {
 	// 	dvDecimal = decimal.NewFromFloat(*dv)
 	// }
-	dvDecimal := fromPIN.PoPScore
-	if blockHeight >= 0 && blockHeight <= 44 {
-		dvDecimal = fromPIN.PoPScoreV1
-		//dvDecimal = decimal.NewFromInt(lv).Mul(value).Add(fromPIN.PoPScoreV1)
+	cut := common.Config.Mvc.PopCutNum
+	if fromPIN.ChainName == "btc" {
+		cut = common.Config.Btc.PopCutNum
 	}
-
+	dvDecimal := pin.GetPoPScore(fromPIN.Pop, int64(fromPIN.PopLv), cut)
+	if blockHeight >= 0 && blockHeight <= 44 {
+		//dvDecimal = fromPIN.PoPScoreV1
+		//dvDecimal = decimal.NewFromInt(lv).Mul(value).Add(fromPIN.PoPScoreV1)
+		dvDecimal = pin.GetPoPScoreV1(fromPIN.Pop, fromPIN.PopLv)
+	}
 	var result []PEVData
 	data := PEVData{
 		Host:             toPIN.Host,

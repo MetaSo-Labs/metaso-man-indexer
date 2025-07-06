@@ -384,21 +384,50 @@ func getBlockNDV(height int64, host string, cursor int64, size int64, orderby st
 	}
 	return
 }
-func getNdvPageList(host string, cursor int64, size int64, orderby string) (list []*MetaSoNDV, err error) {
-	filter := bson.D{}
-	if host != "" {
-		filter = bson.D{{Key: "host", Value: host}}
+func getNdvPageList(host string, pagecursor int64, size int64, orderby string) (list []*MetaSoNDV, err error) {
+	// filter := bson.D{}
+	// if host != "" {
+	// 	filter = bson.D{{Key: "host", Value: host}}
+	// }
+	// findOptions := options.Find()
+	// findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
+	// findOptions.SetSkip(cursor).SetLimit(size)
+	// result, err := mongoClient.Collection(MetaSoNDVData).Find(context.TODO(), filter, findOptions)
+	// if err != nil {
+	// 	return
+	// }
+	// err = result.All(context.TODO(), &list)
+	// if err == mongo.ErrNoDocuments {
+	// 	err = nil
+	// }
+	if host == "" {
+		return
 	}
-	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{Key: "datavalue", Value: -1}})
-	findOptions.SetSkip(cursor).SetLimit(size)
-	result, err := mongoClient.Collection(MetaSoNDVData).Find(context.TODO(), filter, findOptions)
+	pipeline := mongo.Pipeline{
+		{{"$match", bson.D{{"host", host}}}},
+		{{"$group", bson.D{
+			{"_id", nil},
+			{"totalValue", bson.D{{"$sum", "$datavalue"}}},
+		}}},
+	}
+
+	cursor, err := mongoClient.Collection(MetaSoNDVBlockData).Aggregate(context.TODO(), pipeline)
 	if err != nil {
 		return
 	}
-	err = result.All(context.TODO(), &list)
-	if err == mongo.ErrNoDocuments {
-		err = nil
+	defer cursor.Close(context.TODO())
+
+	var results []bson.M
+	if err = cursor.All(context.TODO(), &results); err != nil {
+		return
+	}
+	if len(results) > 0 {
+		v, _ := Decimal128ToDecimal(results[0]["totalValue"].(primitive.Decimal128))
+		data := &MetaSoNDV{
+			Host:      host,
+			DataValue: v,
+		}
+		list = append(list, data)
 	}
 	return
 }

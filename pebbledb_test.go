@@ -26,3 +26,10 @@ func TestQueryPageBlock(t *testing.T) {
 	fmt.Println(err)
 	fmt.Println(list)
 }
+func TestGetMvcBlockFee(t *testing.T) {
+	common.InitConfig("./config_mvc.toml")
+	man.InitAdapter("mvc", "mongo", "0", "1")
+	feeRateInfo := make(map[string]int, 2728)
+	pebblestore.GetMvcBlockFee(126573, &feeRateInfo)
+	fmt.Println(feeRateInfo)
+}

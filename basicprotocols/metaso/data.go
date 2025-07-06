@@ -6,7 +6,6 @@ import (
 	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
-	"manindexer/man"
 	"path"
 	"time"
 
@@ -48,17 +47,17 @@ func (metaso *MetaSo) Synchronization() {
 }
 func (metaso *MetaSo) SyncPEV() (err error) {
 	//fixStatistics()
-	for {
-		if !man.FirstCompleted {
-			time.Sleep(time.Minute * 1)
-			log.Println("waiting for first completed...")
-			continue
-		}
-		metaso.syncPEV()
-		metaso.SyncPendingPEV()
-		time.Sleep(time.Second * 10)
-	}
-	//return
+	//for {
+	// if !man.FirstCompleted {
+	// 	time.Sleep(time.Minute * 1)
+	// 	log.Println("waiting for first completed...")
+	// 	continue
+	// }
+	metaso.syncPEV()
+	metaso.SyncPendingPEV()
+	//	time.Sleep(time.Second * 10)
+	//}
+	return
 }
 func fixHost() {
 	fixed, _ := mongodb.GetSyncLastNumber("fixhost")

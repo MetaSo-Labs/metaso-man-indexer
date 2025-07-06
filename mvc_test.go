@@ -115,24 +115,24 @@ func TestCountBlockPEV(t *testing.T) {
 		EndBlock:    "120671",
 	}
 	blockInfoData := &metaso.MetaSoBlockInfo{
-		Block: 1,
+		Block:     1,
 		BlockTime: 1672531200, // Example block time
 	}
-		
+
 	lastData := &metaso.PevHandle{
-		BlockInfoData: blockInfoData,
-		HostMap:       make(map[string]*metaso.MetaSoBlockNDV),
-		AddressMap:    make(map[string]*metaso.MetaSoBlockMDV),
+		BlockInfoData:  blockInfoData,
+		HostMap:        make(map[string]*metaso.MetaSoBlockNDV),
+		AddressMap:     make(map[string]*metaso.MetaSoBlockMDV),
 		HostAddressMap: make(map[string]*metaso.MetaSoHostAddress),
 	}
 
-	 err = pb.CountBlockPEV(1, block,lastData,1672531200)
+	err = pb.CountBlockPEV(51, block, lastData, 1672531200)
 	fmt.Println(err)
 	// for _, pinNode := range pinList {
 	// 	p := pinNode.(metaso.PEVData)
 	// 	fmt.Println(p.Poplv, p.IncrementalValue)
 	// }
-	err = pb.UpdateBlockValue(1, lastData, 1672531200)
+	err = pb.UpdateBlockValue(51, lastData, 1672531200)
 	if err != nil {
 		log.Println("UpdateBlockValue:", err)
 		return

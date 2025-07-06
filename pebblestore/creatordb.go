@@ -4,7 +4,7 @@ import (
 	"manindexer/pin"
 	"sync"
 
-	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble"
 )
 
 func (idx *Database) BatchInsertCreator(data map[string]string, allMap *sync.Map) error {
