@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/cockroachdb/pebble"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,6 +19,7 @@ var notifcationPath = map[string]bool{
 	"/protocols/simpledonate": true,
 	"/protocols/paylike":      true,
 	"/protocols/paycomment":   true,
+	"/protocols/simplebuzz":   true,
 }
 
 func handNotifcation(pinNode *pin.PinInscription) {
@@ -32,12 +34,15 @@ func handNotifcation(pinNode *pin.PinInscription) {
 		return
 	}
 	notifcationData := pin.NotifcationData{
-		NotifcationId:   time.Now().UnixNano(),
+		NotifcationId:   time.Now().UnixMilli(),
 		NotifcationType: pinNode.Path,
 		FromPinId:       pinNode.Id,
 		FromAddress:     pinNode.Address,
+		FromPinHost:     pinNode.Host,
+		FromPinChain:    pinNode.ChainName,
 		NotifcationPin:  toPIN.Id,
 		NotifcationTime: time.Now().Unix(),
+		NotifcationHost: toPIN.Host,
 	}
 	// Save the notification data to DB
 	content, err := sonic.Marshal(notifcationData)
@@ -57,6 +62,8 @@ func getNotifcationToAddress(pinNode *pin.PinInscription) (toPIN pin.PinInscript
 		toPIN, _ = getPayLikePin(pinNode)
 	case "/protocols/paycomment":
 		toPIN, _ = getPaycommentPin(pinNode)
+	case "/protocols/simplebuzz":
+		toPIN, _ = getRepostPin(pinNode)
 	}
 	return
 }
@@ -65,7 +72,7 @@ func getPINbyId(pinId string) (pinNode pin.PinInscription, err error) {
 	switch err {
 	case nil:
 		return
-	case mongo.ErrNoDocuments:
+	case pebble.ErrNotFound:
 		pinNode, err = PebbleStore.Database.GetMempoolPin(pinId)
 	}
 	return
@@ -102,6 +109,12 @@ func getPayLikePin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err e
 	if err != nil {
 		return
 	}
+	if _, ok := dataMap["likeTo"]; !ok {
+		return
+	}
+	if _, ok := dataMap["isLike"]; !ok {
+		return
+	}
 	if dataMap["likeTo"].(string) == "" || dataMap["isLike"].(string) != "1" {
 		return
 	} else {
@@ -114,9 +127,27 @@ func getPaycommentPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, er
 	if err != nil {
 		return
 	}
-	if dataMap["commentTo"].(string) == "" {
+	if _, ok := dataMap["commentTo"]; !ok {
 		return
 	} else {
+		if dataMap["commentTo"] == nil || dataMap["commentTo"].(string) == "" {
+			return
+		}
 		return getPINbyId(dataMap["commentTo"].(string))
+	}
+}
+func getRepostPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+	var dataMap map[string]interface{}
+	err = sonic.Unmarshal(pinNode.ContentBody, &dataMap)
+	if err != nil {
+		return
+	}
+	if _, ok := dataMap["quotePin"]; !ok {
+		return
+	} else {
+		if dataMap["quotePin"] == nil || dataMap["quotePin"].(string) == "" {
+			return
+		}
+		return getPINbyId(dataMap["quotePin"].(string))
 	}
 }

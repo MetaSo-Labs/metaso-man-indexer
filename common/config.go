@@ -30,6 +30,7 @@ type AllConfig struct {
 	Module      []string `toml:"module"`
 	SyncHost    []string `toml:"syncHost"`
 	BlockedHost []string `toml:"blockedHost"`
+	CacheUrl    string   `toml:"cacheUrl"`
 	Btc         btcConfig
 	Mvc         mvcConfig
 	MongoDb     mongoConfig

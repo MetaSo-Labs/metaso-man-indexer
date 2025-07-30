@@ -1,0 +1,87 @@
+version = "0.2"
+net = "mainnet"
+protocolID = "6d6574616964"
+module = ["metaname","mrc721","mrc20","metaso_notifcation"]
+cacheUrl = "http://47.83.1.172:8081"
+[metaso]
+feeRateHost = "http://47.238.91.186:8085"
+feeLimit = 5
+[sync]
+syncAllData = true
+syncBeginTime = ""
+syncEndTime = ""
+syncProtocols = ["payLike","simplerepost","paycomment"]
+isFullNode = true
+[statistics]
+#metaChainHost = "http://127.0.0.1:7172"
+metaChainHost = "http://47.238.186.172:7576"
+allowHost = ["*"]
+allowProtocols = ["*"]
+[protocols]
+  [protocols.payLike]
+  fields = [{name = "isLike",class = "string",length = 1},
+           {name = "likeTo",class = "string",length = 100}]
+  indexes = [{fields = ["likeTo"],unique = false},
+             {fields = ["pinId"],unique = true},
+             {fields = ["pinNumber"],unique = false},
+             {fields = ["pinAddress"],unique = false},
+            ]
+  key = "likeTo"
+  [protocols.simplerepost]
+  fields = [{name = "rePostComment",class = "string",length = 100},
+           {name = "rePostTx",class = "string",length = 100},
+           {name = "rePostProtocol",class = "string",length = 100}]
+  indexes = [{fields = ["rePostTx"],unique = false},
+             {fields = ["pinId"],unique = true},
+             {fields = ["pinNumber"],unique = false},
+             {fields = ["pinAddress"],unique = false},
+            ]
+  key = "rePostTx"
+  [protocols.paycomment]
+  fields = [{name = "content",class = "string",length = 100},
+           {name = "commentTo",class = "string",length = 100},
+           {name = "replyTo",class = "string",length = 100},
+           {name = "pay",class = "string",length = 100},
+           {name = "payTo",class = "string",length = 100}]
+  indexes = [{fields = ["commentTo"],unique = false},
+             {fields = ["pinId"],unique = true},
+             {fields = ["pinNumber"],unique = false},
+             {fields = ["pinAddress"],unique = false},
+            ]
+  key = "commentTo"
+#regtest
+[btc]
+initialHeight = 0
+mrc20Height = 0
+rpcHost = "127.0.0.1:8332"
+rpcUser = "test"
+rpcPass = "test"
+rpcHttpPostMode = true
+rpcDisableTLS = true
+zmqHost = "tcp://127.0.0.1:28336"
+popCutNum = 0
+[mvc]
+#initialHeight = 91797
+initialHeight = 120831
+mrc20Height = 101630
+#rpcHost = "192.168.1.30:9882"
+rpcHost = "47.242.24.63:9882"
+rpcUser = "showpay"
+rpcPass = "showpay88.."
+rpcHttpPostMode = true
+rpcDisableTLS = true
+zmqHost = "tcp://127.0.0.1:25555"
+popCutNum = 21
+[mongodb]
+mongoURI = "mongodb://test:12345678@192.168.64.2:27017"
+dbName = "man_regtest"
+poolSize = 200
+timeOut = 20
+[pebble]
+dir = "./pebble_data"
+num = 1
+[web]
+port = ":7777"
+pemFile = ""
+keyFile = ""
+host = "https://man-test.metaid.io"

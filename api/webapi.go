@@ -15,6 +15,8 @@ import (
 	"manindexer/pebblestore"
 	"manindexer/pin"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -267,6 +269,10 @@ func searchshow(ctx *gin.Context) {
 	ctx.HTML(200, "home/search.html", gin.H{"Key": ctx.Param("key"), "Data": pinMsg})
 }
 func content(ctx *gin.Context) {
+	if common.Config.CacheUrl != "" && ctx.Query("cache") == "" {
+		getCacheContent(ctx)
+		return
+	}
 	//p, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
 	p, err := man.PebbleStore.GetPinById(ctx.Param("number"))
 	if err != nil || p.Id == "" {
@@ -286,6 +292,24 @@ func content(ctx *gin.Context) {
 		}
 
 	}
+}
+
+func getCacheContent(ctx *gin.Context) {
+	// 拼接目标 URL
+	targetURL, err := url.Parse(common.Config.CacheUrl)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid target URL"})
+		return
+	}
+	// 创建反向代理
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	// 修改请求路径
+	ctx.Request.URL.Path = "/v1/media/" + ctx.Param("number")
+	ctx.Request.Host = targetURL.Host
+
+	// 使用代理处理请求
+	proxy.ServeHTTP(ctx.Writer, ctx.Request)
 }
 func stream(ctx *gin.Context) {
 	p, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))

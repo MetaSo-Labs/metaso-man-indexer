@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"manindexer/pin"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -159,6 +160,7 @@ func (mg *Mongodb) BatchUpsertMetaIdInfo(infoList map[string]*pin.MetaIdInfo) (e
 		if info.Background != "" {
 			updateInfo = append(updateInfo, bson.E{Key: "background", Value: info.Background})
 		}
+		updateInfo = append(updateInfo, bson.E{Key: "lastupdate", Value: time.Now().Unix()})
 		update := bson.D{{Key: "$set", Value: updateInfo}}
 		m := mongo.NewUpdateOneModel()
 		m.SetFilter(filter).SetUpdate(update).SetUpsert(true)
@@ -168,6 +170,24 @@ func (mg *Mongodb) BatchUpsertMetaIdInfo(infoList map[string]*pin.MetaIdInfo) (e
 	_, err = mongoClient.Collection(MetaIdInfoCollection).BulkWrite(context.Background(), models, bulkWriteOptions)
 	//eT := time.Since(bT)
 	//fmt.Println("BatchUpsertMetaIdInfo time: ", eT)
+	return
+}
+func BatchGetMetaIdInfo(lastupdate int64, limit int) (infoList map[string]*pin.MetaIdInfo, err error) {
+	filter := bson.M{"lastupdate": bson.M{"$gt": lastupdate}}
+	opts := options.Find().SetSort(bson.D{{Key: "lastupdate", Value: -1}}).SetLimit(int64(limit))
+	result, err := mongoClient.Collection(MetaIdInfoCollection).Find(context.TODO(), filter, opts)
+	if err != nil {
+		return
+	}
+	var pins []pin.MetaIdInfo
+	err = result.All(context.TODO(), &pins)
+	if err != nil {
+		return
+	}
+	infoList = make(map[string]*pin.MetaIdInfo)
+	for _, pin := range pins {
+		infoList[pin.Address] = &pin
+	}
 	return
 }
 func addPDV(pins []interface{}) error {

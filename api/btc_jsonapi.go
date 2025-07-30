@@ -6,9 +6,13 @@ import (
 	"manindexer/api/respond"
 	"manindexer/common"
 	"manindexer/database"
+	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/pin"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -26,6 +30,7 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup := r.Group("/api")
 	btcGroup.Use(CorsMiddleware())
 	btcGroup.GET("/metaid/list", metaidList)
+	btcGroup.GET("/metaid/list/limit", metaidListLimit)
 	btcGroup.GET("/pin/list", pinList)
 	btcGroup.POST("/pin/check", pinCheck)
 	btcGroup.GET("/block/list", blockList)
@@ -74,6 +79,36 @@ func metaidList(ctx *gin.Context) {
 	}
 	count := man.DbAdapter.Count()
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"list": list, "count": &count}))
+}
+func metaidListLimit(ctx *gin.Context) {
+	lastupdate := ctx.Query("lastupdate")
+	if lastupdate == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	limit := ctx.Query("limit")
+	if limit == "" {
+		limit = "100"
+	}
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	if limitInt > 2000 {
+		limitInt = 2000
+	}
+	lastupdateInt, err := strconv.ParseInt(lastupdate, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	infoList, err := mongodb.BatchGetMetaIdInfo(lastupdateInt, limitInt)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"list": infoList}))
 }
 func pinList(ctx *gin.Context) {
 	//page, err := strconv.ParseInt(ctx.Query("page"), 10, 64)
@@ -371,6 +406,10 @@ type metaInfo struct {
 }
 
 func getInfoByAddress(ctx *gin.Context) {
+	if common.Config.CacheUrl != "" && ctx.Query("cache") == "" {
+		getCacheInfoByAddress(ctx)
+		return
+	}
 	metaid, unconfirmed, err := man.DbAdapter.GetMetaIdInfo(ctx.Param("address"), true, "")
 	if err != nil {
 		ctx.JSON(http.StatusOK, respond.ErrServiceError)
@@ -395,7 +434,24 @@ func getInfoByAddress(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", metaInfo{metaid, unconfirmed, blocked}))
 }
+func getCacheInfoByAddress(ctx *gin.Context) {
+	address := ctx.Param("address")
+	// 拼接目标 URL
+	targetURL, err := url.Parse(common.Config.CacheUrl)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid target URL"})
+		return
+	}
+	// 创建反向代理
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
+	// 修改请求路径
+	ctx.Request.URL.Path = "/v1/users/" + address
+	ctx.Request.Host = targetURL.Host
+
+	// 使用代理处理请求
+	proxy.ServeHTTP(ctx.Writer, ctx.Request)
+}
 func getInfoByMetaId(ctx *gin.Context) {
 	metaid, unconfirmed, err := man.DbAdapter.GetMetaIdInfo("", true, ctx.Param("metaId"))
 	if err != nil {
@@ -639,7 +695,7 @@ func reindex(ctx *gin.Context) {
 func notifcationList(ctx *gin.Context) {
 	address := ctx.Query("address")
 	lastId, _ := strconv.ParseInt(ctx.Query("lastId"), 10, 64)
-	size, _ := strconv.ParseInt(ctx.Query("size"), 10, 64)
+	//size, _ := strconv.ParseInt(ctx.Query("size"), 10, 64)
 	result, err := man.PebbleStore.Database.GetNotifcation(address)
 	if err != nil {
 		ctx.JSON(http.StatusOK, respond.ErrServiceError)
@@ -647,17 +703,17 @@ func notifcationList(ctx *gin.Context) {
 	}
 	var list []pin.NotifcationData
 	arr := strings.Split(string(result), "@*@")
-	checkMap := make(map[int64]struct{})
+	checkMap := make(map[string]struct{})
 	for _, item := range arr {
 		if item == "" {
 			continue
 		}
 		var notif pin.NotifcationData
 		if err := json.Unmarshal([]byte(item), &notif); err == nil {
-			if _, ok := checkMap[notif.NotifcationId]; ok {
+			if _, ok := checkMap[notif.FromPinId]; ok {
 				continue
 			}
-			checkMap[notif.NotifcationId] = struct{}{}
+			checkMap[notif.FromPinId] = struct{}{}
 			list = append(list, notif)
 		}
 	}
@@ -666,13 +722,16 @@ func notifcationList(ctx *gin.Context) {
 		if notif.NotifcationId <= lastId {
 			continue
 		}
-		if len(lastList) >= int(size) {
-			break
-		}
+		// if len(lastList) >= int(size) {
+		// 	break
+		// }
 		lastList = append(lastList, notif)
 	}
 	total := int64(len(list))
 	checkMap = nil
 	list = nil
+	sort.Slice(lastList, func(i, j int) bool {
+		return lastList[i].NotifcationId > lastList[j].NotifcationId
+	})
 	ctx.JSON(http.StatusOK, gin.H{"code": 200, "message": "ok", "data": lastList, "total": total})
 }

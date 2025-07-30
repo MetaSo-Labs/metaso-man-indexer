@@ -217,6 +217,9 @@ type NotifcationData struct {
 	NotifcationType string `json:"notifcationType"`
 	FromPinId       string `json:"fromPinId"`
 	FromAddress     string `json:"fromAddress"`
+	FromPinHost     string `json:"fromPinHost"`
+	FromPinChain    string `json:"fromPinChain"`
 	NotifcationPin  string `json:"notifcationPin"`
 	NotifcationTime int64  `json:"notifcationTime"`
+	NotifcationHost string `json:"notifcationHost"`
 }

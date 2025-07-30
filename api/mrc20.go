@@ -2,6 +2,7 @@ package api
 
 import (
 	"manindexer/api/respond"
+	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/mrc20"
 	"net/http"
@@ -23,6 +24,7 @@ func mrc20JsonApi(r *gin.Engine) {
 	mrc20Group.GET("/tx/history", getHistoryByTx)
 	mrc20Group.GET("/address/shovel/list", getShovelListByAddress)
 	mrc20Group.GET("/shovel/used", getUsedShovelListByTickId)
+	mrc20Group.GET("/tick/AddressBalance", getAddressBalance)
 }
 
 func allTick(ctx *gin.Context) {
@@ -252,4 +254,14 @@ func getUsedShovelListByTickId(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"list": list, "total": total}))
 
+}
+func getAddressBalance(ctx *gin.Context) {
+	address := ctx.Query("address")
+	tickId := ctx.Query("tickId")
+	if address == "" || tickId == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	totalAmt, _ := mongodb.GetTickBalance(tickId, address)
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", totalAmt))
 }

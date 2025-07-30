@@ -87,7 +87,7 @@ func (db *Database) BatchUpdatePins(pins []*pin.PinInscription) (err error) {
 	}
 	return
 }
-func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize int) (err error) {
+func (db *Database) SetAllPins_BAK(height int64, pinList []interface{}, batchSize int) (err error) {
 	num := len(pinList)
 	if num <= 0 {
 		return
@@ -166,6 +166,82 @@ func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize in
 		}
 		db.BatchMergeAddressData(addressData)
 		fmt.Println("  >BatchMergeAddressData:", time.Since(st))
+	}
+	return
+}
+func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize int) (err error) {
+	num := len(pinList)
+	if num <= 0 {
+		return
+	}
+	first := pinList[0].(*pin.PinInscription)
+	chainName := first.ChainName
+	blockTime := first.Timestamp
+	publicKeyStr := common.ConcatBytesOptimized([]string{fmt.Sprintf("%010d", blockTime), "&", chainName, "&", fmt.Sprintf("%010d", height)}, "")
+	for i := 0; i < num; i += batchSize {
+		end := i + batchSize
+		if end > num {
+			end = num
+		}
+		batch := pinList[i:end]
+
+		// 处理本批数据
+		list := make([]pin.PinInscription, 0, len(batch))
+		keys := make([]string, 0, len(batch))
+		pinSortkeys := make([]string, 0, len(batch))
+		pathMap := make(map[string][]string)
+		addressMap := make(map[string][]string)
+
+		for _, item := range batch {
+			p := item.(*pin.PinInscription)
+			if p == nil {
+				continue
+			}
+			list = append(list, *p)
+			keys = append(keys, p.Id)
+			sortKey := common.ConcatBytesOptimized([]string{publicKeyStr, "&", p.Id}, "")
+			pinSortkeys = append(pinSortkeys, sortKey)
+			if p.Path != "" {
+				k := common.ConcatBytesOptimized([]string{p.Path, "&", publicKeyStr}, "")
+				pathMap[k] = append(pathMap[k], p.Id)
+			}
+			if p.MetaId != "" {
+				v := common.ConcatBytesOptimized([]string{p.Id, "&", p.Path, "&", fmt.Sprint(p.OutputValue)}, "")
+				addressMap[p.MetaId] = append(addressMap[p.MetaId], v)
+			}
+		}
+
+		// 批量插入/处理
+		if len(list) > 0 {
+			st := time.Now()
+			err = db.BatchInsertPins(list)
+			if err != nil {
+				fmt.Printf("插入区块PIN失败: %v\n", err)
+			}
+			fmt.Println("  >BatchInsertPins:", time.Since(st))
+		}
+		db.InsertPinSort(db.PinSort, pinSortkeys)
+		db.InsertBlockTxs(publicKeyStr, strings.Join(keys, ","))
+		if len(pathMap) > 0 {
+			pathData := make(map[string]string)
+			for k, v := range pathMap {
+				pathData[k] = "," + strings.Join(v, ",")
+			}
+			db.BatchInsertPathPins(pathData)
+		}
+		if len(addressMap) > 0 {
+			addressData := make(map[string]string)
+			for k, v := range addressMap {
+				addressData[k] = "," + strings.Join(v, ",")
+			}
+			db.BatchMergeAddressData(addressData)
+		}
+		// 本批处理完后，keys等会被GC回收
+		list = list[:0]
+		keys = keys[:0]
+		pinSortkeys = pinSortkeys[:0]
+		pathMap = make(map[string][]string)
+		addressMap = make(map[string][]string)
 	}
 	return
 }

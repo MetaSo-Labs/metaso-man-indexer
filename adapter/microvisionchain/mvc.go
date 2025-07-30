@@ -49,6 +49,14 @@ func (chain *MicroVisionChain) GetBlock(blockHeight int64) (block interface{}, e
 	block, err = client.GetBlock(blockhash)
 	return
 }
+func (chain *MicroVisionChain) GetBlock2(blockHeight int64) (block *wire.MsgBlock, err error) {
+	blockhash, err := client.GetBlockHash(blockHeight)
+	if err != nil {
+		return
+	}
+	block, err = client.GetBlock(blockhash)
+	return
+}
 func (chain *MicroVisionChain) GetBlockVerbose(blockHeight int64) (block *btcjson.GetBlockVerboseResult, err error) {
 	blockhash, err := client.GetBlockHash(blockHeight)
 	if err != nil {

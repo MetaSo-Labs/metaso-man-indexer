@@ -53,7 +53,8 @@ func (metaso *MetaSo) SyncPEV() (err error) {
 	// 	log.Println("waiting for first completed...")
 	// 	continue
 	// }
-	metaso.syncPEV()
+	// PEV 从独立的程序统计，先注释
+	//metaso.syncPEV()
 	metaso.SyncPendingPEV()
 	//	time.Sleep(time.Second * 10)
 	//}

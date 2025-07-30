@@ -63,7 +63,7 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 		// 	return fmt.Errorf("failed to process pins: %v", err)
 		// }
 		startTime = time.Now()
-		pd.Database.SetAllPins(height, pinList, 1000)
+		pd.Database.SetAllPins(height, pinList, 20000)
 		log.Println("SetAllPins:", time.Since(startTime))
 		//check transfer in this block
 		//var idList []string
