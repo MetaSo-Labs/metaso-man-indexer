@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"manindexer/api"
+	"manindexer/basicprotocols/group_chat"
 	"manindexer/basicprotocols/metaname"
 	"manindexer/basicprotocols/metaso"
 	"manindexer/basicprotocols/mrc721"
@@ -42,6 +43,10 @@ func main() {
 	log.Printf("ManIndex,chain=%s,fullnode=%v,test=%s,db=%s,server=%s,config=%s,metaChain=%s", common.Chain, common.Config.Sync.IsFullNode, common.TestNet, common.Db, common.Server, common.ConfigFile, common.Config.Statistics.MetaChainHost)
 	if common.Server == "1" {
 		go api.Start(f)
+	}
+
+	if common.ModuleExist("group_chat") {
+		go group_chat.Run()
 	}
 	ms := metaso.MetaSo{}
 	if common.ModuleExist("metaso") || common.ModuleExist("metaso_pev") {

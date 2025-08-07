@@ -6,6 +6,7 @@ import (
 	"manindexer/adapter"
 	"manindexer/adapter/bitcoin"
 	"manindexer/adapter/microvisionchain"
+	"manindexer/basicprotocols/group_chat"
 	"manindexer/common"
 
 	"manindexer/database"
@@ -187,6 +188,7 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 			} else if pinNode.IsTransfered {
 				handleMempoolTransferPin(pinNode)
 			}
+			group_chat.ProcessGroupChatPin(pinNode)
 		}
 		list := []interface{}{x.Tx}
 		if len(list) > 0 {

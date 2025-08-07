@@ -1,0 +1,56 @@
+FROM ubuntu:22.04
+
+WORKDIR /man
+
+# 使用阿里云镜像源加速
+RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+# 安装必要的依赖
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        curl \
+        libc6 \
+        libzmq3-dev \
+        libstdc++6 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 复制可执行文件
+COPY ./manindexer /man/manindexer
+
+# 复制 testnet 配置文件
+COPY ./config_testnet.toml /man/config_testnet.toml
+
+# 复制必要的证书和密钥文件（如果存在）
+COPY ./man.metaid.io.pem /man/man.metaid.io.pem
+COPY ./man.metaid.io.key /man/man.metaid.io.key
+
+# 复制数据文件
+COPY ./btc_del_mempool_height.txt /man/btc_del_mempool_height.txt
+COPY ./del_mempool_height.txt /man/del_mempool_height.txt
+COPY ./mvc_del_mempool_height.txt /man/mvc_del_mempool_height.txt
+
+# 复制 jieba 词典
+RUN mkdir -p /man/jieba_dict
+COPY jieba_dict /man/jieba_dict
+
+# 设置执行权限
+RUN chmod +x /man/manindexer
+
+# 创建数据目录
+RUN mkdir -p /man/pebble_data
+
+# 设置环境变量
+ENV CONFIG_FILE=/man/config_testnet.toml
+ENV NETWORK=testnet
+
+# 暴露端口（根据配置文件中的端口）
+EXPOSE 7777 7568
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7777/health || exit 1
+
+# 启动命令
+CMD ["/man/manindexer", "-test=1", "-chain=btc,mvc", "-config=/man/config_testnet.toml"] 

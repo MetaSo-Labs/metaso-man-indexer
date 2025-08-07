@@ -38,6 +38,7 @@ type AllConfig struct {
 	Web         webConfig
 	MetaSo      metasoConfig
 	Statistics  Statistics
+	GroupChat   groupChatConfig
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
@@ -113,6 +114,10 @@ type pebble struct {
 	Dir string `toml:"dir"`
 	Num int    `toml:"num"`
 }
+type groupChatConfig struct {
+	Port string `toml:"port"`
+	Host string `toml:"host"`
+}
 
 func InitConfig(filePath string) {
 	configMutex.Lock()
@@ -177,6 +182,10 @@ func InitConfig(filePath string) {
 			Config.Statistics.MetaChainHost = *v
 		case "is_full_node":
 			Config.Sync.IsFullNode = *v == "1"
+		case "group_chat_port":
+			Config.GroupChat.Port = *v
+		case "group_chat_host":
+			Config.GroupChat.Host = *v
 		}
 
 	}
