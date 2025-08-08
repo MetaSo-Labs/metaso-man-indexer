@@ -72,8 +72,8 @@ type SimpleGroupJoin struct {
 	  "groupType": "1",
 	  "status": "1",
 	  "type": "1",
-	  "codehash": "codehash",
-	  "genesis": "genesis",
+	  "tickId": "",
+	  "collectionId": "",
 	  "limitAmount": 100,
 	  "chatSettingType": 0,
 	  "deleteStatus": 0
@@ -87,11 +87,11 @@ type SimpleGroupCreate struct {
 	GroupName       string      `json:"groupName"`
 	GroupNote       string      `json:"groupNote"`
 	Timestamp       interface{} `json:"timestamp"`
-	GroupType       interface{} `json:"groupType"`
-	Status          interface{} `json:"status"`
-	JoinType        interface{} `json:"type"`
-	CodeHash        string      `json:"codehash"`
-	Genesis         string      `json:"genesis"`
+	GroupType       interface{} `json:"groupType"`    //创建房间的类型 ”1“不加密 “2”加密 加密采用AES加密算法
+	Status          interface{} `json:"status"`       //"1" 未加密时为“1” 加密时为加密后的信息, 保留字段
+	JoinType        interface{} `json:"type"`         //加入方式，1为密码，2为nft, 3-FT限制
+	TickId          string      `json:"tickId"`       //FT-限制需要 暂mrc20
+	CollectionId    string      `json:"collectionId"` //NFT-限制需要 暂mrc721
 	LimitAmount     interface{} `json:"limitAmount"`
 	ChatSettingType interface{} `json:"chatSettingType"` //用于设置发言限制， 0-所有人，1-管理员
 	DeleteStatus    interface{} `json:"deleteStatus"`    //删除状态，0-正常，1-删除

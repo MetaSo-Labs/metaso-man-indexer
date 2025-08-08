@@ -10,8 +10,8 @@ services:
       - "7777:7777"  # Web API 端口
       - "7568:7568"  # Group Chat 端口
     volumes:
-      # 数据持久化
-      - manindexer_testnet_data:/man/pebble_data
+      # 数据持久化 - 映射到主机外部目录
+      - ../data/pebble_data:/man/pebble_data
       # 配置文件挂载（可选）
       - ./config_testnet.toml:/man/config_testnet.toml:ro
     environment:
@@ -26,6 +26,4 @@ services:
       retries: 3
       start_period: 60s
 
-volumes:
-  manindexer_testnet_data:
-    driver: local 
+# 数据目录会在项目根目录下自动创建 

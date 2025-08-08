@@ -24,9 +24,11 @@ const (
 	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId 和 pinId_groupId
 	TalkGroupCommunityCollection   string = "talk_group_community"    // key: communityId_groupId
 
-	TalkGroupJoinCollection   string = "talk_group_join"   // key: groupId_pinId 和 pinId_groupId
-	TalkGroupPersonCollection string = "talk_group_person" // key: groupId_metaId 和 metaId_groupId
+	TalkGroupMetaIdJoinCollection string = "talk_group_metaid_join" // key: metaId_groupId, value: []{joinPinId, joinType, joinTimestamp}
+	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId 和 pinId_groupId
+	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId 和 metaId_groupId
 
+	TalkGroupLatestChatCollection   string = "talk_group_latest_chat"    // key: groupId，value: {groupId, timestamp, chatType, content, createAddress}
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
 	// 消息队列相关数据库
@@ -39,6 +41,7 @@ const (
 	TalkGroupOpenRedEnvelopePinCollection    string = "talk_group_open_red_envelope_pin"    // key: pinId
 	TalkGroupResidueRedEnvelopePinCollection string = "talk_group_residue_red_envelope_pin" // key: pinId
 	TalkGroupChatTimestampCollection         string = "talk_group_chat_timestamp"           // key: groupId_timestamp，value: pinId_chatType_timestamp
+	TalkGroupChatTimestampOutCollection      string = "talk_group_chat_timestamp_out"       // key: groupId_timestamp，value: pinId_chatType_timestamp
 )
 
 type Pebble struct{}
@@ -101,10 +104,22 @@ func (pb *Pebble) InitDatabase() error {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupPersonCollection, err)
 	}
 
+	// 初始化群组MetaId加入数据库
+	err = open(TalkGroupMetaIdJoinCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupMetaIdJoinCollection, err)
+	}
+
 	// 初始化用户群列表数据库
 	err = open(TalkMetaIdContextListCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkMetaIdContextListCollection, err)
+	}
+
+	// 初始化群组最新聊天数据库
+	err = open(TalkGroupLatestChatCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLatestChatCollection, err)
 	}
 
 	// 初始化消息队列数据库
@@ -138,12 +153,25 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestampCollection, err)
 	}
+	err = open(TalkGroupChatTimestampOutCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestampOutCollection, err)
+	}
 	return nil
 }
 
 func open(dbName string) (err error) {
 	lg := Logger{}
-	dbPath := common.Config.Pebble.Dir
+
+	// 设置默认数据库路径
+	var dbPath string
+	if common.Config != nil && common.Config.Pebble.Dir != "" {
+		dbPath = common.Config.Pebble.Dir
+	} else {
+		// 使用默认路径
+		dbPath = "./data"
+	}
+
 	dbPath = filepath.Join(dbPath, "group_chat_data")
 	err = os.MkdirAll(dbPath, 0755)
 	if err != nil {

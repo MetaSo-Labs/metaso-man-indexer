@@ -49,32 +49,71 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 	// 转换为响应格式
 	var groupItems []*respond.GroupItem
 	for _, group := range groups {
+		// 获取群组最新聊天信息
+		latestChat, err := chatDB.GetGroupLatestChat(group.GroupId)
+		if err != nil {
+			// 如果获取失败，使用默认值
+			latestChat = nil
+		}
+
 		groupItem := &respond.GroupItem{
-			CommunityId:           group.CommunityId,
-			GroupId:               group.GroupId,
-			TxId:                  group.TxId,
-			RoomName:              group.RoomName,
-			RoomNote:              group.RoomNote,
-			RoomType:              group.RoomType,
-			RoomStatus:            group.RoomStatus,
-			RoomJoinType:          group.RoomJoinType,
-			RoomCodeHash:          "", // 暂未实现
-			RoomGenesis:           "", // 暂未实现
-			RoomLimitAmount:       0,  // 暂未实现
-			RoomGenesisSeriesName: "", // 暂未实现
-			RoomAvatarUrl:         group.RoomAvatarUrl,
-			RoomNinePersonHash:    "", // 暂未实现
-			RoomNewestTxId:        "", // 暂未实现
-			RoomNewestMetaId:      "", // 暂未实现
-			RoomNewestUserName:    "", // 暂未实现
-			RoomNewestProtocol:    "", // 暂未实现
-			RoomNewestContent:     "", // 暂未实现
-			RoomNewestTimestamp:   0,  // 暂未实现
-			CreateUserMetaId:      group.CreateUserMetaId,
-			UserCount:             0, // 需要计算
-			ChatSettingType:       group.ChatSettingType,
-			DeleteStatus:          group.DeleteStatus,
-			Timestamp:             group.Timestamp,
+			CommunityId:  group.CommunityId,
+			GroupId:      group.GroupId,
+			TxId:         group.TxId,
+			PinId:        group.PinId,
+			RoomName:     group.RoomName,
+			RoomNote:     group.RoomNote,
+			RoomType:     group.RoomType,
+			RoomStatus:   group.RoomStatus,
+			RoomJoinType: group.RoomJoinType,
+			// RoomCodeHash:          "", // 暂未实现
+			// RoomGenesis:           "", // 暂未实现
+			// RoomLimitAmount:       0,  // 暂未实现
+			// RoomGenesisSeriesName: "", // 暂未实现
+			RoomAvatarUrl:      group.RoomAvatarUrl,
+			RoomNinePersonHash: "", // 暂未实现
+			RoomNewestTxId: func() string {
+				if latestChat != nil {
+					return latestChat.TxId
+				}
+				return ""
+			}(),
+			RoomNewestPinId: func() string {
+				if latestChat != nil {
+					return latestChat.LastMessagePinId
+				}
+				return ""
+			}(),
+			RoomNewestMetaId: func() string {
+				if latestChat != nil {
+					return latestChat.MetaId
+				}
+				return ""
+			}(),
+			RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+			RoomNewestProtocol: func() string {
+				if latestChat != nil {
+					return latestChat.Protocol
+				}
+				return ""
+			}(),
+			RoomNewestContent: func() string {
+				if latestChat != nil {
+					return latestChat.Content
+				}
+				return ""
+			}(),
+			RoomNewestTimestamp: func() int64 {
+				if latestChat != nil {
+					return latestChat.Timestamp
+				}
+				return 0
+			}(),
+			CreateUserMetaId: group.CreateUserMetaId,
+			UserCount:        0, // 需要计算
+			ChatSettingType:  group.ChatSettingType,
+			DeleteStatus:     group.DeleteStatus,
+			Timestamp:        group.Timestamp,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -110,32 +149,71 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			continue
 		}
 
+		// 获取群组最新聊天信息
+		latestChat, err := chatDB.GetGroupLatestChat(item.GroupId)
+		if err != nil {
+			// 如果获取失败，使用默认值
+			latestChat = nil
+		}
+
 		groupItem := &respond.GroupItem{
-			CommunityId:           group.CommunityId,
-			GroupId:               group.GroupId,
-			TxId:                  group.TxId,
-			RoomName:              group.RoomName,
-			RoomNote:              group.RoomNote,
-			RoomType:              group.RoomType,
-			RoomStatus:            group.RoomStatus,
-			RoomJoinType:          group.RoomJoinType,
-			RoomCodeHash:          "", // 暂未实现
-			RoomGenesis:           "", // 暂未实现
-			RoomLimitAmount:       0,  // 暂未实现
-			RoomGenesisSeriesName: "", // 暂未实现
-			RoomAvatarUrl:         group.RoomAvatarUrl,
-			RoomNinePersonHash:    "", // 暂未实现
-			RoomNewestTxId:        "", // 暂未实现
-			RoomNewestMetaId:      "", // 暂未实现
-			RoomNewestUserName:    "", // 暂未实现
-			RoomNewestProtocol:    "", // 暂未实现
-			RoomNewestContent:     "", // 暂未实现
-			RoomNewestTimestamp:   0,  // 暂未实现
-			CreateUserMetaId:      group.CreateUserMetaId,
-			UserCount:             0, // 需要计算
-			ChatSettingType:       group.ChatSettingType,
-			DeleteStatus:          group.DeleteStatus,
-			Timestamp:             group.Timestamp,
+			CommunityId:  group.CommunityId,
+			GroupId:      group.GroupId,
+			TxId:         group.TxId,
+			PinId:        group.PinId,
+			RoomName:     group.RoomName,
+			RoomNote:     group.RoomNote,
+			RoomType:     group.RoomType,
+			RoomStatus:   group.RoomStatus,
+			RoomJoinType: group.RoomJoinType,
+			// RoomCodeHash:          "", // 暂未实现
+			// RoomGenesis:           "", // 暂未实现
+			// RoomLimitAmount:       0,  // 暂未实现
+			// RoomGenesisSeriesName: "", // 暂未实现
+			RoomAvatarUrl:      group.RoomAvatarUrl,
+			RoomNinePersonHash: "", // 暂未实现
+			RoomNewestTxId: func() string {
+				if latestChat != nil {
+					return latestChat.TxId
+				}
+				return ""
+			}(),
+			RoomNewestPinId: func() string {
+				if latestChat != nil {
+					return latestChat.LastMessagePinId
+				}
+				return ""
+			}(),
+			RoomNewestMetaId: func() string {
+				if latestChat != nil {
+					return latestChat.MetaId
+				}
+				return ""
+			}(),
+			RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+			RoomNewestProtocol: func() string {
+				if latestChat != nil {
+					return latestChat.Protocol
+				}
+				return ""
+			}(),
+			RoomNewestContent: func() string {
+				if latestChat != nil {
+					return latestChat.Content
+				}
+				return ""
+			}(),
+			RoomNewestTimestamp: func() int64 {
+				if latestChat != nil {
+					return latestChat.Timestamp
+				}
+				return 0
+			}(),
+			CreateUserMetaId: group.CreateUserMetaId,
+			UserCount:        0, // 需要计算
+			ChatSettingType:  group.ChatSettingType,
+			DeleteStatus:     group.DeleteStatus,
+			Timestamp:        group.Timestamp,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -157,33 +235,72 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		return nil, nil
 	}
 
+	// 获取群组最新聊天信息
+	latestChat, err := chatDB.GetGroupLatestChat(req.GroupId)
+	if err != nil {
+		// 如果获取失败，使用默认值
+		latestChat = nil
+	}
+
 	// 转换为响应格式
 	groupItem := &respond.GroupItem{
-		CommunityId:           group.CommunityId,
-		GroupId:               group.GroupId,
-		TxId:                  group.TxId,
-		RoomName:              group.RoomName,
-		RoomNote:              group.RoomNote,
-		RoomType:              group.RoomType,
-		RoomStatus:            group.RoomStatus,
-		RoomJoinType:          group.RoomJoinType,
-		RoomCodeHash:          "", // 暂未实现
-		RoomGenesis:           "", // 暂未实现
-		RoomLimitAmount:       0,  // 暂未实现
-		RoomGenesisSeriesName: "", // 暂未实现
-		RoomAvatarUrl:         group.RoomAvatarUrl,
-		RoomNinePersonHash:    "", // 暂未实现
-		RoomNewestTxId:        "", // 暂未实现
-		RoomNewestMetaId:      "", // 暂未实现
-		RoomNewestUserName:    "", // 暂未实现
-		RoomNewestProtocol:    "", // 暂未实现
-		RoomNewestContent:     "", // 暂未实现
-		RoomNewestTimestamp:   0,  // 暂未实现
-		CreateUserMetaId:      group.CreateUserMetaId,
-		UserCount:             0, // 需要计算
-		ChatSettingType:       group.ChatSettingType,
-		DeleteStatus:          group.DeleteStatus,
-		Timestamp:             group.Timestamp,
+		CommunityId:  group.CommunityId,
+		GroupId:      group.GroupId,
+		TxId:         group.TxId,
+		PinId:        group.PinId,
+		RoomName:     group.RoomName,
+		RoomNote:     group.RoomNote,
+		RoomType:     group.RoomType,
+		RoomStatus:   group.RoomStatus,
+		RoomJoinType: group.RoomJoinType,
+		// RoomCodeHash:          "", // 暂未实现
+		// RoomGenesis:           "", // 暂未实现
+		// RoomLimitAmount:       0,  // 暂未实现
+		// RoomGenesisSeriesName: "", // 暂未实现
+		RoomAvatarUrl:      group.RoomAvatarUrl,
+		RoomNinePersonHash: "", // 暂未实现
+		RoomNewestTxId: func() string {
+			if latestChat != nil {
+				return latestChat.TxId
+			}
+			return ""
+		}(),
+		RoomNewestPinId: func() string {
+			if latestChat != nil {
+				return latestChat.LastMessagePinId
+			}
+			return ""
+		}(),
+		RoomNewestMetaId: func() string {
+			if latestChat != nil {
+				return latestChat.MetaId
+			}
+			return ""
+		}(),
+		RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+		RoomNewestProtocol: func() string {
+			if latestChat != nil {
+				return latestChat.Protocol
+			}
+			return ""
+		}(),
+		RoomNewestContent: func() string {
+			if latestChat != nil {
+				return latestChat.Content
+			}
+			return ""
+		}(),
+		RoomNewestTimestamp: func() int64 {
+			if latestChat != nil {
+				return latestChat.Timestamp
+			}
+			return 0
+		}(),
+		CreateUserMetaId: group.CreateUserMetaId,
+		UserCount:        0, // 需要计算
+		ChatSettingType:  group.ChatSettingType,
+		DeleteStatus:     group.DeleteStatus,
+		Timestamp:        group.Timestamp,
 	}
 
 	return groupItem, nil

@@ -230,7 +230,8 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 
 	// 创建群组模型
 	group := &models.TalkGroupModel{
-		GroupId:           simpleGroupCreate.GroupId,
+		// GroupId:           simpleGroupCreate.GroupId,
+		GroupId:           pin.Id,
 		CommunityId:       simpleGroupCreate.CommunityId,
 		TxId:              pin.Id[:len(pin.Id)-2],
 		PinId:             pin.Id,
@@ -243,6 +244,7 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		DeleteStatus:      getInt64Value(simpleGroupCreate.DeleteStatus),
 		CreateUserMetaId:  pin.CreateMetaId,
 		CreateUserAddress: pin.CreateAddress,
+		Chain:             pin.ChainName,
 		Timestamp:         pin.Timestamp,
 	}
 
@@ -264,6 +266,30 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// 创建者自动加入群组
+	err = gdb.processCreatorAutoJoin(group, pin)
+	if err != nil {
+		return err
+	}
+
+	// 初始化群组最新聊天记录
+	err = gdb.initGroupLatestChat(group.GroupId, pin)
+	if err != nil {
+		return err
+	}
+
+	// 初始化创建者的群列表
+	err = gdb.initMetaIdContextList(pin.CreateMetaId, group.GroupId, pin)
+	if err != nil {
+		return err
+	}
+
+	// 初始化创建者的群组加入列表
+	err = gdb.initGroupMetaIdJoinList(pin.CreateMetaId, group.GroupId, pin)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -288,6 +314,10 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 		return errors.New("group not found in db, no modify")
 		// // 如果群组不存在，按创建处理
 		// return gdb.processGroupCreate(pin)
+	}
+
+	if existingGroup.CreateUserAddress != pin.CreateAddress {
+		return errors.New("group creator not match")
 	}
 
 	// 更新群组信息
@@ -380,16 +410,17 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 
 	// 创建群组加入模型
 	join := &models.TalkGroupJoinModel{
-		GroupId:      simpleGroupJoin.GroupId,
-		MetaId:       pin.CreateMetaId,
-		TxId:         pin.Id[:len(pin.Id)-2], //截取掉后两位
-		PinId:        pin.Id,
-		Address:      pin.CreateAddress,
-		GroupState:   groupState,
-		Referrer:     simpleGroupJoin.Referrer,
-		IsValid:      true,
-		IsNew:        true,
+		GroupId:    simpleGroupJoin.GroupId,
+		MetaId:     pin.CreateMetaId,
+		TxId:       pin.Id[:len(pin.Id)-2], //截取掉后两位
+		PinId:      pin.Id,
+		Address:    pin.CreateAddress,
+		GroupState: groupState,
+		Referrer:   simpleGroupJoin.Referrer,
+		// IsValid:      true,
+		// IsNew:        true,
 		BlockHeight:  pin.GenesisHeight,
+		Chain:        pin.ChainName,
 		ConfirmState: 0,
 		Timestamp:    pin.Timestamp,
 	}
@@ -426,6 +457,18 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 			if err != nil {
 				return err
 			}
+
+			// 添加到用户的群列表
+			err = gdb.addGroupToMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin)
+			if err != nil {
+				return err
+			}
+
+			// 添加加入记录到MetaId加入列表
+			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
+			if err != nil {
+				return err
+			}
 		}
 		// 如果是 Out 状态且是新成员，不需要保存
 	} else {
@@ -440,9 +483,33 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				if err != nil {
 					return err
 				}
+
+				// 添加到用户的群列表
+				err = gdb.addGroupToMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin)
+				if err != nil {
+					return err
+				}
+
+				// 添加加入记录到MetaId加入列表
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
+				if err != nil {
+					return err
+				}
 			} else {
 				// 从 In 变为 Out，删除成员信息
 				err = gdb.DeleteGroupPerson(simpleGroupJoin.GroupId, pin.MetaId)
+				if err != nil {
+					return err
+				}
+
+				// 从用户的群列表中移除
+				err = gdb.removeGroupFromMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId)
+				if err != nil {
+					return err
+				}
+
+				// 添加退出记录到MetaId加入列表（状态为out）
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer)
 				if err != nil {
 					return err
 				}
@@ -452,6 +519,252 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 	}
 
 	return nil
+}
+
+// 处理创建者自动加入群组
+func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pin.PinInscription) error {
+	// 创建群组加入记录
+	join := &models.TalkGroupJoinModel{
+		GroupId:      group.GroupId,
+		MetaId:       pin.CreateMetaId,
+		TxId:         pin.Id[:len(pin.Id)-2], // 截取掉后两位
+		PinId:        pin.Id,
+		Address:      pin.CreateAddress,
+		GroupState:   models.RoomStateIn, // 创建者默认加入
+		Referrer:     "",                 // 创建者没有推荐人
+		BlockHeight:  pin.GenesisHeight,
+		Chain:        pin.ChainName,
+		ConfirmState: 0,
+		Timestamp:    pin.Timestamp,
+	}
+
+	// 保存群组加入信息
+	err := gdb.SaveGroupJoin(join)
+	if err != nil {
+		return err
+	}
+
+	// 创建群组成员信息
+	person := &models.TalkGroupPerson{
+		GroupId:      group.GroupId,
+		MetaId:       pin.CreateMetaId,
+		Address:      pin.CreateAddress,
+		UserName:     "",
+		UserNickName: "",
+		GroupState:   models.RoomStateIn, // 创建者默认加入
+		Timestamp:    pin.Timestamp,
+	}
+
+	// 保存群组成员信息
+	err = gdb.SaveGroupPerson(person)
+	if err != nil {
+		return err
+	}
+
+	// 添加创建者加入记录到MetaId加入列表
+	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 初始化群组最新聊天记录
+func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription) error {
+	// 创建初始的最新聊天记录（空记录）
+	latestChat := &models.TalkGroupLatestChat{
+		GroupId:          groupId,
+		Timestamp:        pin.Timestamp,
+		ChatType:         models.ChatTypeMsg, // 默认为消息类型
+		Content:          "",                 // 初始为空
+		CreateAddress:    pin.CreateAddress,
+		LastMessagePinId: "", // 初始为空
+		MetaId:           pin.CreateMetaId,
+		TxId:             pin.Id[:len(pin.Id)-2],
+		Protocol:         pin.Path,
+		ContentType:      "",
+		Encryption:       "",
+		ReplyTx:          "",
+		Chain:            pin.ChainName,
+	}
+
+	// 序列化数据
+	data, err := json.Marshal(latestChat)
+	if err != nil {
+		return err
+	}
+
+	// 使用 GroupId 作为主键保存到 TalkGroupLatestChatCollection
+	key := []byte(groupId)
+	return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+}
+
+// 初始化用户的群列表
+func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
+	// 创建初始的群列表项
+	contextItem := &models.MetaIdContextItem{
+		GroupId:          groupId,
+		Timestamp:        pin.Timestamp,
+		ChatType:         models.ChatTypeMsg, // 默认为消息类型
+		Content:          "",                 // 初始为空
+		CreateAddress:    pin.CreateAddress,
+		LastMessagePinId: "", // 初始为空
+	}
+
+	// 创建群列表
+	contextList := &models.MetaIdContextList{
+		MetaId: metaId,
+		Items:  []*models.MetaIdContextItem{contextItem},
+	}
+
+	// 序列化数据
+	data, err := json.Marshal(contextList)
+	if err != nil {
+		return err
+	}
+
+	// 使用 MetaId 作为主键保存到 TalkMetaIdContextListCollection
+	key := []byte(metaId)
+	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
+}
+
+// 初始化用户的群组加入列表
+func (gdb *GroupDB) initGroupMetaIdJoinList(metaId, groupId string, pin *pin.PinInscription) error {
+	// 创建初始的加入记录项
+	joinItem := &GroupMetaIdJoinItem{
+		JoinPinId:     pin.Id,
+		JoinType:      "create",
+		JoinTimestamp: pin.Timestamp,
+		GroupState:    models.RoomStateIn,
+		Address:       pin.CreateAddress,
+		Referrer:      "",
+		BlockHeight:   pin.GenesisHeight,
+		Chain:         pin.ChainName,
+	}
+
+	// 创建加入列表
+	joinList := &GroupMetaIdJoinList{
+		MetaId: metaId,
+		Items:  []*GroupMetaIdJoinItem{joinItem},
+	}
+
+	// 序列化数据
+	data, err := json.Marshal(joinList)
+	if err != nil {
+		return err
+	}
+
+	// key: metaId_groupId
+	key := []byte(metaId + "_" + groupId)
+	return Pb[TalkGroupMetaIdJoinCollection].Set(key, data, pebble.Sync)
+}
+
+// 更新用户的群列表（添加群组）
+func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
+	// 获取现有的群列表
+	existingList, err := gdb.getMetaIdContextList(metaId)
+	if err != nil {
+		return err
+	}
+
+	// 创建新的群列表项
+	newItem := &models.MetaIdContextItem{
+		GroupId:          groupId,
+		Timestamp:        pin.Timestamp,
+		ChatType:         models.ChatTypeMsg, // 默认为消息类型
+		Content:          "",                 // 初始为空
+		CreateAddress:    pin.CreateAddress,
+		LastMessagePinId: "", // 初始为空
+	}
+
+	// 检查是否已存在该群组
+	found := false
+	for i, item := range existingList.Items {
+		if item.GroupId == groupId {
+			// 更新现有项
+			existingList.Items[i] = newItem
+			found = true
+			break
+		}
+	}
+
+	// 如果不存在，添加新项
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// 按时间戳倒序排序
+	gdb.sortContextListByTimestamp(existingList)
+
+	// 保存更新后的群列表
+	return gdb.saveMetaIdContextList(existingList)
+}
+
+// 从用户的群列表中移除群组
+func (gdb *GroupDB) removeGroupFromMetaIdContextList(metaId, groupId string) error {
+	// 获取现有的群列表
+	existingList, err := gdb.getMetaIdContextList(metaId)
+	if err != nil {
+		return err
+	}
+
+	// 移除指定群组
+	var newItems []*models.MetaIdContextItem
+	for _, item := range existingList.Items {
+		if item.GroupId != groupId {
+			newItems = append(newItems, item)
+		}
+	}
+
+	existingList.Items = newItems
+
+	// 保存更新后的群列表
+	return gdb.saveMetaIdContextList(existingList)
+}
+
+// 获取用户的群列表
+func (gdb *GroupDB) getMetaIdContextList(metaId string) (*models.MetaIdContextList, error) {
+	key := []byte(metaId)
+	value, closer, err := Pb[TalkMetaIdContextListCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.MetaIdContextList{MetaId: metaId, Items: []*models.MetaIdContextItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var contextList models.MetaIdContextList
+	err = json.Unmarshal(value, &contextList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contextList, nil
+}
+
+// 保存用户的群列表
+func (gdb *GroupDB) saveMetaIdContextList(contextList *models.MetaIdContextList) error {
+	data, err := json.Marshal(contextList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(contextList.MetaId)
+	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
+}
+
+// 按时间戳倒序排序群列表
+func (gdb *GroupDB) sortContextListByTimestamp(contextList *models.MetaIdContextList) {
+	// 简单的冒泡排序，按时间戳倒序
+	for i := 0; i < len(contextList.Items)-1; i++ {
+		for j := 0; j < len(contextList.Items)-1-i; j++ {
+			if contextList.Items[j].Timestamp < contextList.Items[j+1].Timestamp {
+				contextList.Items[j], contextList.Items[j+1] = contextList.Items[j+1], contextList.Items[j]
+			}
+		}
+	}
 }
 
 // 辅助函数：获取字符串值
@@ -643,4 +956,111 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 	}
 
 	return persons, nil
+}
+
+// 群组MetaId加入记录项
+type GroupMetaIdJoinItem struct {
+	JoinPinId     string           `json:"joinPinId"`     // 加入的PinId
+	JoinType      string           `json:"joinType"`      // 加入类型：create, join
+	JoinTimestamp int64            `json:"joinTimestamp"` // 加入时间戳
+	GroupState    models.RoomState `json:"groupState"`    // 群组状态：1-in, -1-out
+	Address       string           `json:"address"`       // 用户地址
+	Referrer      string           `json:"referrer"`      // 推荐人
+	BlockHeight   int64            `json:"blockHeight"`   // 区块高度
+	Chain         string           `json:"chain"`         // 链类型
+}
+
+// 群组MetaId加入列表
+type GroupMetaIdJoinList struct {
+	MetaId string                 `json:"metaId"` // 用户MetaId
+	Items  []*GroupMetaIdJoinItem `json:"items"`  // 加入记录列表
+}
+
+// 获取用户的群组加入列表
+func (gdb *GroupDB) getGroupMetaIdJoinList(metaId string) (*GroupMetaIdJoinList, error) {
+	key := []byte(metaId)
+	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &GroupMetaIdJoinList{MetaId: metaId, Items: []*GroupMetaIdJoinItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var joinList GroupMetaIdJoinList
+	err = json.Unmarshal(value, &joinList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &joinList, nil
+}
+
+// 保存用户的群组加入列表
+func (gdb *GroupDB) saveGroupMetaIdJoinList(joinList *GroupMetaIdJoinList, groupId string) error {
+	data, err := json.Marshal(joinList)
+	if err != nil {
+		return err
+	}
+
+	//key: metaId_groupId
+	key := []byte(joinList.MetaId + "_" + groupId)
+	return Pb[TalkGroupMetaIdJoinCollection].Set(key, data, pebble.Sync)
+}
+
+// 添加群组加入记录到用户的加入列表
+func (gdb *GroupDB) addGroupJoinToMetaIdList(metaId, groupId, pinId, joinType string, pin *pin.PinInscription, groupState models.RoomState, referrer string) error {
+	// 获取现有的加入列表
+	existingList, err := gdb.getGroupMetaIdJoinList(metaId)
+	if err != nil {
+		return err
+	}
+
+	// 创建新的加入记录项
+	newItem := &GroupMetaIdJoinItem{
+		JoinPinId:     pinId,
+		JoinType:      joinType,
+		JoinTimestamp: pin.Timestamp,
+		GroupState:    groupState,
+		Address:       pin.CreateAddress,
+		Referrer:      referrer,
+		BlockHeight:   pin.GenesisHeight,
+		Chain:         pin.ChainName,
+	}
+
+	// 检查是否已存在该群组的记录
+	found := false
+	for i, item := range existingList.Items {
+		// 通过JoinPinId来判断是否已存在（因为每次加入都有不同的PinId）
+		if item.JoinPinId == pinId {
+			// 更新现有项
+			existingList.Items[i] = newItem
+			found = true
+			break
+		}
+	}
+
+	// 如果不存在，添加新项
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// 按时间戳倒序排序
+	gdb.sortGroupJoinListByTimestamp(existingList)
+
+	// 保存更新后的加入列表
+	return gdb.saveGroupMetaIdJoinList(existingList, groupId)
+}
+
+// 按时间戳倒序排序群组加入列表
+func (gdb *GroupDB) sortGroupJoinListByTimestamp(joinList *GroupMetaIdJoinList) {
+	// 简单的冒泡排序，按时间戳倒序
+	for i := 0; i < len(joinList.Items)-1; i++ {
+		for j := 0; j < len(joinList.Items)-1-i; j++ {
+			if joinList.Items[j].JoinTimestamp < joinList.Items[j+1].JoinTimestamp {
+				joinList.Items[j], joinList.Items[j+1] = joinList.Items[j+1], joinList.Items[j]
+			}
+		}
+	}
 }

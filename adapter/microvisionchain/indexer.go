@@ -277,13 +277,16 @@ func (indexer *Indexer) CatchPinsByTx(msgTx *wire.MsgTx, blockHeight int64, time
 			if pinInscription == nil {
 				continue
 			}
+			// log.Println("pinInscription:", pinInscription)
 			_, host, path := pin.ValidHostPath(pinInscription.Path)
 			if common.CheckBlockedHost(host) {
 				continue //blocked host
 			}
+			// log.Printf("pinInscription 2: %+v", pinInscription)
 			if !common.CheckHost(host) {
 				continue //not in host list
 			}
+			// log.Printf("pinInscription 3: %+v", pinInscription)
 			//address, outIdx, locationIdx := indexer.GetPinOwner(msgTx, i-1)
 			address, outIdx, locationIdx := indexer.GetPinOwner(msgTx, 0)
 			//recalculate txhash

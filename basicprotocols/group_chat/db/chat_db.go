@@ -422,6 +422,12 @@ func (cdb *ChatDB) SaveMetaIdContextList(contextList *models.MetaIdContextList) 
 
 // 更新群组中所有成员的群列表（当有新消息时）
 func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.TalkGroupChatV3, groupDB *GroupDB) error {
+	// 更新群组最新聊天记录
+	err := cdb.updateGroupLatestChat(groupId, chat)
+	if err != nil {
+		return err
+	}
+
 	// 获取群组的所有成员
 	members, err := groupDB.GetGroupMembers(groupId)
 	if err != nil {
@@ -437,6 +443,57 @@ func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.Ta
 	}
 
 	return nil
+}
+
+// 更新群组最新聊天记录
+func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupChatV3) error {
+	// 创建最新聊天记录
+	latestChat := &models.TalkGroupLatestChat{
+		GroupId:          groupId,
+		Timestamp:        chat.Timestamp,
+		ChatType:         chat.ChatType,
+		Content:          chat.Content,
+		CreateAddress:    chat.Address,
+		LastMessagePinId: chat.PinId,
+		MetaId:           chat.MetaId,
+		TxId:             chat.TxId,
+		Protocol:         chat.Protocol,
+		ContentType:      chat.ContentType,
+		Encryption:       chat.Encryption,
+		ReplyTx:          chat.ReplyTx,
+		Chain:            chat.Chain,
+	}
+
+	// 序列化数据
+	data, err := json.Marshal(latestChat)
+	if err != nil {
+		return err
+	}
+
+	// 使用 GroupId 作为主键保存到 TalkGroupLatestChatCollection
+	key := []byte(groupId)
+	return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+}
+
+// 获取群组最新聊天记录
+func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestChat, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupLatestChatCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var latestChat models.TalkGroupLatestChat
+	err = json.Unmarshal(value, &latestChat)
+	if err != nil {
+		return nil, err
+	}
+
+	return &latestChat, nil
 }
 
 // 更新单个成员的群列表
@@ -666,6 +723,7 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
 		ReplyTx:     simpleGroupChat.ReplyTx,
 		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
 	}
 
 	// 保存聊天消息到 TalkGroupChatPinCollection
@@ -674,8 +732,8 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		return err
 	}
 
-	// 保存时间戳索引到 TalkGroupChatTimestampCollection
-	err = cdb.SaveChatTimestamp(chat)
+	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
@@ -687,6 +745,138 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	}
 
 	return nil
+}
+
+// 检查用户是否在群组中
+func (cdb *ChatDB) isUserInGroup(metaId, groupId string) (bool, error) {
+	// 使用 TalkGroupMetaIdJoinCollection 来检查用户是否在群组中
+	// key: metaId_groupId
+	key := []byte(metaId + "_" + groupId)
+	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	defer closer.Close()
+
+	var joinList GroupMetaIdJoinList
+	err = json.Unmarshal(value, &joinList)
+	if err != nil {
+		return false, err
+	}
+
+	// 如果列表为空，用户不在群组中
+	if len(joinList.Items) == 0 {
+		return false, nil
+	}
+
+	// 获取最新的加入记录（按时间戳倒序，第一个是最新的）
+	latestItem := joinList.Items[0]
+	return latestItem.GroupState == models.RoomStateIn, nil
+}
+
+// 获取用户在群组中的状态
+func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64) (models.RoomState, error) {
+	// 使用 TalkGroupMetaIdJoinCollection 来获取用户状态
+	// key: metaId_groupId
+	key := []byte(metaId + "_" + groupId)
+	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return models.RoomStateOut, nil
+		}
+		return models.RoomStateOut, err
+	}
+	defer closer.Close()
+
+	var joinList GroupMetaIdJoinList
+	err = json.Unmarshal(value, &joinList)
+	if err != nil {
+		return models.RoomStateOut, err
+	}
+
+	// 如果列表为空，用户不在群组中
+	if len(joinList.Items) == 0 {
+		return models.RoomStateOut, nil
+	}
+
+	// 按时间戳正序排序，确保时间顺序正确
+	// 简单的冒泡排序，按时间戳正序
+	for i := 0; i < len(joinList.Items)-1; i++ {
+		for j := 0; j < len(joinList.Items)-1-i; j++ {
+			if joinList.Items[j].JoinTimestamp > joinList.Items[j+1].JoinTimestamp {
+				joinList.Items[j], joinList.Items[j+1] = joinList.Items[j+1], joinList.Items[j]
+			}
+		}
+	}
+
+	var startItem, endItem *GroupMetaIdJoinItem
+	// 遍历加入记录，找到聊天消息时间戳对应的区间
+	for i, item := range joinList.Items {
+		if chatTimestamp >= item.JoinTimestamp {
+			// 找到聊天消息时间戳对应的开始记录
+			startItem = item
+
+			// 查找下一个记录作为结束记录
+			if i+1 < len(joinList.Items) {
+				endItem = joinList.Items[i+1]
+			} else {
+				// 如果没有下一个记录，说明这是最新的状态
+				endItem = nil
+			}
+		} else {
+			// 如果当前记录的时间戳大于聊天时间戳，说明找到了区间的结束
+			// 此时startItem应该是前一个记录
+			if startItem != nil {
+				endItem = item
+			}
+			break
+		}
+	}
+
+	// 如果没有找到对应的区间，说明聊天消息在用户加入群组之前
+	if startItem == nil {
+		return models.RoomStateOut, nil
+	}
+
+	// 根据startItem的状态来判断用户在该时间点的状态
+	// 如果endItem存在且聊天时间超过了endItem的时间，说明状态已经改变
+	if endItem != nil && chatTimestamp >= endItem.JoinTimestamp {
+		// 聊天时间在下一个状态变更之后，使用下一个状态
+		return endItem.GroupState, nil
+	} else {
+		// 聊天时间在当前状态区间内，使用当前状态
+		return startItem.GroupState, nil
+	}
+}
+
+// 保存聊天时间戳索引（根据用户状态决定保存到哪个集合）
+func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) error {
+	// 获取用户在群组中的状态
+	groupState, err := cdb.getUserGroupState(chat.MetaId, chat.GroupId, chat.Timestamp)
+	if err != nil {
+		// 如果获取状态失败，默认保存到正常集合
+		return cdb.SaveChatTimestamp(chat)
+	}
+
+	// 构造时间戳索引值：pinId_chatType_timestamp
+	value := chat.PinId + "_" + string(rune(chat.ChatType)) + "_" + string(rune(chat.Timestamp))
+
+	// 根据用户状态决定保存到哪个集合
+	var collection string
+	if groupState == models.RoomStateIn {
+		// 用户在群组中，保存到正常集合
+		collection = TalkGroupChatTimestampCollection
+	} else {
+		// 用户不在群组中，保存到无效集合
+		collection = TalkGroupChatTimestampOutCollection
+	}
+
+	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
+	key := []byte(chat.GroupId + "_" + string(rune(chat.Timestamp)))
+	return Pb[collection].Set(key, []byte(value), pebble.Sync)
 }
 
 // 处理文件群组聊天
@@ -727,8 +917,8 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		return err
 	}
 
-	// 保存时间戳索引到 TalkGroupChatTimestampCollection
-	err = cdb.SaveChatTimestamp(chat)
+	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}

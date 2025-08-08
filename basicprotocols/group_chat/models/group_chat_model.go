@@ -17,9 +17,10 @@ type TalkCommunityModel struct {
 	Admins      []string `json:"admins"`      //社区管理者
 	Reserved    string   `json:"reserved"`    //用生成节点的metaId用户的00私钥对metaName进行签名
 	// ValidState   ValidState `json:"validState"`   //验证是否有效
-	BlockHeight  int64 `json:"blockHeight"`
-	ConfirmState int64 `json:"confirmState"`
-	Timestamp    int64 `json:"timestamp"` //
+	Chain        string `json:"chain"` //链类型
+	BlockHeight  int64  `json:"blockHeight"`
+	ConfirmState int64  `json:"confirmState"`
+	Timestamp    int64  `json:"timestamp"` //
 }
 
 type TalkCommunityJoinModel struct {
@@ -31,11 +32,12 @@ type TalkCommunityJoinModel struct {
 	PublicKey      string    `json:"publicKey"`
 	CommunityId    string    `json:"communityId"` //社区Id: hash(metaname)
 	CommunityState RoomState `json:"communityState"`
-	IsValid        bool      `json:"isValid"`
-	IsNew          bool      `json:"isNew"`
-	BlockHeight    int64     `json:"blockHeight"`
-	ConfirmState   int64     `json:"confirmState"`
-	Timestamp      int64     `json:"timestamp"` //
+	// IsValid        bool      `json:"isValid"`
+	// IsNew          bool      `json:"isNew"`
+	Chain        string `json:"chain"` //链类型
+	BlockHeight  int64  `json:"blockHeight"`
+	ConfirmState int64  `json:"confirmState"`
+	Timestamp    int64  `json:"timestamp"` //
 }
 
 type TalkCommunityInfo struct {
@@ -64,14 +66,15 @@ type TalkGroupJoinModel struct {
 	ZeroAddress string `json:"zeroAddress"`
 	Address     string `json:"address"`
 	// PublicKey    string    `json:"publicKey"`
-	GroupId      string    `json:"groupId"` //群组Id: hash(metaname)
-	GroupState   RoomState `json:"groupState"`
-	Referrer     string    `json:"referrer"` //推荐人
-	IsValid      bool      `json:"isValid"`
-	IsNew        bool      `json:"isNew"`
-	BlockHeight  int64     `json:"blockHeight"`
-	ConfirmState int64     `json:"confirmState"`
-	Timestamp    int64     `json:"timestamp"` //
+	GroupId    string    `json:"groupId"` //群组Id: hash(metaname)
+	GroupState RoomState `json:"groupState"`
+	Referrer   string    `json:"referrer"` //推荐人
+	Chain      string    `json:"chain"`    //链类型
+	// IsValid      bool      `json:"isValid"`
+	// IsNew        bool      `json:"isNew"`
+	BlockHeight  int64 `json:"blockHeight"`
+	ConfirmState int64 `json:"confirmState"`
+	Timestamp    int64 `json:"timestamp"` //
 }
 
 type TalkGroupPerson struct {
@@ -112,8 +115,9 @@ type TalkGroupModel struct {
 	CreateUserAddress string `json:"createUserAddress"` //创建人的address
 	ChatSettingType   int64  `json:"chatSettingType"`   //用于设置发言限制， 0-所有人，1-管理员
 	// ValidState            ValidState `json:"validState"`                       //验证是否有效
-	DeleteStatus int64 `json:"deleteStatus"` //删除状态，0-正常，1-删除
-	Timestamp    int64 `json:"timestamp"`    //创建你房间的时间戳
+	Chain        string `json:"chain"`        //链类型
+	DeleteStatus int64  `json:"deleteStatus"` //删除状态，0-正常，1-删除
+	Timestamp    int64  `json:"timestamp"`    //创建你房间的时间戳
 }
 
 type TalkGroupTxV3 struct {
@@ -134,11 +138,12 @@ type TalkGroupTxV3 struct {
 	ChatSettingType int64 `json:"chatSettingType"` //用于设置发言限制， 0-所有人，1-管理员
 	// ValidState            ValidState `json:"validState"`                       //验证是否有效
 	DeleteStatus int64 `json:"deleteStatus"` //删除状态，0-正常，1-删除
-	IsValid      bool  `json:"isValid"`
-	IsNew        bool  `json:"isNew"`
-	BlockHeight  int64 `json:"blockHeight"`
-	ConfirmState int64 `json:"confirmState"`
-	Timestamp    int64 `json:"timestamp"` //创建你房间的时间戳
+	// IsValid      bool  `json:"isValid"`
+	// IsNew        bool  `json:"isNew"`
+	BlockHeight  int64  `json:"blockHeight"`
+	ConfirmState int64  `json:"confirmState"`
+	Timestamp    int64  `json:"timestamp"` //创建你房间的时间戳
+	Chain        string `json:"chain"`     //链类型
 }
 
 type ChatInsideIndex int64
@@ -166,6 +171,7 @@ type TalkGroupChatV3 struct {
 	ReplyTx     string          `json:"replyTx"`
 	ReplyInfo   *ReplyInfo      `json:"replyInfo"`
 	Timestamp   int64           `json:"timestamp"` //聊天记录时间戳
+	Chain       string          `json:"chain"`     //链类型
 }
 
 type ReplyInfo struct {
@@ -302,4 +308,21 @@ type MetaIdContextItem struct {
 type MetaIdContextList struct {
 	MetaId string               `json:"metaId"` // 用户MetaId
 	Items  []*MetaIdContextItem `json:"items"`  // 群列表项
+}
+
+// 群组最新聊天记录
+type TalkGroupLatestChat struct {
+	GroupId          string   `json:"groupId"`          // 群组ID
+	Timestamp        int64    `json:"timestamp"`        // 最新消息时间戳
+	ChatType         ChatType `json:"chatType"`         // 消息类型
+	Content          string   `json:"content"`          // 消息内容摘要
+	CreateAddress    string   `json:"createAddress"`    // 消息创建者地址
+	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
+	MetaId           string   `json:"metaId"`           // 消息创建者的MetaId
+	TxId             string   `json:"txId"`             // 消息的TxId
+	Protocol         string   `json:"protocol"`         // 协议类型
+	ContentType      string   `json:"contentType"`      // 内容类型
+	Encryption       string   `json:"encryption"`       // 加密信息
+	ReplyTx          string   `json:"replyTx"`          // 回复消息的TxId
+	Chain            string   `json:"chain"`            // 链类型
 }

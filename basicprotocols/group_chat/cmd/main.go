@@ -9,7 +9,7 @@ import (
 
 // @title Group Chat API
 // @version 1.0
-// @description 群聊服务 API 文档
+// @description 群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
@@ -19,11 +19,23 @@ import (
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @host localhost:8080
+// @host 0.0.0.0:7568
 // @BasePath /
 
-// @tag.name Group
-// @tag.description 群组相关操作
+// @tag.name 数据库查询
+// @tag.description 数据库查询相关API，用于查看Pebble数据库中的数据
+
+// @tag.name 群组管理
+// @tag.description 群组管理相关API，包括群组信息、成员管理等
+
+// @tag.name 社区管理
+// @tag.description 社区管理相关API，包括社区信息、成员管理等
+
+// @tag.name 聊天功能
+// @tag.description 聊天功能相关API，包括消息、队列等
+
+// @tag.name 用户管理
+// @tag.description 用户管理相关API，包括用户信息、群列表等
 
 func main() {
 	// 解析命令行参数

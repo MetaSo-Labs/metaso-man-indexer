@@ -2,6 +2,7 @@ package group_chat
 
 import (
 	"log"
+	"manindexer/basicprotocols/group_chat/api/swagger"
 	"manindexer/common"
 	"net/http"
 	"os"
@@ -9,8 +10,6 @@ import (
 	"syscall"
 
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // ServerConfig 服务器配置
@@ -40,7 +39,7 @@ func NewServer(config *ServerConfig) *Server {
 	}
 
 	// 设置 Gin 模式
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.DebugMode)
 
 	router := gin.Default()
 
@@ -79,8 +78,8 @@ func (s *Server) SetupRoutes() error {
 		return err
 	}
 
-	// 添加 Swagger 文档路由
-	s.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// 设置群聊模块的Swagger
+	swagger.SetupSwagger(s.router)
 
 	// 添加健康检查路由
 	s.router.GET("/health", func(c *gin.Context) {
@@ -104,7 +103,7 @@ func (s *Server) SetupRoutes() error {
 		c.JSON(http.StatusOK, gin.H{
 			"service": "group-chat",
 			"version": "1.0.0",
-			"docs":    "/swagger/index.html",
+			"docs":    "/group-chat/docs/index.html",
 			"health":  "/health",
 			"status":  "/status",
 		})
@@ -157,7 +156,7 @@ func (s *Server) Start() error {
 	}()
 
 	log.Printf("Starting Group Chat server on %s", addr)
-	log.Printf("Swagger documentation available at: http://%s/swagger/index.html", addr)
+	log.Printf("Swagger documentation available at: %s", swagger.GetSwaggerURL(s.config.Host, s.config.Port))
 	log.Printf("Health check available at: http://%s/health", addr)
 
 	return server.ListenAndServe()

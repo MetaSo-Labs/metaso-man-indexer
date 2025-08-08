@@ -67,13 +67,16 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription) error {
 	protocol := gci.extractProtocol(pin.Path)
 
 	switch strings.ToLower(protocol) {
-	case protocols.MonitorSimpleCommunity, protocols.MonitorSimpleCommunityJoin:
+	case strings.ToLower(protocols.MonitorSimpleCommunity), strings.ToLower(protocols.MonitorSimpleCommunityJoin):
+		log.Printf("Community protocol: %s", pin.Path)
 		// 社区相关协议
 		return gci.communityDB.ProcessCommunityPin(pin)
-	case protocols.MonitorSimpleGroupCreate, protocols.MonitorSimpleGroupJoin:
+	case strings.ToLower(protocols.MonitorSimpleGroupCreate), strings.ToLower(protocols.MonitorSimpleGroupJoin):
+		log.Printf("Group protocol: %s", pin.Path)
 		// 群组相关协议
 		return gci.groupDB.ProcessGroupPin(pin)
-	case protocols.MonitorSimpleGroupChat, protocols.MonitorSimpleFileGroupChat:
+	case strings.ToLower(protocols.MonitorSimpleGroupChat), strings.ToLower(protocols.MonitorSimpleFileGroupChat):
+		log.Printf("Chat protocol: %s", pin.Path)
 		// 聊天相关协议
 		return gci.chatDB.ProcessGroupChatPin(pin)
 	default:

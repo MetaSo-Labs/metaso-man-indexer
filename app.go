@@ -12,6 +12,7 @@ import (
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
+	"os"
 	"time"
 )
 
@@ -32,7 +33,11 @@ func main() {
 /_/  /_/ /_/  |_|/_/ |_/                   
  `
 	fmt.Println(banner)
-	common.InitConfig("./config.toml")
+	configFile := os.Getenv("CONFIG_FILE")
+	if configFile == "" {
+		configFile = "./config.toml"
+	}
+	common.InitConfig(configFile)
 	cmd := common.Cmd
 	fmt.Println("cmd:", cmd)
 	// api.Start(f)

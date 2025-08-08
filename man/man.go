@@ -178,7 +178,9 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 	msg := make(chan pin.MempollChanMsg)
 	go indexer.ZmqRun(msg)
 	for x := range msg {
+		// fmt.Println("x.Tx:", x.Tx)
 		for _, pinNode := range x.PinList {
+			fmt.Println("pinNode.Id:", pinNode.Id, "pinNode.Path:", pinNode.Path)
 			onlyHost := common.Config.MetaSo.OnlyHost
 			if onlyHost != "" && pinNode.Host != onlyHost {
 				continue
@@ -189,6 +191,7 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 				handleMempoolTransferPin(pinNode)
 			}
 			group_chat.ProcessGroupChatPin(pinNode)
+
 		}
 		list := []interface{}{x.Tx}
 		if len(list) > 0 {

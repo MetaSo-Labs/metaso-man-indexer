@@ -1,0 +1,990 @@
+basePath: /
+definitions:
+  models.ChatType:
+    enum:
+    - 0
+    - 6
+    - 1
+    - 2
+    - 22
+    - 3
+    - 4
+    - 5
+    format: int64
+    type: integer
+    x-enum-comments:
+      ChatTypeEmoji: 群聊 - 表情类型
+      ChatTypeFile: 群聊 - 文件类型
+      ChatTypeJoin: 群聊 - 加入类型
+      ChatTypeLeave: 群聊 - 离开类型
+      ChatTypeMsg: 群聊 - 信息类型
+      ChatTypeOpenRed: 群聊 - 抢红包类型
+      ChatTypeRecycleRed: 群聊 - 回收红包类型
+      ChatTypeRed: 群聊 - 红包类型
+    x-enum-descriptions:
+    - 群聊 - 信息类型
+    - 群聊 - 表情类型
+    - 群聊 - 红包类型
+    - 群聊 - 抢红包类型
+    - 群聊 - 回收红包类型
+    - 群聊 - 文件类型
+    - 群聊 - 加入类型
+    - 群聊 - 离开类型
+    x-enum-varnames:
+    - ChatTypeMsg
+    - ChatTypeEmoji
+    - ChatTypeRed
+    - ChatTypeOpenRed
+    - ChatTypeRecycleRed
+    - ChatTypeFile
+    - ChatTypeJoin
+    - ChatTypeLeave
+  respond.GroupChatItem:
+    properties:
+      chatType:
+        allOf:
+        - $ref: '#/definitions/models.ChatType'
+        description: 0-msg, 1-red, 2-img
+      content:
+        type: string
+      contentType:
+        type: string
+      data: {}
+      encryption:
+        type: string
+      groupId:
+        description: 房间ID 唯一
+        type: string
+      metaId:
+        type: string
+      metanetId:
+        type: string
+      nickName:
+        description: |-
+          UserInfo    *model.UserInfoResp `json:"userInfo"`
+          AvatarTxId  string              `json:"avatarTxId"`
+          AvatarImage string              `json:"avatarImage"`
+          AvatarType  model.AvatarType    `json:"avatarType"`
+        type: string
+      params:
+        description: 通用字段，便于后续新增参数
+        type: string
+      protocol:
+        type: string
+      redMetaId:
+        type: string
+      replyInfo:
+        $ref: '#/definitions/respond.ReplyInfo'
+      replyTx:
+        type: string
+      timestamp:
+        description: 聊天记录时间戳
+        type: integer
+      txId:
+        type: string
+    type: object
+  respond.GroupChatResponse:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/respond.GroupChatItem'
+        type: array
+      nextTimestamp:
+        type: integer
+      total:
+        type: integer
+    type: object
+  respond.GroupItem:
+    properties:
+      chatSettingType:
+        description: 用于设置发言限制， 0-所有人，1-管理员
+        type: integer
+      communityId:
+        description: 社区Id 唯一
+        type: string
+      createUserMetaId:
+        description: 创建人的metaId
+        type: string
+      deleteStatus:
+        description: 删除状态，0-正常，1-删除
+        type: integer
+      groupId:
+        description: 房间ID 唯一
+        type: string
+      roomAvatarUrl:
+        description: 房间头像url
+        type: string
+      roomCodeHash:
+        description: roomJoinType为2时有值，codeHash
+        type: string
+      roomGenesis:
+        description: roomJoinType为2时有值，genesis
+        type: string
+      roomGenesisSeriesName:
+        type: string
+      roomJoinType:
+        description: 加入方式，1为密码，2为nft
+        type: string
+      roomLimitAmount:
+        description: roomJoinType为2时有值，token的限制
+        type: integer
+      roomName:
+        description: 创建房间的名称
+        type: string
+      roomNewestContent:
+        description: 房间最新聊天内容
+        type: string
+      roomNewestMetaId:
+        description: 房间最新聊天内容的MetaId
+        type: string
+      roomNewestProtocol:
+        description: 房间最新聊天内容的协议类型
+        type: string
+      roomNewestTimestamp:
+        description: 房间最新聊天的时间戳
+        type: integer
+      roomNewestTxId:
+        description: 房间最新聊天内容的txId
+        type: string
+      roomNewestUserName:
+        description: 房间最新聊天内容的MetaId
+        type: string
+      roomNinePersonHash:
+        description: 房间前9位人员的metaId总hash值
+        type: string
+      roomNote:
+        description: 创建房间的公告
+        type: string
+      roomStatus:
+        description: '"1" 未加密时为“1” 加密时为加密后的信息, 保留字段'
+        type: string
+      roomType:
+        description: 创建房间的类型 ”1“不加密 “2”加密 加密采用AES加密算法
+        type: string
+      timestamp:
+        description: 创建你房间的时间戳
+        type: integer
+      txId:
+        description: 房间的TxId
+        type: string
+      userCount:
+        description: 房间人数
+        type: integer
+    type: object
+  respond.GroupMemberItem:
+    properties:
+      address:
+        type: string
+      metaId:
+        type: string
+      name:
+        type: string
+      timeStr:
+        type: string
+      timestamp:
+        type: integer
+    type: object
+  respond.GroupMemberResponse:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/respond.GroupMemberItem'
+        type: array
+      total:
+        type: integer
+    type: object
+  respond.GroupResponse:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/respond.GroupItem'
+        type: array
+      total:
+        type: integer
+    type: object
+  respond.Message:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+      processingTime:
+        type: integer
+      processingTimeInMid:
+        type: integer
+    type: object
+  respond.ReplyInfo:
+    properties:
+      chatType:
+        allOf:
+        - $ref: '#/definitions/models.ChatType'
+        description: 0-msg, 1-red, 2-img
+      content:
+        type: string
+      contentType:
+        type: string
+      encryption:
+        type: string
+      metaId:
+        type: string
+      nickName:
+        description: UserInfo    *models.UserInfoResp `json:"userInfo"`
+        type: string
+      protocol:
+        type: string
+      timestamp:
+        description: 聊天记录时间戳
+        type: integer
+      txId:
+        type: string
+    type: object
+host: 0.0.0.0:7568
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: 群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Group Chat API
+  version: "1.0"
+paths:
+  /api/db/chat/pin:
+    get:
+      consumes:
+      - application/json
+      description: 根据pinId查询TalkGroupChatPinCollection数据
+      parameters:
+      - description: PinID
+        in: query
+        name: pinId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据pinId获取聊天消息
+      tags:
+      - 数据库查询
+  /api/db/chat/pin/all:
+    get:
+      consumes:
+      - application/json
+      description: 获取TalkGroupChatPinCollection的所有数据，支持分页
+      parameters:
+      - default: 1
+        description: 页码，从1开始
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取所有聊天消息列表（分页）
+      tags:
+      - 数据库查询
+  /api/db/chat/queue:
+    get:
+      consumes:
+      - application/json
+      description: 根据timestamp查询TalkGroupChatQueueCollection数据，或不传timestamp获取所有数据
+      parameters:
+      - description: 时间戳
+        in: query
+        name: timestamp
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据timestamp获取聊天队列列表
+      tags:
+      - 数据库查询
+  /api/db/chat/timestamp:
+    get:
+      consumes:
+      - application/json
+      description: 根据groupId查询TalkGroupChatTimestampCollection数据
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        required: true
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据groupId获取聊天时间戳列表
+      tags:
+      - 数据库查询
+  /api/db/collections:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有可用的数据库集合名称
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 集合列表
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取所有可用的数据库集合
+      tags:
+      - 数据库查询
+  /api/db/community/info:
+    get:
+      consumes:
+      - application/json
+      description: 根据communityId查询TalkCommunityInfoCollection数据
+      parameters:
+      - description: 社区ID
+        in: query
+        name: communityId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据communityId获取社区信息
+      tags:
+      - 数据库查询
+  /api/db/community/join:
+    get:
+      consumes:
+      - application/json
+      description: 根据communityId或pinId查询TalkCommunityJoinCollection数据
+      parameters:
+      - description: 社区ID
+        in: query
+        name: communityId
+        type: string
+      - description: PinID
+        in: query
+        name: pinId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据communityId或pinId获取社区加入记录
+      tags:
+      - 数据库查询
+  /api/db/community/person:
+    get:
+      consumes:
+      - application/json
+      description: 根据communityId或metaId查询TalkCommunityPersonCollection数据
+      parameters:
+      - description: 社区ID
+        in: query
+        name: communityId
+        type: string
+      - description: MetaID
+        in: query
+        name: metaId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据communityId或metaId获取社区成员列表
+      tags:
+      - 数据库查询
+  /api/db/community/version:
+    get:
+      consumes:
+      - application/json
+      description: 根据communityId或pinId查询TalkCommunityVersionInfoCollection数据
+      parameters:
+      - description: 社区ID
+        in: query
+        name: communityId
+        type: string
+      - description: PinID
+        in: query
+        name: pinId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据communityId或pinId获取社区版本信息
+      tags:
+      - 数据库查询
+  /api/db/group/info:
+    get:
+      consumes:
+      - application/json
+      description: 根据groupId查询TalkGroupInfoCollection数据
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据groupId获取群组信息
+      tags:
+      - 数据库查询
+  /api/db/group/join:
+    get:
+      consumes:
+      - application/json
+      description: 根据groupId或pinId查询TalkGroupJoinCollection数据
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        type: string
+      - description: PinID
+        in: query
+        name: pinId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据groupId或pinId获取群组加入记录
+      tags:
+      - 数据库查询
+  /api/db/group/person:
+    get:
+      consumes:
+      - application/json
+      description: 根据groupId或metaId查询TalkGroupPersonCollection数据
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        type: string
+      - description: MetaID
+        in: query
+        name: metaId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据groupId或metaId获取群组成员列表
+      tags:
+      - 数据库查询
+  /api/db/group/version:
+    get:
+      consumes:
+      - application/json
+      description: 根据groupId或pinId查询TalkGroupVersionInfoCollection数据
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        type: string
+      - description: PinID
+        in: query
+        name: pinId
+        type: string
+      - default: 10
+        description: 限制数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据groupId或pinId获取群组版本信息
+      tags:
+      - 数据库查询
+  /api/db/group/version/all:
+    get:
+      consumes:
+      - application/json
+      description: 获取TalkGroupVersionInfoCollection的所有数据，支持分页
+      parameters:
+      - default: 1
+        description: 页码，从1开始
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取所有群组版本信息列表（分页）
+      tags:
+      - 数据库查询
+  /api/db/stats:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有数据库集合的统计信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计信息
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取数据库统计信息
+      tags:
+      - 数据库查询
+  /api/db/user/context:
+    get:
+      consumes:
+      - application/json
+      description: 根据metaId查询TalkMetaIdContextListCollection数据
+      parameters:
+      - description: MetaID
+        in: query
+        name: metaId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 根据metaId获取用户群列表
+      tags:
+      - 数据库查询
+  /group-chat/group-chat-list:
+    get:
+      description: 获取群组的聊天记录，支持时间戳分页
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        required: true
+        type: string
+      - description: 用户MetaId
+        in: query
+        name: metaId
+        type: string
+      - description: 游标，默认为1
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页大小，默认为20
+        in: query
+        name: size
+        type: integer
+      - description: 时间戳，用于分页
+        in: query
+        name: timestamp
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回群组聊天记录
+          schema:
+            allOf:
+            - $ref: '#/definitions/respond.Message'
+            - properties:
+                data:
+                  $ref: '#/definitions/respond.GroupChatResponse'
+              type: object
+      summary: 获取群组聊天记录
+      tags:
+      - Group
+  /group-chat/group-info:
+    get:
+      description: 获取指定群组的详细信息
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回群组信息
+          schema:
+            allOf:
+            - $ref: '#/definitions/respond.Message'
+            - properties:
+                data:
+                  $ref: '#/definitions/respond.GroupItem'
+              type: object
+      summary: 获取群组信息
+      tags:
+      - Group
+  /group-chat/group-list:
+    get:
+      description: 获取群组列表，支持分页
+      parameters:
+      - description: 用户MetaId
+        in: query
+        name: metaId
+        type: string
+      - description: 游标，默认为1
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页大小，默认为20
+        in: query
+        name: size
+        type: integer
+      - description: 时间戳
+        in: query
+        name: timestamp
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回群组列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/respond.Message'
+            - properties:
+                data:
+                  $ref: '#/definitions/respond.GroupResponse'
+              type: object
+      summary: 获取群组列表
+      tags:
+      - Group
+  /group-chat/group-member-list:
+    get:
+      description: 获取群组的成员列表，支持分页
+      parameters:
+      - description: 群组ID
+        in: query
+        name: groupId
+        required: true
+        type: string
+      - description: 游标，默认为1
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页大小，默认为20
+        in: query
+        name: size
+        type: integer
+      - description: 时间戳
+        in: query
+        name: timestamp
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回群组成员列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/respond.Message'
+            - properties:
+                data:
+                  $ref: '#/definitions/respond.GroupMemberResponse'
+              type: object
+      summary: 获取群组成员列表
+      tags:
+      - Group
+  /group-chat/user/latest-group-list:
+    get:
+      description: 获取用户的最新聊天群组列表，基于最新聊天时间排序
+      parameters:
+      - description: 用户MetaId
+        in: query
+        name: metaId
+        required: true
+        type: string
+      - description: 游标，默认为1
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页大小，默认为20
+        in: query
+        name: size
+        type: integer
+      - description: 时间戳
+        in: query
+        name: timestamp
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回最新聊天群组列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/respond.Message'
+            - properties:
+                data:
+                  $ref: '#/definitions/respond.GroupResponse'
+              type: object
+      summary: 获取最新聊天群组列表
+      tags:
+      - Group
+swagger: "2.0"
+tags:
+- description: 数据库查询相关API，用于查看Pebble数据库中的数据
+  name: 数据库查询
+- description: 群组管理相关API，包括群组信息、成员管理等
+  name: 群组管理
+- description: 社区管理相关API，包括社区信息、成员管理等
+  name: 社区管理
+- description: 聊天功能相关API，包括消息、队列等
+  name: 聊天功能
+- description: 用户管理相关API，包括用户信息、群列表等
+  name: 用户管理

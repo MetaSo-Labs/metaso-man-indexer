@@ -1,7 +1,16 @@
 package respond
 
+import "time"
+
 const (
-	Version_1_0_0 string = "1.0.0"
+	HttpsCodeSuccess int = iota
+	HttpsCodeError
+	HttpsCodeErrorAuth
+)
+
+const (
+	RespMessageSuccess string = "success"
+	RespMessageError   string = "error"
 )
 
 type Message struct {
@@ -10,4 +19,25 @@ type Message struct {
 	Message             string      `json:"message"`
 	ProcessingTime      int64       `json:"processingTime"`
 	ProcessingTimeInMid int64       `json:"processingTimeInMid,omitempty"`
+}
+
+func RespSuccess(data interface{}, timestamp int64) Message {
+	return Message{
+		Code:           HttpsCodeSuccess,
+		Message:        RespMessageSuccess,
+		ProcessingTime: timestamp - time.Now().Unix(),
+		Data:           data,
+	}
+}
+
+func RespErr(err error, timestamp int64, code int) Message {
+	if code == 0 {
+		code = HttpsCodeError
+	}
+	return Message{
+		Code:           code,
+		Message:        err.Error(),
+		ProcessingTime: timestamp - time.Now().Unix(),
+		Data:           nil,
+	}
 }

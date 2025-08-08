@@ -188,10 +188,10 @@ func ExampleUsage() {
 		CommunityId:    "community_123",
 		MetaId:         "metaid_789",
 		CommunityState: models.RoomStateIn,
-		IsValid:        true,
-		IsNew:          true,
-		TxId:           "tx_join_001",
-		Timestamp:      1234567890,
+		// IsValid:        true,
+		// IsNew:          true,
+		TxId:      "tx_join_001",
+		Timestamp: 1234567890,
 	}
 
 	err = communityDB.SaveCommunityJoin(join)

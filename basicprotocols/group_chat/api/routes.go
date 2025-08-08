@@ -29,4 +29,5 @@ func RegisterGroupRoutes(router *gin.Engine) {
 // RegisterAllRoutes 注册所有路由
 func RegisterAllRoutes(router *gin.Engine) {
 	RegisterGroupRoutes(router)
+	RegisterDbRoutes(router)
 }

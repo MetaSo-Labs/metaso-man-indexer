@@ -1,12 +1,14 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/service"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,6 +25,7 @@ import (
 // @Router /group-chat/group-list [get]
 func GetGroupList(c *gin.Context) {
 	var (
+		t   = time.Now().Unix()
 		req = &request.FetchGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
@@ -42,11 +45,11 @@ func GetGroupList(c *gin.Context) {
 	response, err := service.FetchGroupList(req)
 	if err != nil {
 		log.Printf("Failed to fetch group list: %v", err)
-		c.JSONP(http.StatusInternalServerError, respond.Message{Code: 1, Data: err.Error()})
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, respond.Message{Code: 0, Data: response})
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
 // @Summary 获取最新聊天群组列表
@@ -61,6 +64,7 @@ func GetGroupList(c *gin.Context) {
 // @Router /group-chat/user/latest-group-list [get]
 func GetLatestChatGroupList(c *gin.Context) {
 	var (
+		t   = time.Now().Unix()
 		req = &request.FetchLatestChatGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
@@ -79,18 +83,18 @@ func GetLatestChatGroupList(c *gin.Context) {
 	)
 
 	if req.MetaId == "" {
-		c.JSONP(http.StatusBadRequest, respond.Message{Code: 1, Data: "metaId is empty"})
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
 		return
 	}
 
 	response, err := service.FetchLatestChatGroupList(req)
 	if err != nil {
 		log.Printf("Failed to fetch latest chat group list for metaId %s: %v", req.MetaId, err)
-		c.JSONP(http.StatusInternalServerError, respond.Message{Code: 1, Data: err.Error()})
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, respond.Message{Code: 0, Data: response})
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
 // @Summary 获取群组信息
@@ -102,29 +106,30 @@ func GetLatestChatGroupList(c *gin.Context) {
 // @Router /group-chat/group-info [get]
 func GetGroupInfo(c *gin.Context) {
 	var (
+		t   = time.Now().Unix()
 		req = &request.FetchGroupInfoRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 		}
 	)
 
 	if req.GroupId == "" {
-		c.JSONP(http.StatusBadRequest, respond.Message{Code: 1, Data: "groupId is empty"})
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
 		return
 	}
 
 	response, err := service.FetchGroupInfo(req)
 	if err != nil {
 		log.Printf("Failed to fetch group info for groupId %s: %v", req.GroupId, err)
-		c.JSONP(http.StatusInternalServerError, respond.Message{Code: 1, Data: err.Error()})
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
 	if response == nil {
-		c.JSONP(http.StatusNotFound, respond.Message{Code: 1, Data: "Group not found"})
+		c.JSONP(http.StatusNotFound, respond.RespErr(fmt.Errorf("Group not found"), t, 1))
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, respond.Message{Code: 0, Data: response})
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
 // @Summary 获取群组聊天记录
@@ -140,6 +145,7 @@ func GetGroupInfo(c *gin.Context) {
 // @Router /group-chat/group-chat-list [get]
 func GetGroupChatList(c *gin.Context) {
 	var (
+		t   = time.Now().Unix()
 		req = &request.FetchGroupChatListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			MetaId:  c.DefaultQuery("metaId", ""),
@@ -159,18 +165,18 @@ func GetGroupChatList(c *gin.Context) {
 	)
 
 	if req.GroupId == "" {
-		c.JSONP(http.StatusBadRequest, respond.Message{Code: 1, Data: "groupId is empty"})
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
 		return
 	}
 
 	response, err := service.FetchGroupChatList(req)
 	if err != nil {
 		log.Printf("Failed to fetch group chat list for groupId %s: %v", req.GroupId, err)
-		c.JSONP(http.StatusInternalServerError, respond.Message{Code: 1, Data: err.Error()})
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, respond.Message{Code: 0, Data: response})
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
 // @Summary 获取群组成员列表
@@ -185,6 +191,7 @@ func GetGroupChatList(c *gin.Context) {
 // @Router /group-chat/group-member-list [get]
 func GetGroupMemberList(c *gin.Context) {
 	var (
+		t   = time.Now().Unix()
 		req = &request.FetchGroupMemberListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			Cursor: func() int64 {
@@ -203,16 +210,16 @@ func GetGroupMemberList(c *gin.Context) {
 	)
 
 	if req.GroupId == "" {
-		c.JSONP(http.StatusBadRequest, respond.Message{Code: 1, Data: "groupId is empty"})
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
 		return
 	}
 
 	response, err := service.FetchGroupMemberList(req)
 	if err != nil {
 		log.Printf("Failed to fetch group member list for groupId %s: %v", req.GroupId, err)
-		c.JSONP(http.StatusInternalServerError, respond.Message{Code: 1, Data: err.Error()})
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	c.IndentedJSON(http.StatusOK, respond.Message{Code: 0, Data: response})
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }

@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/pin"
@@ -295,11 +296,12 @@ func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
 
 	// 创建社区模型
 	community := &models.TalkCommunityModel{
-		CommunityId: simpleCommunity.CommunityId,
-		MetaId:      pin.MetaId,
+		// CommunityId: simpleCommunity.CommunityId,
+		CommunityId: pin.Id,
+		MetaId:      pin.CreateMetaId,
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
-		Address:     pin.Address,
+		Address:     pin.CreateAddress,
 		// PublicKey:   pin.CreateAddress,
 		Name:        simpleCommunity.Name,
 		Description: simpleCommunity.Description,
@@ -309,6 +311,7 @@ func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
 		MetaNameNft: simpleCommunity.MetaNameNft,
 		Admins:      simpleCommunity.Admins,
 		Reserved:    simpleCommunity.Reserved,
+		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 		Timestamp:   pin.Timestamp,
 	}
@@ -365,10 +368,11 @@ func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
 		Address:     pin.Address,
 		// PublicKey:      pin.CreateAddress,
 		CommunityState: communityState,
-		IsValid:        true,
-		IsNew:          true,
-		BlockHeight:    pin.GenesisHeight,
-		Timestamp:      pin.Timestamp,
+		// IsValid:        true,
+		// IsNew:          true,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+		Timestamp:   pin.Timestamp,
 	}
 
 	// 保存社区加入信息
@@ -414,6 +418,10 @@ func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
 	if existingCommunity == nil {
 		// 如果社区不存在，按创建处理
 		return cdb.processCommunityCreate(pin)
+	}
+
+	if existingCommunity.Address != pin.CreateAddress {
+		return errors.New("community creator not match")
 	}
 
 	// 更新社区信息

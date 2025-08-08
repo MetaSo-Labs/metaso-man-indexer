@@ -7,3 +7,6 @@ manindexer
 .DS_Store
 pev_data_pebble/
 config_testnet.toml
+ssl.txt
+pebble_data/
+basicprotocols/group_chat/api/swagger/README.md
