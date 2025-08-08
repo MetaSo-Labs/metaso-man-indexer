@@ -47,10 +47,10 @@ func (cdb *ChatDB) SaveChat(chat *models.TalkGroupChatV3) error {
 // 保存聊天时间戳索引
 func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
 	// 构造时间戳索引值：pinId_chatType_timestamp
-	value := chat.PinId + "_" + string(rune(chat.ChatType)) + "_" + string(rune(chat.Timestamp))
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
 	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
-	key := []byte(chat.GroupId + "_" + string(rune(chat.Timestamp)))
+	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	return Pb[TalkGroupChatTimestampCollection].Set(key, []byte(value), pebble.Sync)
 }
 
@@ -155,7 +155,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 	defer iter.Close()
 
 	// 构造查询起始键：groupId_startTimestamp
-	startKey := []byte(groupId + "_" + string(rune(startTimestamp)))
+	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
 
 	// 从指定时间戳开始倒序遍历（最新的消息在前）
 	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
@@ -193,48 +193,9 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 
 // 获取群组的最新聊天消息（基于时间戳倒序）
 func (cdb *ChatDB) GetLatestChatsByGroupId(groupId string, size int64) ([]*models.TalkGroupChatV3, error) {
-	var chats []*models.TalkGroupChatV3
-	iter, err := Pb[TalkGroupChatTimestampCollection].NewIter(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer iter.Close()
-
-	// 构造群组前缀
-	groupPrefix := groupId + "_"
-
-	// 从最新时间戳开始倒序遍历
-	for iter.Last(); iter.Valid() && iter.Key() != nil; iter.Prev() {
-		key := string(iter.Key())
-
-		// 检查是否属于指定群组
-		if !strings.HasPrefix(key, groupPrefix) {
-			continue
-		}
-
-		// 解析索引值获取 PinId
-		value := string(iter.Value())
-		valueParts := strings.Split(value, "_")
-		if len(valueParts) < 1 {
-			continue
-		}
-		pinId := valueParts[0]
-
-		// 获取完整的聊天消息
-		chat, err := cdb.GetChatByPinId(pinId)
-		if err != nil || chat == nil {
-			continue
-		}
-
-		// 达到分页大小限制
-		if int64(len(chats)) >= size {
-			break
-		}
-
-		chats = append(chats, chat)
-	}
-
-	return chats, nil
+	// 使用当前时间作为起始时间戳
+	currentTimestamp := time.Now().Unix()
+	return cdb.GetChatsByGroupIdAndTimestampRange(groupId, currentTimestamp, size)
 }
 
 // 删除聊天消息
@@ -862,7 +823,7 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	}
 
 	// 构造时间戳索引值：pinId_chatType_timestamp
-	value := chat.PinId + "_" + string(rune(chat.ChatType)) + "_" + string(rune(chat.Timestamp))
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
 	// 根据用户状态决定保存到哪个集合
 	var collection string
@@ -875,7 +836,7 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	}
 
 	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
-	key := []byte(chat.GroupId + "_" + string(rune(chat.Timestamp)))
+	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	return Pb[collection].Set(key, []byte(value), pebble.Sync)
 }
 

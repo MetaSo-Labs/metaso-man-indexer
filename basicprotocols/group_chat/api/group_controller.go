@@ -137,7 +137,7 @@ func GetGroupInfo(c *gin.Context) {
 // @Produce json
 // @Param groupId query string true "群组ID"
 // @Param metaId query string false "用户MetaId"
-// @Param cursor query int false "游标，默认为1"
+// @Param cursor query int false "游标，默认为0"
 // @Param size query int false "每页大小，默认为20"
 // @Param timestamp query int false "时间戳，用于分页"
 // @Tags Group
@@ -150,7 +150,7 @@ func GetGroupChatList(c *gin.Context) {
 			GroupId: c.DefaultQuery("groupId", ""),
 			MetaId:  c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
-				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
 				return cursor
 			}(),
 			Size: func() int64 {

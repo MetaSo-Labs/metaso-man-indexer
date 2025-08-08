@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/db"
@@ -327,6 +328,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("chats: %+v\n", chats)
 
 	// 转换为响应格式
 	var chatItems []*respond.GroupChatItem
