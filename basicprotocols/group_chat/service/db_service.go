@@ -196,11 +196,6 @@ func (s *DbService) QueryGroupChatQueue(limit int) ([]map[string]interface{}, er
 	return s.QueryAll(db.TalkGroupChatQueueCollection, limit)
 }
 
-// 查询处理中的聊天队列
-func (s *DbService) QueryGroupChatQueueProcessing(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupChatQueueProcessingCollection, limit)
-}
-
 // 聊天相关查询方法
 
 // 查询群聊消息

@@ -22,14 +22,50 @@ func NewGroupDB(pb *Pebble) *GroupDB {
 
 // 保存群组信息
 func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
-	data, err := json.Marshal(group)
+	// 先获取现有的群组信息
+	existingGroup, err := gdb.GetGroupInfoByGroupId(group.GroupId)
 	if err != nil {
 		return err
 	}
 
-	// 使用 GroupId 作为主键
-	key := []byte(group.GroupId)
-	return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+	// 如果不存在现有数据，直接保存
+	if existingGroup == nil {
+		data, err := json.Marshal(group)
+		if err != nil {
+			return err
+		}
+		key := []byte(group.GroupId)
+		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+	}
+
+	// 判断是否需要更新
+	shouldUpdate := false
+
+	// 1. 先判断pinId是否一样
+	if existingGroup.PinId == group.PinId {
+		// pinId一样，检查blockHeight是否不一样
+		if existingGroup.BlockHeight != group.BlockHeight {
+			shouldUpdate = true
+		}
+	} else {
+		// pinId不一样，比较timestamp
+		if group.Timestamp > existingGroup.Timestamp {
+			shouldUpdate = true
+		}
+	}
+
+	// 如果需要更新，则保存新数据
+	if shouldUpdate {
+		data, err := json.Marshal(group)
+		if err != nil {
+			return err
+		}
+		key := []byte(group.GroupId)
+		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+	}
+
+	// 不需要更新，直接返回
+	return nil
 }
 
 // 根据GroupId获取群组信息
@@ -246,6 +282,7 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		CreateUserAddress: pin.CreateAddress,
 		Chain:             pin.ChainName,
 		Timestamp:         pin.Timestamp,
+		BlockHeight:       pin.GenesisHeight,
 	}
 
 	// 保存到版本信息表
@@ -331,6 +368,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	existingGroup.TxId = pin.Id[:len(pin.Id)-2] //截取掉后两位
 	existingGroup.PinId = pin.Id
 	existingGroup.Timestamp = pin.Timestamp
+	existingGroup.BlockHeight = pin.GenesisHeight
 
 	// 处理群组与社区的关系变化
 	oldCommunityId := existingGroup.CommunityId
@@ -450,6 +488,8 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				UserNickName: "",
 				GroupState:   groupState,
 				Timestamp:    pin.Timestamp,
+				PinId:        pin.Id,
+				BlockHeight:  pin.GenesisHeight,
 			}
 
 			// 保存群组成员信息
@@ -479,6 +519,8 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				// 从 Out 变为 In，保存成员信息
 				existingPerson.GroupState = groupState
 				existingPerson.Timestamp = pin.Timestamp
+				existingPerson.PinId = pin.Id
+				existingPerson.BlockHeight = pin.GenesisHeight
 				err = gdb.SaveGroupPerson(existingPerson)
 				if err != nil {
 					return err
@@ -553,6 +595,7 @@ func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pi
 		UserNickName: "",
 		GroupState:   models.RoomStateIn, // 创建者默认加入
 		Timestamp:    pin.Timestamp,
+		BlockHeight:  pin.GenesisHeight,
 	}
 
 	// 保存群组成员信息
@@ -572,8 +615,14 @@ func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pi
 
 // 初始化群组最新聊天记录
 func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription) error {
-	// 创建初始的最新聊天记录（空记录）
-	latestChat := &models.TalkGroupLatestChat{
+	// 先获取现有的最新聊天记录
+	existingLatestChat, err := gdb.getGroupLatestChat(groupId)
+	if err != nil {
+		return err
+	}
+
+	// 创建新的最新聊天记录
+	newLatestChat := &models.TalkGroupLatestChat{
 		GroupId:          groupId,
 		Timestamp:        pin.Timestamp,
 		ChatType:         models.ChatTypeMsg, // 默认为消息类型
@@ -585,48 +634,152 @@ func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription)
 		Protocol:         pin.Path,
 		ContentType:      "",
 		Encryption:       "",
-		ReplyTx:          "",
+		ReplyPin:         "",
 		Chain:            pin.ChainName,
+		BlockHeight:      pin.GenesisHeight,
 	}
 
-	// 序列化数据
-	data, err := json.Marshal(latestChat)
-	if err != nil {
-		return err
+	// 如果不存在现有数据，直接保存
+	if existingLatestChat == nil {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(groupId)
+		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 使用 GroupId 作为主键保存到 TalkGroupLatestChatCollection
+	// 判断是否需要更新
+	shouldUpdate := false
+
+	// 1. 先判断pinId是否一样（这里LastMessagePinId都是空的，所以主要比较其他字段）
+	if existingLatestChat.LastMessagePinId == newLatestChat.LastMessagePinId {
+		// pinId一样，检查blockHeight是否不一样
+		if existingLatestChat.BlockHeight != newLatestChat.BlockHeight {
+			shouldUpdate = true
+		}
+	} else {
+		// pinId不一样，比较timestamp
+		if newLatestChat.Timestamp > existingLatestChat.Timestamp {
+			shouldUpdate = true
+		}
+	}
+
+	// 如果需要更新，则保存新数据
+	if shouldUpdate {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(groupId)
+		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+	}
+
+	// 不需要更新，直接返回
+	return nil
+}
+
+// 获取群组最新聊天记录（GroupDB内部方法）
+func (gdb *GroupDB) getGroupLatestChat(groupId string) (*models.TalkGroupLatestChat, error) {
 	key := []byte(groupId)
-	return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+	value, closer, err := Pb[TalkGroupLatestChatCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var latestChat models.TalkGroupLatestChat
+	err = json.Unmarshal(value, &latestChat)
+	if err != nil {
+		return nil, err
+	}
+
+	return &latestChat, nil
 }
 
 // 初始化用户的群列表
 func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
-	// 创建初始的群列表项
-	contextItem := &models.MetaIdContextItem{
+	// 先获取现有的群列表
+	existingList, err := gdb.getMetaIdContextList(metaId)
+	if err != nil {
+		return err
+	}
+
+	// 创建新的群列表项
+	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
 		Timestamp:        pin.Timestamp,
 		ChatType:         models.ChatTypeMsg, // 默认为消息类型
 		Content:          "",                 // 初始为空
 		CreateAddress:    pin.CreateAddress,
 		LastMessagePinId: "", // 初始为空
+		BlockHeight:      pin.GenesisHeight,
 	}
 
-	// 创建群列表
-	contextList := &models.MetaIdContextList{
-		MetaId: metaId,
-		Items:  []*models.MetaIdContextItem{contextItem},
+	// 如果不存在现有数据，直接保存
+	if existingList == nil || len(existingList.Items) == 0 {
+		// 创建群列表
+		contextList := &models.MetaIdContextList{
+			MetaId: metaId,
+			Items:  []*models.MetaIdContextItem{newItem},
+		}
+
+		// 序列化数据
+		data, err := json.Marshal(contextList)
+		if err != nil {
+			return err
+		}
+
+		// 使用 MetaId 作为主键保存到 TalkMetaIdContextListCollection
+		key := []byte(metaId)
+		return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 序列化数据
-	data, err := json.Marshal(contextList)
-	if err != nil {
-		return err
+	// 检查是否已存在该群组
+	found := false
+	shouldUpdate := false
+	for i, item := range existingList.Items {
+		if item.GroupId == groupId {
+			// 判断是否需要更新
+			if item.LastMessagePinId == newItem.LastMessagePinId {
+				// LastMessagePinId一样，检查blockHeight是否不一样
+				if item.BlockHeight != newItem.BlockHeight {
+					shouldUpdate = true
+				}
+			} else {
+				// LastMessagePinId不一样，比较timestamp
+				if newItem.Timestamp > item.Timestamp {
+					shouldUpdate = true
+				}
+			}
+
+			if shouldUpdate {
+				// 更新现有项
+				existingList.Items[i] = newItem
+			}
+			found = true
+			break
+		}
 	}
 
-	// 使用 MetaId 作为主键保存到 TalkMetaIdContextListCollection
-	key := []byte(metaId)
-	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
+	// 如果不存在该群组，添加新项
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+		shouldUpdate = true
+	}
+
+	// 如果需要更新，保存数据
+	if shouldUpdate {
+		// 按时间戳倒序排序
+		gdb.sortContextListByTimestamp(existingList)
+		return gdb.saveMetaIdContextList(existingList)
+	}
+
+	// 不需要更新，直接返回
+	return nil
 }
 
 // 初始化用户的群组加入列表
@@ -668,6 +821,12 @@ func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin
 		return err
 	}
 
+	// 从TalkGroupLatestChatCollection获取群组最新聊天信息
+	latestChat, err := gdb.getGroupLatestChat(groupId)
+	if err != nil {
+		return err
+	}
+
 	// 创建新的群列表项
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
@@ -678,27 +837,57 @@ func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin
 		LastMessagePinId: "", // 初始为空
 	}
 
+	// 如果获取到了最新聊天信息，使用其数据
+	if latestChat != nil {
+		newItem.Content = latestChat.Content
+		newItem.LastMessagePinId = latestChat.LastMessagePinId
+		newItem.Timestamp = latestChat.Timestamp
+		newItem.ChatType = latestChat.ChatType
+		newItem.BlockHeight = latestChat.BlockHeight
+	}
+
 	// 检查是否已存在该群组
 	found := false
+	shouldUpdate := false
 	for i, item := range existingList.Items {
 		if item.GroupId == groupId {
-			// 更新现有项
-			existingList.Items[i] = newItem
+			// 判断是否需要更新
+			if item.LastMessagePinId == newItem.LastMessagePinId {
+				// LastMessagePinId一样，检查blockHeight是否不一样
+				if item.BlockHeight != newItem.BlockHeight {
+					shouldUpdate = true
+				}
+			} else {
+				// LastMessagePinId不一样，比较timestamp
+				if newItem.Timestamp > item.Timestamp {
+					shouldUpdate = true
+				}
+			}
+
+			if shouldUpdate {
+				// 更新现有项
+				existingList.Items[i] = newItem
+			}
 			found = true
 			break
 		}
 	}
 
-	// 如果不存在，添加新项
+	// 如果不存在该群组，添加新项
 	if !found {
 		existingList.Items = append(existingList.Items, newItem)
+		shouldUpdate = true
 	}
 
-	// 按时间戳倒序排序
-	gdb.sortContextListByTimestamp(existingList)
+	// 如果需要更新，保存数据
+	if shouldUpdate {
+		// 按时间戳倒序排序
+		gdb.sortContextListByTimestamp(existingList)
+		return gdb.saveMetaIdContextList(existingList)
+	}
 
-	// 保存更新后的群列表
-	return gdb.saveMetaIdContextList(existingList)
+	// 不需要更新，直接返回
+	return nil
 }
 
 // 从用户的群列表中移除群组

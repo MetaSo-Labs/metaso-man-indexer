@@ -119,7 +119,7 @@ type SimpleGroupChat struct {
 	ContentType string      `json:"contentType"`
 	Encryption  string      `json:"encryption"`
 	Timestamp   interface{} `json:"timestamp"`
-	ReplyTx     string      `json:"replyTx"`
+	ReplyPin    string      `json:"replyPin"`
 }
 
 /*
@@ -146,7 +146,7 @@ type SimpleFileGroupChat struct {
 	FileType   string      `json:"fileType"` //png/jpg/gif
 	NickName   string      `json:"nickName"`
 	Timestamp  interface{} `json:"timestamp"`
-	ReplyTx    string      `json:"replyTx"`
+	ReplyPin   string      `json:"replyPin"`
 }
 
 /*
@@ -338,6 +338,51 @@ type SimpleGroupResidueRedEnvelope struct {
 	FtName            string      `json:"ftName"`
 }
 
+//private chat
+/*
+SimpleMsg
+{
+	"to": "{metaid}"
+	"encrypt": "",
+	"content": "",
+	"contentType": "",
+	"timestamp": 0,
+	"replyPin": "{pinId}"
+}
+*/
+type SimpleMsg struct {
+	To          string      `json:"to"`
+	Encrypt     string      `json:"encrypt"`
+	Content     string      `json:"content"`
+	ContentType string      `json:"contentType"`
+	Timestamp   interface{} `json:"timestamp"`
+	ReplyPin    string      `json:"replyPin"`
+}
+
+/*
+*
+SimpleFileMsg
+
+	{
+		"to": "{metaid}"
+		"encrypt": "",
+		"attachment": "metafile://pinId.jpg",
+		"fileType": "png/jpg/doc/pdf/excel",
+		"timestamp": 0,
+		"replyPin": "{pinId}"
+	}
+
+*
+*/
+type SimpleFileMsg struct {
+	To         string      `json:"to"`
+	Encrypt    string      `json:"encrypt"`
+	Attachment string      `json:"attachment"`
+	FileType   string      `json:"fileType"`
+	Timestamp  interface{} `json:"timestamp"`
+	ReplyPin   string      `json:"replyPin"`
+}
+
 // 协议常量定义
 const (
 	MonitorSimpleCommunity               = "SimpleCommunity"
@@ -349,4 +394,7 @@ const (
 	MonitorSimpleGroupRedEnvelope        = "SimpleGroupRedEnvelope"
 	MonitorSimpleGroupOpenRedEnvelope    = "SimpleGroupOpenRedEnvelope"
 	MonitorSimpleGroupResidueRedEnvelope = "SimpleGroupResidueRedEnvelope"
+
+	MonitorSimpleMsg     = "SimpleMsg"
+	MonitorSimpleFileMsg = "SimpleFileMsg"
 )

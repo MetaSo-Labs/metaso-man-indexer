@@ -408,8 +408,14 @@ func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.Ta
 
 // 更新群组最新聊天记录
 func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupChatV3) error {
-	// 创建最新聊天记录
-	latestChat := &models.TalkGroupLatestChat{
+	// 先获取现有的最新聊天记录
+	existingLatestChat, err := cdb.GetGroupLatestChat(groupId)
+	if err != nil {
+		return err
+	}
+
+	// 创建新的最新聊天记录
+	newLatestChat := &models.TalkGroupLatestChat{
 		GroupId:          groupId,
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
@@ -418,22 +424,53 @@ func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupC
 		LastMessagePinId: chat.PinId,
 		MetaId:           chat.MetaId,
 		TxId:             chat.TxId,
+		PinId:            chat.PinId,
 		Protocol:         chat.Protocol,
 		ContentType:      chat.ContentType,
 		Encryption:       chat.Encryption,
-		ReplyTx:          chat.ReplyTx,
+		ReplyPin:         chat.ReplyPin,
 		Chain:            chat.Chain,
+		BlockHeight:      chat.BlockHeight,
 	}
 
-	// 序列化数据
-	data, err := json.Marshal(latestChat)
-	if err != nil {
-		return err
+	// 如果不存在现有数据，直接保存
+	if existingLatestChat == nil {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(groupId)
+		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 使用 GroupId 作为主键保存到 TalkGroupLatestChatCollection
-	key := []byte(groupId)
-	return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+	// 判断是否需要更新
+	shouldUpdate := false
+
+	// 1. 先判断pinId是否一样
+	if existingLatestChat.LastMessagePinId == chat.PinId {
+		// pinId一样，检查blockHeight是否不一样
+		if existingLatestChat.BlockHeight != chat.BlockHeight {
+			shouldUpdate = true
+		}
+	} else {
+		// pinId不一样，比较timestamp
+		if chat.Timestamp > existingLatestChat.Timestamp {
+			shouldUpdate = true
+		}
+	}
+
+	// 如果需要更新，则保存新数据
+	if shouldUpdate {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(groupId)
+		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
+	}
+
+	// 不需要更新，直接返回
+	return nil
 }
 
 // 获取群组最新聊天记录
@@ -473,8 +510,11 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 		Content:          chat.Content,
 		CreateAddress:    chat.Address,
 		LastMessagePinId: chat.PinId,
+		BlockHeight:      chat.BlockHeight,
 	}
 
+	//是否需要更新
+	shouldUpdate := false
 	// 查找是否已存在该群组的项
 	found := false
 	for i, item := range contextList.Items {
@@ -482,6 +522,10 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 			// 更新现有项
 			contextList.Items[i] = newItem
 			found = true
+			if item.LastMessagePinId != newItem.LastMessagePinId ||
+				item.BlockHeight != newItem.BlockHeight {
+				shouldUpdate = true
+			}
 			break
 		}
 	}
@@ -489,6 +533,11 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 	// 如果不存在，添加新项
 	if !found {
 		contextList.Items = append(contextList.Items, newItem)
+	}
+
+	// 如果不需要更新，直接返回
+	if !shouldUpdate {
+		return nil
 	}
 
 	// 按时间戳倒序排序
@@ -682,9 +731,10 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		Encryption:  simpleGroupChat.Encryption,
 		ChatType:    models.ChatTypeMsg,       // 默认为消息类型
 		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
-		ReplyTx:     simpleGroupChat.ReplyTx,
+		ReplyPin:    simpleGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
 	}
 
 	// 保存聊天消息到 TalkGroupChatPinCollection
@@ -868,8 +918,9 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		Encryption:  simpleFileGroupChat.Encrypt,
 		ChatType:    models.ChatTypeFile,      // 文件类型
 		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
-		ReplyTx:     simpleFileGroupChat.ReplyTx,
+		ReplyPin:    simpleFileGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
+		BlockHeight: pin.GenesisHeight,
 	}
 
 	// 保存聊天消息到 TalkGroupChatPinCollection

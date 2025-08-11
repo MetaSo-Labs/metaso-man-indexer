@@ -32,8 +32,8 @@ const (
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
 	// 消息队列相关数据库
-	TalkGroupChatQueueCollection           string = "talk_group_chat_queue"            // key: timestamp_pinId，value: chat消息数据
-	TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
+	TalkGroupChatQueueCollection string = "talk_group_chat_queue" // key: timestamp_pinId，value: chat消息数据
+	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
 
 	// 聊天相关数据库
 	TalkGroupChatPinCollection               string = "talk_group_chat_pin"                 // key: pinId
@@ -42,6 +42,12 @@ const (
 	TalkGroupResidueRedEnvelopePinCollection string = "talk_group_residue_red_envelope_pin" // key: pinId
 	TalkGroupChatTimestampCollection         string = "talk_group_chat_timestamp"           // key: groupId_timestamp，value: pinId_chatType_timestamp
 	TalkGroupChatTimestampOutCollection      string = "talk_group_chat_timestamp_out"       // key: groupId_timestamp，value: pinId_chatType_timestamp
+
+	//私聊
+	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
+	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: selfMetaId_otherMetaId_timestamp和otherMetaId_selfMetaId_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: selfMetaId_otherMetaId_timestamp和otherMetaId_selfMetaId_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat消息数据
 )
 
 type Pebble struct{}
@@ -127,10 +133,10 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueCollection, err)
 	}
-	err = open(TalkGroupChatQueueProcessingCollection)
-	if err != nil {
-		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueProcessingCollection, err)
-	}
+	// err = open(TalkGroupChatQueueProcessingCollection)
+	// if err != nil {
+	// 	return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueProcessingCollection, err)
+	// }
 
 	// 初始化聊天相关数据库
 	err = open(TalkGroupChatPinCollection)

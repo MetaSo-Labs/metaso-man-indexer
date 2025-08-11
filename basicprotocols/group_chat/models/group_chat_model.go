@@ -5,7 +5,6 @@ type TalkCommunityModel struct {
 	TxId        string   `json:"txId"`        //
 	PinId       string   `json:"pinId"`       //
 	MetaId      string   `json:"metaId"`
-	ZeroAddress string   `json:"zeroAddress"`
 	Address     string   `json:"address"`
 	PublicKey   string   `json:"publicKey"`
 	Name        string   `json:"name"`        //社区名称
@@ -86,7 +85,9 @@ type TalkGroupPerson struct {
 	UserName          string    `json:"userName"`
 	UserNickName      string    `json:"userNickName"`
 	GroupState        RoomState `json:"groupState"`
-	Timestamp         int64     `json:"timestamp"` //加入或离开群组的时间戳
+	Timestamp         int64     `json:"timestamp"`   //加入或离开群组的时间戳
+	BlockHeight       int64     `json:"blockHeight"` //区块高度
+	PinId             string    `json:"pinId"`       //加入或离开群组的PinId
 }
 
 type TalkGroupModel struct {
@@ -118,6 +119,7 @@ type TalkGroupModel struct {
 	Chain        string `json:"chain"`        //链类型
 	DeleteStatus int64  `json:"deleteStatus"` //删除状态，0-正常，1-删除
 	Timestamp    int64  `json:"timestamp"`    //创建你房间的时间戳
+	BlockHeight  int64  `json:"blockHeight"`  //区块高度
 }
 
 type TalkGroupTxV3 struct {
@@ -168,10 +170,11 @@ type TalkGroupChatV3 struct {
 	Encryption  string          `json:"encryption"`
 	ChatType    ChatType        `json:"chatType"`    //0-msg, 1-red, 2-img
 	InsideIndex ChatInsideIndex `json:"insideIndex"` //0-in, 1-out
-	ReplyTx     string          `json:"replyTx"`
+	ReplyPin    string          `json:"replyPin"`
 	ReplyInfo   *ReplyInfo      `json:"replyInfo"`
-	Timestamp   int64           `json:"timestamp"` //聊天记录时间戳
-	Chain       string          `json:"chain"`     //链类型
+	Timestamp   int64           `json:"timestamp"`   //聊天记录时间戳
+	Chain       string          `json:"chain"`       //链类型
+	BlockHeight int64           `json:"blockHeight"` //区块高度
 }
 
 type ReplyInfo struct {
@@ -302,6 +305,7 @@ type MetaIdContextItem struct {
 	Content          string   `json:"content"`          // 消息内容摘要
 	CreateAddress    string   `json:"createAddress"`    // 消息创建者地址
 	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
+	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
 }
 
 // 用户群列表
@@ -320,9 +324,11 @@ type TalkGroupLatestChat struct {
 	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
 	MetaId           string   `json:"metaId"`           // 消息创建者的MetaId
 	TxId             string   `json:"txId"`             // 消息的TxId
+	PinId            string   `json:"pinId"`            // 消息的PinId
 	Protocol         string   `json:"protocol"`         // 协议类型
 	ContentType      string   `json:"contentType"`      // 内容类型
 	Encryption       string   `json:"encryption"`       // 加密信息
-	ReplyTx          string   `json:"replyTx"`          // 回复消息的TxId
+	ReplyPin         string   `json:"replyPin"`         // 回复消息的PinId
 	Chain            string   `json:"chain"`            // 链类型
+	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
 }

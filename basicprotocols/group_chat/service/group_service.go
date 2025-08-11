@@ -115,6 +115,8 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 			ChatSettingType:  group.ChatSettingType,
 			DeleteStatus:     group.DeleteStatus,
 			Timestamp:        group.Timestamp,
+			Chain:            group.Chain,
+			BlockHeight:      group.BlockHeight,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -215,6 +217,8 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			ChatSettingType:  group.ChatSettingType,
 			DeleteStatus:     group.DeleteStatus,
 			Timestamp:        group.Timestamp,
+			Chain:            group.Chain,
+			BlockHeight:      group.BlockHeight,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -302,6 +306,8 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		ChatSettingType:  group.ChatSettingType,
 		DeleteStatus:     group.DeleteStatus,
 		Timestamp:        group.Timestamp,
+		Chain:            group.Chain,
+		BlockHeight:      group.BlockHeight,
 	}
 
 	return groupItem, nil
@@ -346,8 +352,32 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			ContentType: chat.ContentType,
 			Encryption:  chat.Encryption,
 			ChatType:    chat.ChatType,
-			ReplyTx:     chat.ReplyTx,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			RedMetaId:   "",
 			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+		}
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err != nil {
+				replyChat = nil
+			}
+			chatItem.ReplyInfo = &respond.ReplyInfo{
+				PinId:       replyChat.PinId,
+				MetaId:      replyChat.MetaId,
+				NickName:    replyChat.NickName,
+				Protocol:    replyChat.Protocol,
+				Content:     replyChat.Content,
+				ContentType: replyChat.ContentType,
+				Encryption:  replyChat.Encryption,
+				ChatType:    replyChat.ChatType,
+				Timestamp:   replyChat.Timestamp,
+				Chain:       replyChat.Chain,
+			}
+			chatItem.RedMetaId = replyChat.MetaId
+			chatItem.BlockHeight = replyChat.BlockHeight
 		}
 
 		chatItems = append(chatItems, chatItem)
