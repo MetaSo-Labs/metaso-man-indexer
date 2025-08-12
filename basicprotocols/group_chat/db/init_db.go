@@ -36,12 +36,14 @@ const (
 	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
 
 	// 聊天相关数据库
-	TalkGroupChatPinCollection            string = "talk_group_chat_pin"              // key: pinId
-	TalkGroupLuckyBagPinCollection        string = "talk_group_lucky_bag_pin"         // key: pinId
-	TalkGroupOpenLuckyBagPinCollection    string = "talk_group_open_lucky_bag_pin"    // key: pinId
-	TalkGroupResidueLuckyBagPinCollection string = "talk_group_residue_lucky_bag_pin" // key: pinId
-	TalkGroupChatTimestampCollection      string = "talk_group_chat_timestamp"        // key: groupId_timestamp，value: pinId_chatType_timestamp
-	TalkGroupChatTimestampOutCollection   string = "talk_group_chat_timestamp_out"    // key: groupId_timestamp，value: pinId_chatType_timestamp
+	TalkGroupChatPinCollection             string = "talk_group_chat_pin"               // key: pinId
+	TalkGroupLuckyBagPinCollection         string = "talk_group_lucky_bag_pin"          // key: pinId
+	TalkGroupOpenLuckyBagPinCollection     string = "talk_group_open_lucky_bag_pin"     // key: pinId
+	TalkGroupResidueLuckyBagPinCollection  string = "talk_group_residue_lucky_bag_pin"  // key: pinId
+	TalkGroupOpenLuckyBagListCollection    string = "talk_group_open_lucky_bag_list"    // key: luckyBagPinId，value: []{openPinId, groupId, timestamp, createAddress}
+	TalkGroupResidueLuckyBagListCollection string = "talk_group_residue_lucky_bag_list" // key: luckyBagPinId，value: []{residuePinId, groupId, timestamp, createAddress}
+	TalkGroupChatTimestampCollection       string = "talk_group_chat_timestamp"         // key: groupId_timestamp，value: pinId_chatType_timestamp
+	TalkGroupChatTimestampOutCollection    string = "talk_group_chat_timestamp_out"     // key: groupId_timestamp，value: pinId_chatType_timestamp
 
 	//私聊
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
@@ -154,6 +156,14 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupResidueLuckyBagPinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupResidueLuckyBagPinCollection, err)
+	}
+	err = open(TalkGroupOpenLuckyBagListCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupOpenLuckyBagListCollection, err)
+	}
+	err = open(TalkGroupResidueLuckyBagListCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupResidueLuckyBagListCollection, err)
 	}
 	err = open(TalkGroupChatTimestampCollection)
 	if err != nil {

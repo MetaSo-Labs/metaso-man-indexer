@@ -350,6 +350,126 @@ func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*
 	return &residue, nil
 }
 
+// 保存抢红包列表记录
+func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createAddress string) error {
+	// 获取现有的列表
+	list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
+	if err != nil {
+		return err
+	}
+
+	// 添加新的记录
+	newItem := &models.OpenLuckyBagListItem{
+		OpenPinId:     openPinId,
+		GroupId:       groupId,
+		Timestamp:     timestamp,
+		CreateAddress: createAddress,
+	}
+
+	// 检查是否已存在
+	found := false
+	for _, item := range list.Items {
+		if item.OpenPinId == openPinId {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		list.Items = append(list.Items, newItem)
+	}
+
+	// 保存更新后的列表
+	data, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(luckyBagPinId)
+	return Pb[TalkGroupOpenLuckyBagListCollection].Set(key, data, pebble.Sync)
+}
+
+// 获取抢红包列表
+func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyBagList, error) {
+	key := []byte(luckyBagPinId)
+	value, closer, err := Pb[TalkGroupOpenLuckyBagListCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.OpenLuckyBagList{LuckyBagPinId: luckyBagPinId, Items: []*models.OpenLuckyBagListItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var list models.OpenLuckyBagList
+	err = json.Unmarshal(value, &list)
+	if err != nil {
+		return nil, err
+	}
+
+	return &list, nil
+}
+
+// 保存回收红包列表记录
+func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createAddress string) error {
+	// 获取现有的列表
+	list, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
+	if err != nil {
+		return err
+	}
+
+	// 添加新的记录
+	newItem := &models.ResidueLuckyBagListItem{
+		ResiduePinId:  residuePinId,
+		GroupId:       groupId,
+		Timestamp:     timestamp,
+		CreateAddress: createAddress,
+	}
+
+	// 检查是否已存在
+	found := false
+	for _, item := range list.Items {
+		if item.ResiduePinId == residuePinId {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		list.Items = append(list.Items, newItem)
+	}
+
+	// 保存更新后的列表
+	data, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(luckyBagPinId)
+	return Pb[TalkGroupResidueLuckyBagListCollection].Set(key, data, pebble.Sync)
+}
+
+// 获取回收红包列表
+func (cdb *ChatDB) GetResidueLuckyBagList(luckyBagPinId string) (*models.ResidueLuckyBagList, error) {
+	key := []byte(luckyBagPinId)
+	value, closer, err := Pb[TalkGroupResidueLuckyBagListCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.ResidueLuckyBagList{LuckyBagPinId: luckyBagPinId, Items: []*models.ResidueLuckyBagListItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var list models.ResidueLuckyBagList
+	err = json.Unmarshal(value, &list)
+	if err != nil {
+		return nil, err
+	}
+
+	return &list, nil
+}
+
 // 获取用户的群列表
 func (cdb *ChatDB) GetMetaIdContextList(metaId string) (*models.MetaIdContextList, error) {
 	key := []byte(metaId)
@@ -1029,6 +1149,8 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
 		Chain:               pin.ChainName,
 	}
 
+	//
+
 	// 保存红包信息
 	err = cdb.SaveLuckyBag(redEnvelope)
 	if err != nil {
@@ -1102,8 +1224,8 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 	var vins []*models.TxIn
 	if simpleOpenLuckyBag.Used != nil {
 		vins = append(vins, &models.TxIn{
-			OutTxID: "", // 需要从交易中解析
-			Index:   0,  // 需要从交易中解析
+			OutTxID: simpleOpenLuckyBag.LuckyBagTxId,
+			Index:   toUint64(simpleOpenLuckyBag.Used.Index),
 		})
 	}
 
@@ -1138,6 +1260,13 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 	err = cdb.SaveOpenLuckyBag(openLuckyBag)
 	if err != nil {
 		return err
+	}
+
+	// 保存抢红包列表记录
+	err = cdb.SaveOpenLuckyBagList(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateAddress)
+	if err != nil {
+		log.Printf("SaveOpenLuckyBagList err: %v", err)
+		// 不返回错误，因为主流程已经成功
 	}
 
 	// 创建聊天消息模型（用于群聊显示）
@@ -1245,6 +1374,13 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription) error {
 	err = cdb.SaveResidueLuckyBag(residueLuckyBag)
 	if err != nil {
 		return err
+	}
+
+	// 保存回收红包列表记录
+	err = cdb.SaveResidueLuckyBagList(simpleResidueLuckyBag.LuckyBagPinId, pin.Id, simpleResidueLuckyBag.GroupId, pin.Timestamp, pin.CreateAddress)
+	if err != nil {
+		log.Printf("SaveResidueLuckyBagList err: %v", err)
+		// 不返回错误，因为主流程已经成功
 	}
 
 	// 创建聊天消息模型（用于群聊显示）

@@ -343,3 +343,31 @@ type TalkPrivateChatV3 struct {
 	Chain       string     `json:"chain"`       //链类型
 	BlockHeight int64      `json:"blockHeight"` //区块高度
 }
+
+// 抢红包列表项
+type OpenLuckyBagListItem struct {
+	OpenPinId     string `json:"openPinId"`     // 抢红包的PinId
+	GroupId       string `json:"groupId"`       // 群组ID
+	Timestamp     int64  `json:"timestamp"`     // 时间戳
+	CreateAddress string `json:"createAddress"` // 创建地址
+}
+
+// 抢红包列表
+type OpenLuckyBagList struct {
+	LuckyBagPinId string                  `json:"luckyBagPinId"` // 红包PinId
+	Items         []*OpenLuckyBagListItem `json:"items"`         // 抢红包列表项
+}
+
+// 回收红包列表项
+type ResidueLuckyBagListItem struct {
+	ResiduePinId  string `json:"residuePinId"`  // 回收红包的PinId
+	GroupId       string `json:"groupId"`       // 群组ID
+	Timestamp     int64  `json:"timestamp"`     // 时间戳
+	CreateAddress string `json:"createAddress"` // 创建地址
+}
+
+// 回收红包列表
+type ResidueLuckyBagList struct {
+	LuckyBagPinId string                     `json:"luckyBagPinId"` // 红包PinId
+	Items         []*ResidueLuckyBagListItem `json:"items"`         // 回收红包列表项
+}
