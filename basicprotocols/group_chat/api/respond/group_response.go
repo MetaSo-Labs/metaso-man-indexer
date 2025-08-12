@@ -2,6 +2,12 @@ package respond
 
 import "manindexer/basicprotocols/group_chat/models"
 
+type UserInfo struct {
+	Name        string `json:"name"`
+	Avatar      string `json:"avatar"`
+	AvatarImage string `json:"avatarImage"`
+}
+
 type GroupResponse struct {
 	Total int64        `json:"total"`
 	List  []*GroupItem `json:"list"`
@@ -21,22 +27,23 @@ type GroupItem struct {
 	// RoomGenesis           string `json:"roomGenesis"`           //roomJoinType为2时有值，genesis
 	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       //roomJoinType为2时有值，token的限制
 	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` //
-	RoomAvatarUrl       string `json:"roomAvatarUrl"`       //房间头像url
-	RoomNinePersonHash  string `json:"roomNinePersonHash"`  //房间前9位人员的metaId总hash值
-	RoomNewestTxId      string `json:"roomNewestTxId"`      //房间最新聊天内容的txId
-	RoomNewestPinId     string `json:"roomNewestPinId"`     //房间最新聊天内容的pinId
-	RoomNewestMetaId    string `json:"roomNewestMetaId"`    //房间最新聊天内容的MetaId
-	RoomNewestUserName  string `json:"roomNewestUserName"`  //房间最新聊天内容的MetaId
-	RoomNewestProtocol  string `json:"roomNewestProtocol"`  //房间最新聊天内容的协议类型
-	RoomNewestContent   string `json:"roomNewestContent"`   //房间最新聊天内容
-	RoomNewestTimestamp int64  `json:"roomNewestTimestamp"` //房间最新聊天的时间戳
-	CreateUserMetaId    string `json:"createUserMetaId"`    //创建人的metaId
-	UserCount           int64  `json:"userCount"`           //房间人数
-	ChatSettingType     int64  `json:"chatSettingType"`     //用于设置发言限制， 0-所有人，1-管理员
-	DeleteStatus        int64  `json:"deleteStatus"`        //删除状态，0-正常，1-删除
-	Timestamp           int64  `json:"timestamp"`           //创建你房间的时间戳
-	Chain               string `json:"chain"`               //链类型
-	BlockHeight         int64  `json:"blockHeight"`         //区块高度
+	RoomAvatarUrl       string    `json:"roomAvatarUrl"`       //房间头像url
+	RoomNinePersonHash  string    `json:"roomNinePersonHash"`  //房间前9位人员的metaId总hash值
+	RoomNewestTxId      string    `json:"roomNewestTxId"`      //房间最新聊天内容的txId
+	RoomNewestPinId     string    `json:"roomNewestPinId"`     //房间最新聊天内容的pinId
+	RoomNewestMetaId    string    `json:"roomNewestMetaId"`    //房间最新聊天内容的MetaId
+	RoomNewestUserName  string    `json:"roomNewestUserName"`  //房间最新聊天内容的MetaId
+	RoomNewestProtocol  string    `json:"roomNewestProtocol"`  //房间最新聊天内容的协议类型
+	RoomNewestContent   string    `json:"roomNewestContent"`   //房间最新聊天内容
+	RoomNewestTimestamp int64     `json:"roomNewestTimestamp"` //房间最新聊天的时间戳
+	CreateUserMetaId    string    `json:"createUserMetaId"`    //创建人的metaId
+	CreateUserInfo      *UserInfo `json:"createUserInfo"`      //创建人的信息
+	UserCount           int64     `json:"userCount"`           //房间人数
+	ChatSettingType     int64     `json:"chatSettingType"`     //用于设置发言限制， 0-所有人，1-管理员
+	DeleteStatus        int64     `json:"deleteStatus"`        //删除状态，0-正常，1-删除
+	Timestamp           int64     `json:"timestamp"`           //创建你房间的时间戳
+	Chain               string    `json:"chain"`               //链类型
+	BlockHeight         int64     `json:"blockHeight"`         //区块高度
 }
 
 type GroupChatResponse struct {
@@ -46,11 +53,11 @@ type GroupChatResponse struct {
 }
 
 type GroupChatItem struct {
-	GroupId   string `json:"groupId"`   //房间ID 唯一
-	MetanetId string `json:"metanetId"` //
-	TxId      string `json:"txId"`
-	MetaId    string `json:"metaId"`
-	// UserInfo    *model.UserInfoResp `json:"userInfo"`
+	GroupId   string    `json:"groupId"`   //房间ID 唯一
+	MetanetId string    `json:"metanetId"` //
+	TxId      string    `json:"txId"`
+	MetaId    string    `json:"metaId"`
+	UserInfo  *UserInfo `json:"userInfo"`
 	// AvatarTxId  string              `json:"avatarTxId"`
 	// AvatarImage string              `json:"avatarImage"`
 	// AvatarType  model.AvatarType    `json:"avatarType"`
@@ -71,9 +78,9 @@ type GroupChatItem struct {
 }
 
 type ReplyInfo struct {
-	PinId  string `json:"pinId"`
-	MetaId string `json:"metaId"`
-	// UserInfo    *models.UserInfoResp `json:"userInfo"`
+	PinId       string          `json:"pinId"`
+	MetaId      string          `json:"metaId"`
+	UserInfo    *UserInfo       `json:"userInfo"`
 	NickName    string          `json:"nickName"`
 	Protocol    string          `json:"protocol"`
 	Content     string          `json:"content"`
@@ -91,25 +98,27 @@ type GroupMemberResponse struct {
 }
 
 type GroupMemberItem struct {
-	MetaId    string `json:"metaId"`
-	Name      string `json:"name"`
-	Address   string `json:"address"`
-	TimeStr   string `json:"timeStr"`
-	Timestamp int64  `json:"timestamp"`
+	MetaId    string    `json:"metaId"`
+	Name      string    `json:"name"`
+	Address   string    `json:"address"`
+	UserInfo  *UserInfo `json:"userInfo"`
+	TimeStr   string    `json:"timeStr"`
+	Timestamp int64     `json:"timestamp"`
 }
-type RoomPersonItem struct {
-	GroupId   string `json:"groupId"`   //房间ID 唯一
-	MetanetId string `json:"metanetId"` //房间ID 唯一
-	MetaId    string `json:"metaId"`    //用户的MetaId
-	Address   string `json:"address"`   //用户的00地址
-	// UserInfo    *model.UserInfoResp `json:"userInfo"`
-	Name        string `json:"name"`        //用户名称
-	AvatarTxId  string `json:"avatarTxId"`  //用户当前头像
-	AvatarImage string `json:"avatarImage"` //用户当前头像路由
-	// AvatarType  model.AvatarType `json:"avatarType"`  //用户当前头像类型
-	RoomState models.RoomState `json:"roomState"`
-	Timestamp int64            `json:"timestamp"` //加入或离开房间的时间戳
-}
+
+// type RoomPersonItem struct {
+// 	GroupId   string `json:"groupId"`   //房间ID 唯一
+// 	MetanetId string `json:"metanetId"` //房间ID 唯一
+// 	MetaId    string `json:"metaId"`    //用户的MetaId
+// 	Address   string `json:"address"`   //用户的00地址
+// 	// UserInfo    *model.UserInfoResp `json:"userInfo"`
+// 	Name        string `json:"name"`        //用户名称
+// 	AvatarTxId  string `json:"avatarTxId"`  //用户当前头像
+// 	AvatarImage string `json:"avatarImage"` //用户当前头像路由
+// 	// AvatarType  model.AvatarType `json:"avatarType"`  //用户当前头像类型
+// 	RoomState models.RoomState `json:"roomState"`
+// 	Timestamp int64            `json:"timestamp"` //加入或离开房间的时间戳
+// }
 
 // type GroupInfoResponse struct {
 // 	CommunityId           string `json:"communityId"`           //社区Id 唯一
@@ -146,3 +155,24 @@ type RoomPersonItem struct {
 // 	Timestamp       int64  `json:"timestamp"`       //创建你房间的时间戳
 // 	Chain           string `json:"chain"`           //链类型
 // }
+
+// GroupPersonResponse 群组成员信息响应
+type GroupPersonResponse struct {
+	IsInGroup bool             `json:"isInGroup"` // 是否在群组中
+	Person    *GroupPersonItem `json:"person"`    // 成员信息，如果不在群组中则为null
+}
+
+// GroupPersonItem 群组成员信息项
+type GroupPersonItem struct {
+	GroupIdMetaIdHash string `json:"groupIdMetaIdHash"` // 群组ID与成员唯一标识
+	GroupId           string `json:"groupId"`           // 群组ID
+	MetaId            string `json:"metaId"`            // 用户MetaId
+	Address           string `json:"address"`           // 用户地址
+	AvatarTxId        string `json:"avatarTxId"`        // 头像TxId
+	UserName          string `json:"userName"`          // 用户名
+	UserNickName      string `json:"userNickName"`      // 用户昵称
+	GroupState        int64  `json:"groupState"`        // 群组状态：1-在群中，-1-已离开
+	Timestamp         int64  `json:"timestamp"`         // 加入或离开群组的时间戳
+	BlockHeight       int64  `json:"blockHeight"`       // 区块高度
+	PinId             string `json:"pinId"`             // 加入或离开群组的PinId
+}

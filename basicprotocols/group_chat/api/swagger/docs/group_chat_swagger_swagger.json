@@ -1,0 +1,43 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能",
+        "title": "Group Chat API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "0.0.0.0:7568",
+    "basePath": "/",
+    "paths": {},
+    "tags": [
+        {
+            "description": "数据库查询相关API，用于查看Pebble数据库中的数据",
+            "name": "数据库查询"
+        },
+        {
+            "description": "群组管理相关API，包括群组信息、成员管理等",
+            "name": "群组管理"
+        },
+        {
+            "description": "社区管理相关API，包括社区信息、成员管理等",
+            "name": "社区管理"
+        },
+        {
+            "description": "聊天功能相关API，包括消息、队列等",
+            "name": "聊天功能"
+        },
+        {
+            "description": "用户管理相关API，包括用户信息、群列表等",
+            "name": "用户管理"
+        }
+    ]
+}

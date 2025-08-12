@@ -297,12 +297,15 @@ type TalkGroupResidueRedEnvelopeV3 struct {
 	Timestamp         int64             `json:"timestamp"` //聊天记录时间戳
 }
 
-// 用户群列表项
+// 用户群列表项 + 用户私聊列表项
 type MetaIdContextItem struct {
 	GroupId          string   `json:"groupId"`          // 群组ID
+	MetaId           string   `json:"metaId"`           // 消息创建者的MetaId
+	Type             string   `json:"type"`             // 类型，1-群聊，2-私聊
 	Timestamp        int64    `json:"timestamp"`        // 最新消息时间戳
 	ChatType         ChatType `json:"chatType"`         // 消息类型
 	Content          string   `json:"content"`          // 消息内容摘要
+	CreateMetaId     string   `json:"createMetaId"`     // 消息创建者的MetaId
 	CreateAddress    string   `json:"createAddress"`    // 消息创建者地址
 	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
 	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
@@ -331,4 +334,24 @@ type TalkGroupLatestChat struct {
 	ReplyPin         string   `json:"replyPin"`         // 回复消息的PinId
 	Chain            string   `json:"chain"`            // 链类型
 	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
+}
+
+// 私聊消息模型
+type TalkPrivateChatV3 struct {
+	From        string     `json:"from"`        // 发送者MetaId
+	FromAddress string     `json:"fromAddress"` // 发送者地址
+	To          string     `json:"to"`          // 接收者MetaId
+	ToAddress   string     `json:"toAddress"`   // 接收者地址
+	TxId        string     `json:"txId"`
+	PinId       string     `json:"pinId"` //
+	Protocol    string     `json:"protocol"`
+	Content     string     `json:"content"`
+	ContentType string     `json:"contentType"`
+	Encryption  string     `json:"encryption"`
+	ChatType    ChatType   `json:"chatType"` //0-msg, 1-red, 2-img
+	ReplyPin    string     `json:"replyPin"`
+	ReplyInfo   *ReplyInfo `json:"replyInfo"`
+	Timestamp   int64      `json:"timestamp"`   //聊天记录时间戳
+	Chain       string     `json:"chain"`       //链类型
+	BlockHeight int64      `json:"blockHeight"` //区块高度
 }

@@ -429,3 +429,45 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		List:  memberItems,
 	}, nil
 }
+
+// FetchGroupPerson 获取群组成员信息
+func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPersonResponse, error) {
+	// 参数验证
+	if req.MetaId == "" {
+		return nil, fmt.Errorf("metaId is empty")
+	}
+	if req.GroupId == "" {
+		return nil, fmt.Errorf("groupId is empty")
+	}
+
+	// 获取群组成员信息
+	person, err := groupDB.GetGroupPersonByGroupIdAndMetaId(req.GroupId, req.MetaId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建响应
+	response := &respond.GroupPersonResponse{
+		IsInGroup: false,
+		Person:    nil,
+	}
+
+	if person != nil {
+		response.IsInGroup = person.GroupState == models.RoomStateIn
+		response.Person = &respond.GroupPersonItem{
+			GroupIdMetaIdHash: person.GroupIdMetaIdHash,
+			GroupId:           person.GroupId,
+			MetaId:            person.MetaId,
+			Address:           person.Address,
+			AvatarTxId:        person.AvatarTxId,
+			UserName:          person.UserName,
+			UserNickName:      person.UserNickName,
+			GroupState:        int64(person.GroupState),
+			Timestamp:         person.Timestamp,
+			BlockHeight:       person.BlockHeight,
+			PinId:             person.PinId,
+		}
+	}
+
+	return response, nil
+}

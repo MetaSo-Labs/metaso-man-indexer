@@ -505,9 +505,12 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 	// 创建新的群列表项
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
+		MetaId:           "",
+		Type:             "1",
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,
+		CreateMetaId:     chat.MetaId,
 		CreateAddress:    chat.Address,
 		LastMessagePinId: chat.PinId,
 		BlockHeight:      chat.BlockHeight,
@@ -707,6 +710,13 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	// 检查是否已经保存过该 PinId
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
+		if existingChat.BlockHeight != pin.GenesisHeight {
+			existingChat.BlockHeight = pin.GenesisHeight
+			err = cdb.SaveChat(existingChat)
+			if err != nil {
+				return err
+			}
+		}
 		// 已经存在，跳过处理
 		return nil
 	}
@@ -895,6 +905,13 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	// 检查是否已经保存过该 PinId
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
+		if existingChat.BlockHeight != pin.GenesisHeight {
+			existingChat.BlockHeight = pin.GenesisHeight
+			err = cdb.SaveChat(existingChat)
+			if err != nil {
+				return err
+			}
+		}
 		// 已经存在，跳过处理
 		return nil
 	}

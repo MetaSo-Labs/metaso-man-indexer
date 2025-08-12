@@ -45,8 +45,8 @@ const (
 
 	//私聊
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
-	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: selfMetaId_otherMetaId_timestamp和otherMetaId_selfMetaId_timestamp，value: pinId_chatType_timestamp
-	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: selfMetaId_otherMetaId_timestamp和otherMetaId_selfMetaId_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp和to_from_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp和to_from_timestamp，value: pinId_chatType_timestamp
 	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat消息数据
 )
 
@@ -162,6 +162,24 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupChatTimestampOutCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestampOutCollection, err)
+	}
+
+	// 初始化私聊相关数据库
+	err = open(TalkPrivateChatPinCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatPinCollection, err)
+	}
+	err = open(TalkPrivateChatTimestampCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatTimestampCollection, err)
+	}
+	err = open(TalkPrivateChatTimestampOutCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatTimestampOutCollection, err)
+	}
+	err = open(TalkPrivateChatQueueCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatQueueCollection, err)
 	}
 	return nil
 }

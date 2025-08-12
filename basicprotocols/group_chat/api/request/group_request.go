@@ -53,3 +53,9 @@ type FetchLatestChatGroupListRequest struct {
 // 	TxId    string `form:"txId"`
 // 	Address string `form:"address"`
 // }
+
+// FetchGroupPersonRequest 获取群组成员信息请求
+type FetchGroupPersonRequest struct {
+	MetaId  string `form:"metaId"`
+	GroupId string `form:"groupId"`
+}

@@ -223,3 +223,40 @@ func GetGroupMemberList(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary 获取群组成员信息
+// @Description 根据metaId和groupId获取TalkGroupPersonCollection信息，判断用户是否在指定群组中
+// @Produce json
+// @Param metaId query string true "用户MetaId"
+// @Param groupId query string true "群组ID"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupPersonResponse} "成功返回群组成员信息"
+// @Router /group-chat/group-person [get]
+func GetGroupPerson(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchGroupPersonRequest{
+			MetaId:  c.DefaultQuery("metaId", ""),
+			GroupId: c.DefaultQuery("groupId", ""),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchGroupPerson(req)
+	if err != nil {
+		log.Printf("Failed to fetch group person for metaId %s and groupId %s: %v", req.MetaId, req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

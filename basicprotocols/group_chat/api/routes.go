@@ -23,6 +23,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// 获取群组成员列表
 		group.GET("/group-member-list", GetGroupMemberList)
+
+		// 获取群组成员信息
+		group.GET("/group-person", GetGroupPerson)
 	}
 }
 
