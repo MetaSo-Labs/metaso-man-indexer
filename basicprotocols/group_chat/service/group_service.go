@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	groupDB  *db.GroupDB
-	chatDB   *db.ChatDB
-	pebbleDB *db.Pebble
+	groupDB   *db.GroupDB
+	chatDB    *db.ChatDB
+	privateDB *db.PrivateChatDB
+	pebbleDB  *db.Pebble
 )
 
 // InitService 初始化服务
@@ -24,6 +25,7 @@ func InitService(indexer *indexer.GroupChatIndexer) error {
 	pebbleDB = indexer.GetPebble()
 	groupDB = indexer.GetGroupDB()
 	chatDB = indexer.GetChatDB()
+	privateDB = indexer.GetPrivateDB()
 
 	// 启动聊天队列处理器
 	chatDB.StartQueueProcessor(groupDB)
@@ -470,4 +472,192 @@ func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPerso
 	}
 
 	return response, nil
+}
+
+// FetchLatestChatInfoList 获取最新聊天信息列表（群聊+私聊）
+func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*respond.ChatInfoResponse, error) {
+	// 设置默认分页参数
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+	if req.Cursor <= 0 {
+		req.Cursor = 1
+	}
+
+	// 获取用户的上下文列表（群聊+私聊）
+	contextList, err := chatDB.GetMetaIdContextList(req.MetaId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为响应格式
+	var chatInfoItems []*respond.ChatInfoItem
+	for _, item := range contextList.Items {
+		chatInfoItem := &respond.ChatInfoItem{
+			Type:             item.Type,
+			GroupId:          item.GroupId,
+			MetaId:           item.MetaId,
+			Timestamp:        item.Timestamp,
+			ChatType:         int64(item.ChatType),
+			Content:          item.Content,
+			CreateMetaId:     item.CreateMetaId,
+			CreateAddress:    item.CreateAddress,
+			LastMessagePinId: item.LastMessagePinId,
+			BlockHeight:      item.BlockHeight,
+		}
+
+		// 根据类型处理不同字段
+		if item.Type == "1" || item.Type == "" {
+			item.Type = "1"
+			// 群聊类型，获取群组详细信息
+			group, err := groupDB.GetGroupInfoByGroupId(item.GroupId)
+			if err != nil || group == nil {
+				continue
+			}
+
+			// 获取群组最新聊天信息
+			latestChat, err := chatDB.GetGroupLatestChat(item.GroupId)
+			if err != nil {
+				// 如果获取失败，使用默认值
+				latestChat = nil
+			}
+
+			// 填充群聊特有字段
+			chatInfoItem.CommunityId = group.CommunityId
+			chatInfoItem.RoomName = group.RoomName
+			chatInfoItem.RoomNote = group.RoomNote
+			chatInfoItem.RoomType = group.RoomType
+			chatInfoItem.RoomStatus = group.RoomStatus
+			chatInfoItem.RoomJoinType = group.RoomJoinType
+			chatInfoItem.RoomAvatarUrl = group.RoomAvatarUrl
+			chatInfoItem.CreateUserMetaId = group.CreateUserMetaId
+			chatInfoItem.UserCount = 0 // 需要计算
+			chatInfoItem.ChatSettingType = group.ChatSettingType
+			chatInfoItem.DeleteStatus = group.DeleteStatus
+			chatInfoItem.Chain = group.Chain
+
+			// 如果获取到了最新聊天信息，更新相关字段
+			if latestChat != nil {
+				chatInfoItem.Content = latestChat.Content
+				chatInfoItem.LastMessagePinId = latestChat.LastMessagePinId
+				chatInfoItem.Timestamp = latestChat.Timestamp
+				chatInfoItem.ChatType = int64(latestChat.ChatType)
+				chatInfoItem.CreateMetaId = latestChat.MetaId
+				chatInfoItem.CreateAddress = latestChat.CreateAddress
+				chatInfoItem.BlockHeight = latestChat.BlockHeight
+			}
+		} else if item.Type == "2" {
+			// 私聊类型，获取私聊最新消息
+			latestPrivateChat, err := privateDB.GetPrivateChatByPinId(item.LastMessagePinId)
+			if err != nil {
+				// 如果获取失败，使用默认值
+				latestPrivateChat = nil
+			}
+
+			// 如果获取到了最新私聊信息，更新相关字段
+			if latestPrivateChat != nil {
+				chatInfoItem.Content = latestPrivateChat.Content
+				chatInfoItem.LastMessagePinId = latestPrivateChat.PinId
+				chatInfoItem.Timestamp = latestPrivateChat.Timestamp
+				chatInfoItem.ChatType = int64(latestPrivateChat.ChatType)
+				chatInfoItem.CreateMetaId = latestPrivateChat.From
+				chatInfoItem.CreateAddress = latestPrivateChat.FromAddress
+				chatInfoItem.BlockHeight = latestPrivateChat.BlockHeight
+				chatInfoItem.Chain = latestPrivateChat.Chain
+			}
+		}
+
+		chatInfoItems = append(chatInfoItems, chatInfoItem)
+	}
+
+	return &respond.ChatInfoResponse{
+		Total: int64(len(chatInfoItems)),
+		List:  chatInfoItems,
+	}, nil
+}
+
+// FetchPrivateChatList 获取私聊记录列表
+func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.PrivateChatResponse, error) {
+	// 设置默认分页参数
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	var chats []*models.TalkPrivateChatV3
+	var err error
+
+	if req.Timestamp > 0 {
+		// 根据时间戳范围获取私聊记录
+		chats, err = privateDB.GetPrivateChatsByMetaIdsAndTimestampRange(req.MetaId, req.OtherMetaId, req.Timestamp, req.Size)
+	} else {
+		// 获取最新的私聊记录
+		chats, err = privateDB.GetLatestPrivateChatsByMetaIds(req.MetaId, req.OtherMetaId, req.Size)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("private chats: %+v\n", chats)
+
+	// 转换为响应格式
+	var chatItems []*respond.PrivateChatItem
+	var nextTimestamp int64 = 0
+
+	for i, chat := range chats {
+		chatItem := &respond.PrivateChatItem{
+			From:        chat.From,
+			To:          chat.To,
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			MetaId:      chat.From, // 消息创建者MetaId
+			NickName:    "",        // 需要从用户信息中获取
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    int64(chat.ChatType),
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			RedMetaId:   "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+		}
+
+		// 处理回复消息
+		if chat.ReplyPin != "" {
+			replyChat, err := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
+			if err != nil {
+				replyChat = nil
+			}
+			if replyChat != nil {
+				chatItem.ReplyInfo = &respond.ReplyInfo{
+					PinId:       replyChat.PinId,
+					MetaId:      replyChat.From,
+					NickName:    "", // 私聊消息没有NickName字段
+					Protocol:    replyChat.Protocol,
+					Content:     replyChat.Content,
+					ContentType: replyChat.ContentType,
+					Encryption:  replyChat.Encryption,
+					ChatType:    replyChat.ChatType,
+					Timestamp:   replyChat.Timestamp,
+					Chain:       replyChat.Chain,
+				}
+				chatItem.RedMetaId = replyChat.From
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+
+		// 记录下一条消息的时间戳（用于分页）
+		if i == len(chats)-1 && len(chats) > 0 {
+			nextTimestamp = chat.Timestamp
+		}
+	}
+
+	return &respond.PrivateChatResponse{
+		Total:         int64(len(chatItems)),
+		NextTimestamp: nextTimestamp,
+		List:          chatItems,
+	}, nil
 }

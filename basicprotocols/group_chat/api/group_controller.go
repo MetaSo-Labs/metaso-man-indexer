@@ -260,3 +260,100 @@ func GetGroupPerson(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary 获取最新聊天信息列表（群聊+私聊）
+// @Description 获取用户的最新聊天信息列表，包括群聊和私聊，基于最新聊天时间排序
+// @Produce json
+// @Param metaId query string true "用户MetaId"
+// @Param cursor query int false "游标，默认为1"
+// @Param size query int false "每页大小，默认为20"
+// @Param timestamp query int false "时间戳"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.ChatInfoResponse} "成功返回最新聊天信息列表"
+// @Router /group-chat/user/latest-chat-info-list [get]
+func GetLatestChatInfoList(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchLatestChatInfoListRequest{
+			MetaId: c.DefaultQuery("metaId", ""),
+			Cursor: func() int64 {
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				return cursor
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+			Timestamp: func() int64 {
+				timestamp, _ := strconv.ParseInt(c.DefaultQuery("timestamp", "0"), 10, 64)
+				return timestamp
+			}(),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchLatestChatInfoList(req)
+	if err != nil {
+		log.Printf("Failed to fetch latest chat info list for metaId %s: %v", req.MetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary 获取私聊记录
+// @Description 获取两个用户之间的私聊记录，支持时间戳分页
+// @Produce json
+// @Param metaId query string true "当前用户MetaId"
+// @Param otherMetaId query string true "对方用户MetaId"
+// @Param cursor query int false "游标，默认为0"
+// @Param size query int false "每页大小，默认为20"
+// @Param timestamp query int false "时间戳，用于分页"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.PrivateChatResponse} "成功返回私聊记录"
+// @Router /group-chat/private-chat-list [get]
+func GetPrivateChatList(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchPrivateChatListRequest{
+			MetaId:      c.DefaultQuery("metaId", ""),
+			OtherMetaId: c.DefaultQuery("otherMetaId", ""),
+			Cursor: func() int64 {
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
+				return cursor
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+			Timestamp: func() int64 {
+				timestamp, _ := strconv.ParseInt(c.DefaultQuery("timestamp", "0"), 10, 64)
+				return timestamp
+			}(),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.OtherMetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("otherMetaId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchPrivateChatList(req)
+	if err != nil {
+		log.Printf("Failed to fetch private chat list for metaId %s and otherMetaId %s: %v", req.MetaId, req.OtherMetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

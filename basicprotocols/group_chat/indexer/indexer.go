@@ -13,6 +13,7 @@ type GroupChatIndexer struct {
 	communityDB *db.CommunityDB
 	groupDB     *db.GroupDB
 	chatDB      *db.ChatDB
+	privateDB   *db.PrivateChatDB
 	pb          *db.Pebble
 }
 
@@ -31,6 +32,7 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 		communityDB: db.NewCommunityDB(pb),
 		groupDB:     db.NewGroupDB(pb),
 		chatDB:      db.NewChatDB(pb),
+		privateDB:   db.NewPrivateChatDB(pb),
 		pb:          pb,
 	}, nil
 }
@@ -41,6 +43,9 @@ func (gci *GroupChatIndexer) Start() error {
 
 	// 启动聊天队列处理器
 	gci.chatDB.StartQueueProcessor(gci.groupDB)
+
+	// 启动私聊队列处理器
+	gci.privateDB.StartPrivateQueueProcessor()
 
 	log.Println("Group Chat Indexer started successfully")
 	return nil
@@ -79,6 +84,10 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription) error {
 		log.Printf("Chat protocol: %s", pin.Path)
 		// 聊天相关协议
 		return gci.chatDB.ProcessGroupChatPin(pin)
+	case strings.ToLower(protocols.MonitorSimpleMsg), strings.ToLower(protocols.MonitorSimpleFileMsg):
+		log.Printf("Private chat protocol: %s", pin.Path)
+		// 私聊相关协议
+		return gci.privateDB.ProcessPrivateChatPin(pin)
 	default:
 		log.Printf("Unknown protocol: %s", protocol)
 		return nil
@@ -105,6 +114,11 @@ func (gci *GroupChatIndexer) GetGroupDB() *db.GroupDB {
 // GetChatDB 获取聊天数据库实例
 func (gci *GroupChatIndexer) GetChatDB() *db.ChatDB {
 	return gci.chatDB
+}
+
+// GetPrivateDB 获取私聊数据库实例
+func (gci *GroupChatIndexer) GetPrivateDB() *db.PrivateChatDB {
+	return gci.privateDB
 }
 
 // GetPebble 获取 Pebble 数据库实例

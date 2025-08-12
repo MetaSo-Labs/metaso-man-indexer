@@ -15,11 +15,17 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// 获取用户的最新聊天群组列表
 		group.GET("/user/latest-group-list", GetLatestChatGroupList)
 
+		// 获取最新聊天信息列表（群聊+私聊）
+		group.GET("/user/latest-chat-info-list", GetLatestChatInfoList)
+
 		// 获取群组信息
 		group.GET("/group-info", GetGroupInfo)
 
 		// 获取群组聊天记录
 		group.GET("/group-chat-list", GetGroupChatList)
+
+		// 获取私聊记录
+		group.GET("/private-chat-list", GetPrivateChatList)
 
 		// 获取群组成员列表
 		group.GET("/group-member-list", GetGroupMemberList)

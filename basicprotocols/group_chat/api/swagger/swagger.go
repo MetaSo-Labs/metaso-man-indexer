@@ -73,6 +73,25 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/user/latest-chat-info-list": {
+            "get": {
+                "description": "获取用户的最新聊天信息列表，包括群聊和私聊，基于最新聊天时间排序",
+                "produces": ["application/json"],
+                "tags": ["群组管理"],
+                "summary": "获取最新聊天信息列表（群聊+私聊）",
+                "parameters": [
+                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": true},
+                    {"type": "integer", "description": "游标，默认为1", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
+                    {"type": "integer", "description": "时间戳", "name": "timestamp", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "成功返回最新聊天信息列表", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/group-info": {
             "get": {
                 "description": "获取指定群组的详细信息",
@@ -105,6 +124,26 @@ func SetupSwagger(router *gin.Engine) {
                 "responses": {
                     "200": {"description": "成功返回群组聊天记录", "schema": {"type": "object"}},
                     "400": {"description": "参数错误", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/private-chat-list": {
+            "get": {
+                "description": "获取两个用户之间的私聊记录，支持时间戳分页",
+                "produces": ["application/json"],
+                "tags": ["群组管理"],
+                "summary": "获取私聊记录",
+                "parameters": [
+                    {"type": "string", "description": "当前用户MetaId", "name": "metaId", "in": "query", "required": true},
+                    {"type": "string", "description": "对方用户MetaId", "name": "otherMetaId", "in": "query", "required": true},
+                    {"type": "integer", "description": "游标，默认为0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
+                    {"type": "integer", "description": "时间戳，用于分页", "name": "timestamp", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "成功返回私聊记录", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
                 }
             }
         },

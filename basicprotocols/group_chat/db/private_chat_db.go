@@ -120,6 +120,94 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIds(selfMetaId, otherMetaId stri
 	return chats, nil
 }
 
+// 根据两个MetaId和时间戳范围获取私聊消息列表（倒序，基于时间戳分页）
+func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId string, startTimestamp int64, size int64) ([]*models.TalkPrivateChatV3, error) {
+	var chats []*models.TalkPrivateChatV3
+	iter, err := Pb[TalkPrivateChatTimestampCollection].NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	// 构造查询起始键：from_to_startTimestamp 和 to_from_startTimestamp
+	fromToStartKey := []byte(selfMetaId + "_" + otherMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
+	toFromStartKey := []byte(otherMetaId + "_" + selfMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
+
+	// 从指定时间戳开始倒序遍历（最新的消息在前）
+	for iter.SeekLT(fromToStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
+		key := string(iter.Key())
+
+		// 检查是否属于这两个用户之间的聊天
+		if !strings.HasPrefix(key, selfMetaId+"_"+otherMetaId+"_") &&
+			!strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
+			continue
+		}
+
+		// 解析索引值获取 PinId
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+		pinId := valueParts[0]
+
+		// 获取完整的私聊消息
+		chat, err := pcdb.GetPrivateChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		// 达到分页大小限制
+		if int64(len(chats)) >= size {
+			break
+		}
+
+		chats = append(chats, chat)
+	}
+
+	// 如果从from_to方向没有找到足够的消息，继续从to_from方向查找
+	if int64(len(chats)) < size {
+		for iter.SeekLT(toFromStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
+			key := string(iter.Key())
+
+			// 检查是否属于这两个用户之间的聊天
+			if !strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
+				continue
+			}
+
+			// 解析索引值获取 PinId
+			value := string(iter.Value())
+			valueParts := strings.Split(value, "_")
+			if len(valueParts) < 1 {
+				continue
+			}
+			pinId := valueParts[0]
+
+			// 获取完整的私聊消息
+			chat, err := pcdb.GetPrivateChatByPinId(pinId)
+			if err != nil || chat == nil {
+				continue
+			}
+
+			// 达到分页大小限制
+			if int64(len(chats)) >= size {
+				break
+			}
+
+			chats = append(chats, chat)
+		}
+	}
+
+	return chats, nil
+}
+
+// 获取两个用户之间的最新私聊消息（基于时间戳倒序）
+func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, error) {
+	// 使用当前时间作为起始时间戳
+	currentTimestamp := time.Now().Unix()
+	return pcdb.GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId, currentTimestamp, size)
+}
+
 // 删除私聊消息
 func (pcdb *PrivateChatDB) DeletePrivateChat(pinId string) error {
 	key := []byte(pinId)

@@ -348,7 +348,7 @@ type TalkPrivateChatV3 struct {
 	Content     string     `json:"content"`
 	ContentType string     `json:"contentType"`
 	Encryption  string     `json:"encryption"`
-	ChatType    ChatType   `json:"chatType"` //0-msg, 1-red, 2-img
+	ChatType    ChatType   `json:"chatType"` //0-msg, 1-red, 3-img
 	ReplyPin    string     `json:"replyPin"`
 	ReplyInfo   *ReplyInfo `json:"replyInfo"`
 	Timestamp   int64      `json:"timestamp"`   //聊天记录时间戳

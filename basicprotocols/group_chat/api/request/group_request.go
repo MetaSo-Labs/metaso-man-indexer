@@ -59,3 +59,25 @@ type FetchGroupPersonRequest struct {
 	MetaId  string `form:"metaId"`
 	GroupId string `form:"groupId"`
 }
+
+// FetchLatestChatInfoListRequest 获取最新聊天信息列表请求（群聊+私聊）
+type FetchLatestChatInfoListRequest struct {
+	MetaId string `form:"metaId"`
+	// Page      string `form:"page"`
+	// PageSize  string `form:"pageSize"`
+	Cursor    int64 `form:"cursor"`
+	Size      int64 `form:"size"`
+	Timestamp int64 `form:"timestamp"`
+}
+
+// FetchPrivateChatListRequest 获取私聊记录请求
+type FetchPrivateChatListRequest struct {
+	MetaId      string `form:"metaId"`      // 当前用户MetaId
+	OtherMetaId string `form:"otherMetaId"` // 对方用户MetaId
+	// Page          string `form:"page"`
+	// PageSize      string `form:"pageSize"`
+	Cursor    int64 `form:"cursor"`
+	Size      int64 `form:"size"`
+	Timestamp int64 `form:"timestamp"`
+	// TimestampType int64 `form:"timestampType"` //0为查历史，1为查最新
+}
