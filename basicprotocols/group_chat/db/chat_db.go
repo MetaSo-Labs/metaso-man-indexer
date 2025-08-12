@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
@@ -205,7 +206,7 @@ func (cdb *ChatDB) DeleteChat(pinId string) error {
 }
 
 // 保存红包信息
-func (cdb *ChatDB) SaveRedEnvelope(red *models.TalkGroupRedEnvelopeV3) error {
+func (cdb *ChatDB) SaveLuckyBag(red *models.TalkGroupLuckyBagV3) error {
 	data, err := json.Marshal(red)
 	if err != nil {
 		return err
@@ -213,13 +214,13 @@ func (cdb *ChatDB) SaveRedEnvelope(red *models.TalkGroupRedEnvelopeV3) error {
 
 	// 使用 PinId 作为主键
 	key := []byte(red.PinId)
-	return Pb[TalkGroupRedEnvelopePinCollection].Set(key, data, pebble.Sync)
+	return Pb[TalkGroupLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
 // 根据PinId获取红包信息
-func (cdb *ChatDB) GetRedEnvelopeByPinId(pinId string) (*models.TalkGroupRedEnvelopeV3, error) {
+func (cdb *ChatDB) GetLuckyBagByPinId(pinId string) (*models.TalkGroupLuckyBagV3, error) {
 	key := []byte(pinId)
-	value, closer, err := Pb[TalkGroupRedEnvelopePinCollection].Get(key)
+	value, closer, err := Pb[TalkGroupLuckyBagPinCollection].Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil
@@ -228,7 +229,7 @@ func (cdb *ChatDB) GetRedEnvelopeByPinId(pinId string) (*models.TalkGroupRedEnve
 	}
 	defer closer.Close()
 
-	var red models.TalkGroupRedEnvelopeV3
+	var red models.TalkGroupLuckyBagV3
 	err = json.Unmarshal(value, &red)
 	if err != nil {
 		return nil, err
@@ -238,16 +239,16 @@ func (cdb *ChatDB) GetRedEnvelopeByPinId(pinId string) (*models.TalkGroupRedEnve
 }
 
 // 根据群组ID获取红包列表
-func (cdb *ChatDB) GetRedEnvelopesByGroupId(groupId string) ([]*models.TalkGroupRedEnvelopeV3, error) {
-	var reds []*models.TalkGroupRedEnvelopeV3
-	iter, err := Pb[TalkGroupRedEnvelopePinCollection].NewIter(nil)
+func (cdb *ChatDB) GetLuckyBagsByGroupId(groupId string) ([]*models.TalkGroupLuckyBagV3, error) {
+	var reds []*models.TalkGroupLuckyBagV3
+	iter, err := Pb[TalkGroupLuckyBagPinCollection].NewIter(nil)
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		var red models.TalkGroupRedEnvelopeV3
+		var red models.TalkGroupLuckyBagV3
 		err := json.Unmarshal(iter.Value(), &red)
 		if err != nil {
 			continue
@@ -261,7 +262,7 @@ func (cdb *ChatDB) GetRedEnvelopesByGroupId(groupId string) ([]*models.TalkGroup
 }
 
 // 保存抢红包信息
-func (cdb *ChatDB) SaveOpenRedEnvelope(open *models.TalkGroupOpenRedEnvelopeV3) error {
+func (cdb *ChatDB) SaveOpenLuckyBag(open *models.TalkGroupOpenLuckyBagV3) error {
 	data, err := json.Marshal(open)
 	if err != nil {
 		return err
@@ -269,13 +270,13 @@ func (cdb *ChatDB) SaveOpenRedEnvelope(open *models.TalkGroupOpenRedEnvelopeV3) 
 
 	// 使用 PinId 作为主键
 	key := []byte(open.PinId)
-	return Pb[TalkGroupOpenRedEnvelopePinCollection].Set(key, data, pebble.Sync)
+	return Pb[TalkGroupOpenLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
 // 根据PinId获取抢红包信息
-func (cdb *ChatDB) GetOpenRedEnvelopeByPinId(pinId string) (*models.TalkGroupOpenRedEnvelopeV3, error) {
+func (cdb *ChatDB) GetOpenLuckyBagByPinId(pinId string) (*models.TalkGroupOpenLuckyBagV3, error) {
 	key := []byte(pinId)
-	value, closer, err := Pb[TalkGroupOpenRedEnvelopePinCollection].Get(key)
+	value, closer, err := Pb[TalkGroupOpenLuckyBagPinCollection].Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil
@@ -284,7 +285,7 @@ func (cdb *ChatDB) GetOpenRedEnvelopeByPinId(pinId string) (*models.TalkGroupOpe
 	}
 	defer closer.Close()
 
-	var open models.TalkGroupOpenRedEnvelopeV3
+	var open models.TalkGroupOpenLuckyBagV3
 	err = json.Unmarshal(value, &open)
 	if err != nil {
 		return nil, err
@@ -294,21 +295,21 @@ func (cdb *ChatDB) GetOpenRedEnvelopeByPinId(pinId string) (*models.TalkGroupOpe
 }
 
 // 根据红包TxId获取抢红包列表
-func (cdb *ChatDB) GetOpenRedEnvelopesByRedEnvelopeTxId(redEnvelopeTxId string) ([]*models.TalkGroupOpenRedEnvelopeV3, error) {
-	var opens []*models.TalkGroupOpenRedEnvelopeV3
-	iter, err := Pb[TalkGroupOpenRedEnvelopePinCollection].NewIter(nil)
+func (cdb *ChatDB) GetOpenLuckyBagsByLuckyBagTxId(redEnvelopeTxId string) ([]*models.TalkGroupOpenLuckyBagV3, error) {
+	var opens []*models.TalkGroupOpenLuckyBagV3
+	iter, err := Pb[TalkGroupOpenLuckyBagPinCollection].NewIter(nil)
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		var open models.TalkGroupOpenRedEnvelopeV3
+		var open models.TalkGroupOpenLuckyBagV3
 		err := json.Unmarshal(iter.Value(), &open)
 		if err != nil {
 			continue
 		}
-		if open.RedEnvelopeTxId == redEnvelopeTxId {
+		if open.LuckyBagTxId == redEnvelopeTxId {
 			opens = append(opens, &open)
 		}
 	}
@@ -317,7 +318,7 @@ func (cdb *ChatDB) GetOpenRedEnvelopesByRedEnvelopeTxId(redEnvelopeTxId string) 
 }
 
 // 保存剩余红包信息
-func (cdb *ChatDB) SaveResidueRedEnvelope(residue *models.TalkGroupResidueRedEnvelopeV3) error {
+func (cdb *ChatDB) SaveResidueLuckyBag(residue *models.TalkGroupResidueLuckyBagV3) error {
 	data, err := json.Marshal(residue)
 	if err != nil {
 		return err
@@ -325,13 +326,13 @@ func (cdb *ChatDB) SaveResidueRedEnvelope(residue *models.TalkGroupResidueRedEnv
 
 	// 使用 PinId 作为主键
 	key := []byte(residue.PinId)
-	return Pb[TalkGroupResidueRedEnvelopePinCollection].Set(key, data, pebble.Sync)
+	return Pb[TalkGroupResidueLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
 // 根据红包PinId获取剩余红包信息
-func (cdb *ChatDB) GetResidueRedEnvelopeByRedEnvelopePinId(redEnvelopePinId string) (*models.TalkGroupResidueRedEnvelopeV3, error) {
+func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*models.TalkGroupResidueLuckyBagV3, error) {
 	key := []byte(redEnvelopePinId)
-	value, closer, err := Pb[TalkGroupResidueRedEnvelopePinCollection].Get(key)
+	value, closer, err := Pb[TalkGroupResidueLuckyBagPinCollection].Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return nil, nil
@@ -340,7 +341,7 @@ func (cdb *ChatDB) GetResidueRedEnvelopeByRedEnvelopePinId(redEnvelopePinId stri
 	}
 	defer closer.Close()
 
-	var residue models.TalkGroupResidueRedEnvelopeV3
+	var residue models.TalkGroupResidueLuckyBagV3
 	err = json.Unmarshal(value, &residue)
 	if err != nil {
 		return nil, err
@@ -698,6 +699,12 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription) error {
 			return cdb.processGroupChat(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleFileGroupChat) {
 			return cdb.processFileGroupChat(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupLuckyBag) {
+			return cdb.processGroupLuckyBag(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag) {
+			return cdb.processGroupOpenLuckyBag(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag) {
+			return cdb.processGroupResidueLuckyBag(pin)
 		}
 	default:
 		return nil // 未知操作类型，跳过
@@ -959,4 +966,413 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	}
 
 	return nil
+}
+
+// 处理群组红包
+func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
+	// 检查是否已经保存过该 PinId
+	existingRed, err := cdb.GetLuckyBagByPinId(pin.Id)
+	if err == nil && existingRed != nil {
+		// 已经存在，跳过处理
+		if existingRed.BlockHeight != pin.GenesisHeight {
+			existingRed.BlockHeight = pin.GenesisHeight
+			err = cdb.SaveLuckyBag(existingRed)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// 解析协议数据
+	var simpleLuckyBag protocols.SimpleGroupLuckyBag
+	err = json.Unmarshal(pin.ContentBody, &simpleLuckyBag)
+	if err != nil {
+		return err
+	}
+
+	// 转换支付列表
+	var payList []*models.ProInfoPayList
+	for _, pay := range simpleLuckyBag.PayList {
+		payList = append(payList, &models.ProInfoPayList{
+			Amount:  toString(pay.Amount),
+			Address: pay.Address,
+			Index:   toInt64(pay.Index),
+		})
+	}
+
+	// 创建红包模型
+	redEnvelope := &models.TalkGroupLuckyBagV3{
+		CommunityId:         "", // 需要从群组信息中获取
+		GroupId:             simpleLuckyBag.GroupId,
+		TxId:                pin.Id[:len(pin.Id)-2],
+		PinId:               pin.Id,
+		MetaId:              pin.CreateMetaId,
+		Protocol:            pin.Path,
+		SubId:               simpleLuckyBag.SubId,
+		Code:                simpleLuckyBag.Code,
+		CreateTimeStr:       toString(simpleLuckyBag.CreateTime),
+		Content:             simpleLuckyBag.Content,
+		Img:                 simpleLuckyBag.Img,
+		ImgType:             simpleLuckyBag.ImgType,
+		Amount:              toString(simpleLuckyBag.Amount),
+		Count:               toString(simpleLuckyBag.Count),
+		PayList:             payList,
+		LuckyBagVouts:       []*models.LuckyBagOutput{}, // 需要从交易中解析
+		Type:                simpleLuckyBag.Type,
+		RequireType:         toString(simpleLuckyBag.RequireType),
+		RequireTickId:       simpleLuckyBag.RequireTickId,
+		RequireCollectionId: simpleLuckyBag.RequireCollectionId,
+		LimitAmount:         toUint64(simpleLuckyBag.LimitAmount),
+		Timestamp:           pin.Timestamp,
+		BlockHeight:         pin.GenesisHeight,
+		Chain:               pin.ChainName,
+	}
+
+	// 保存红包信息
+	err = cdb.SaveLuckyBag(redEnvelope)
+	if err != nil {
+		return err
+	}
+
+	// 创建聊天消息模型（用于群聊显示）
+	chat := &models.TalkGroupChatV3{
+		GroupId:     simpleLuckyBag.GroupId,
+		TxId:        pin.Id[:len(pin.Id)-2],
+		PinId:       pin.Id,
+		MetaId:      pin.CreateMetaId,
+		Address:     pin.CreateAddress,
+		Protocol:    pin.Path,
+		Content:     "[LuckyBag]:" + simpleLuckyBag.Content, // 红包祝福语
+		ContentType: "text/plain",
+		Encryption:  "",
+		ChatType:    models.ChatTypeLuckyBag,  // 红包类型
+		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
+		ReplyPin:    "",
+		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+	}
+
+	// 保存聊天消息到 TalkGroupChatPinCollection
+	err = cdb.SaveChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	err = cdb.SaveChatTimestampWithState(chat)
+	if err != nil {
+		return err
+	}
+
+	// 将消息加入队列，异步更新群列表
+	err = cdb.EnqueueChatMessage(chat)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 处理群组抢红包
+func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
+	// 检查是否已经保存过该 PinId
+	existingOpen, err := cdb.GetOpenLuckyBagByPinId(pin.Id)
+	if err == nil && existingOpen != nil {
+		// 已经存在，跳过处理
+		if existingOpen.BlockHeight != pin.GenesisHeight {
+			existingOpen.BlockHeight = pin.GenesisHeight
+			err = cdb.SaveOpenLuckyBag(existingOpen)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// 解析协议数据
+	var simpleOpenLuckyBag protocols.SimpleGroupOpenLuckyBag
+	err = json.Unmarshal(pin.ContentBody, &simpleOpenLuckyBag)
+	if err != nil {
+		return err
+	}
+
+	// 转换输入交易
+	var vins []*models.TxIn
+	if simpleOpenLuckyBag.Used != nil {
+		vins = append(vins, &models.TxIn{
+			OutTxID: "", // 需要从交易中解析
+			Index:   0,  // 需要从交易中解析
+		})
+	}
+
+	// 创建抢红包模型
+	openLuckyBag := &models.TalkGroupOpenLuckyBagV3{
+		CommunityId:         "", // 需要从群组信息中获取
+		GroupId:             simpleOpenLuckyBag.GroupId,
+		TxId:                pin.Id[:len(pin.Id)-2],
+		PinId:               pin.Id,
+		MetaId:              pin.CreateMetaId,
+		Protocol:            pin.Path,
+		SubId:               simpleOpenLuckyBag.SubId,
+		Code:                simpleOpenLuckyBag.Code,
+		CreateTimeStr:       toString(simpleOpenLuckyBag.CreateTime),
+		Address:             pin.CreateAddress,
+		Index:               0,  // 需要从交易中解析
+		Amount:              "", // 需要从交易中解析
+		Vins:                vins,
+		Type:                simpleOpenLuckyBag.Type,
+		RequireTickId:       "",
+		RequireCollectionId: "",
+		LuckyBagTxId:        simpleOpenLuckyBag.LuckyBagTxId,
+		LuckyBagPinId:       simpleOpenLuckyBag.LuckyBagPinId,
+		LuckyBagMetaId:      simpleOpenLuckyBag.LuckyBagMetaId,
+		IsWithdraw:          toBool(simpleOpenLuckyBag.IsWithdraw),
+		Timestamp:           pin.Timestamp,
+		BlockHeight:         pin.GenesisHeight,
+		Chain:               pin.ChainName,
+	}
+
+	// 保存抢红包信息
+	err = cdb.SaveOpenLuckyBag(openLuckyBag)
+	if err != nil {
+		return err
+	}
+
+	// 创建聊天消息模型（用于群聊显示）
+	chat := &models.TalkGroupChatV3{
+		GroupId:     simpleOpenLuckyBag.GroupId,
+		TxId:        pin.Id[:len(pin.Id)-2],
+		PinId:       pin.Id,
+		MetaId:      pin.CreateMetaId,
+		Address:     pin.CreateAddress,
+		Protocol:    pin.Path,
+		Content:     "[Grab LuckyBag]:" + simpleOpenLuckyBag.Code, // 可以根据实际金额显示
+		ContentType: "text/plain",
+		Encryption:  "",
+		ChatType:    models.ChatTypeOpenLuckyBag, // 抢红包类型
+		InsideIndex: models.ChatInsideIndexIn,    // 默认为进入状态
+		ReplyPin:    "",
+		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+	}
+
+	// 保存聊天消息到 TalkGroupChatPinCollection
+	err = cdb.SaveChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	err = cdb.SaveChatTimestampWithState(chat)
+	if err != nil {
+		return err
+	}
+
+	// 将消息加入队列，异步更新群列表
+	err = cdb.EnqueueChatMessage(chat)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 处理群组回收红包
+func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription) error {
+	// 检查是否已经保存过该 PinId
+	existingResidue, err := cdb.GetResidueLuckyBagByLuckyBagPinId(pin.Id)
+	if err == nil && existingResidue != nil {
+		// 已经存在，跳过处理
+		if existingResidue.BlockHeight != pin.GenesisHeight {
+			existingResidue.BlockHeight = pin.GenesisHeight
+			err = cdb.SaveResidueLuckyBag(existingResidue)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// 解析协议数据
+	var simpleResidueLuckyBag protocols.SimpleGroupResidueLuckyBag
+	err = json.Unmarshal(pin.ContentBody, &simpleResidueLuckyBag)
+	if err != nil {
+		return err
+	}
+
+	// 转换已使用列表
+	var usedList []*models.ProInfoPayList
+	for _, used := range simpleResidueLuckyBag.Used {
+		usedList = append(usedList, &models.ProInfoPayList{
+			Amount:  toString(used.Amount),
+			Address: used.Address,
+			Index:   toInt64(used.Index),
+		})
+	}
+
+	// 转换输入交易
+	var vins []*models.TxIn
+	// 这里需要根据实际情况解析输入交易
+
+	// 创建回收红包模型
+	residueLuckyBag := &models.TalkGroupResidueLuckyBagV3{
+		CommunityId:         "", // 需要从群组信息中获取
+		GroupId:             simpleResidueLuckyBag.GroupId,
+		TxId:                pin.Id[:len(pin.Id)-2],
+		PinId:               pin.Id,
+		MetaId:              pin.CreateMetaId,
+		Protocol:            pin.Path,
+		SubId:               simpleResidueLuckyBag.SubId,
+		Code:                simpleResidueLuckyBag.Code,
+		CreateTimeStr:       toString(simpleResidueLuckyBag.CreateTime),
+		UsedList:            usedList,
+		Vins:                vins,
+		Type:                simpleResidueLuckyBag.Type,
+		RequireTickId:       "",
+		RequireCollectionId: "",
+		LuckyBagTxId:        simpleResidueLuckyBag.LuckyBagTxId,
+		LuckyBagPinId:       simpleResidueLuckyBag.LuckyBagPinId,
+		LuckyBagMetaId:      simpleResidueLuckyBag.LuckyBagMetaId,
+		Timestamp:           pin.Timestamp,
+		BlockHeight:         pin.GenesisHeight,
+		Chain:               pin.ChainName,
+	}
+
+	// 保存回收红包信息
+	err = cdb.SaveResidueLuckyBag(residueLuckyBag)
+	if err != nil {
+		return err
+	}
+
+	// 创建聊天消息模型（用于群聊显示）
+	chat := &models.TalkGroupChatV3{
+		GroupId:     simpleResidueLuckyBag.GroupId,
+		TxId:        pin.Id[:len(pin.Id)-2],
+		PinId:       pin.Id,
+		MetaId:      pin.CreateMetaId,
+		Address:     pin.CreateAddress,
+		Protocol:    pin.Path,
+		Content:     "[Recycle LuckyBag]:" + simpleResidueLuckyBag.Code, // 可以根据实际情况显示
+		ContentType: "text/plain",
+		Encryption:  "",
+		ChatType:    models.ChatTypeRecycleLuckyBag, // 回收红包类型
+		InsideIndex: models.ChatInsideIndexIn,       // 默认为进入状态
+		ReplyPin:    "",
+		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+	}
+
+	// 保存聊天消息到 TalkGroupChatPinCollection
+	err = cdb.SaveChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	err = cdb.SaveChatTimestampWithState(chat)
+	if err != nil {
+		return err
+	}
+
+	// 将消息加入队列，异步更新群列表
+	err = cdb.EnqueueChatMessage(chat)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// 辅助函数：将 interface{} 转换为 string
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case int, int32, int64, float32, float64:
+		return fmt.Sprintf("%v", val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// 辅助函数：将 interface{} 转换为 int64
+func toInt64(v interface{}) int64 {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case int:
+		return int64(val)
+	case int32:
+		return int64(val)
+	case int64:
+		return val
+	case float32:
+		return int64(val)
+	case float64:
+		return int64(val)
+	case string:
+		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return i
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+// 辅助函数：将 interface{} 转换为 uint64
+func toUint64(v interface{}) uint64 {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case int:
+		return uint64(val)
+	case int32:
+		return uint64(val)
+	case int64:
+		return uint64(val)
+	case uint64:
+		return val
+	case float32:
+		return uint64(val)
+	case float64:
+		return uint64(val)
+	case string:
+		if i, err := strconv.ParseUint(val, 10, 64); err == nil {
+			return i
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+// 辅助函数：将 interface{} 转换为 bool
+func toBool(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case int:
+		return val != 0
+	case int32:
+		return val != 0
+	case int64:
+		return val != 0
+	case string:
+		return val == "true" || val == "1"
+	default:
+		return false
+	}
 }

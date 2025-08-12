@@ -190,78 +190,68 @@ type ReplyInfo struct {
 	Timestamp   int64           `json:"timestamp"`   //聊天记录时间戳
 }
 
-type TalkGroupRedEnvelopeV3 struct {
-	CommunityId     string            `json:"communityId"` //房间ID 唯一
-	GroupId         string            `json:"groupId"`     //频道ID 唯一
-	TxId            string            `json:"txId"`
-	PinId           string            `json:"pinId"` //
-	MetaId          string            `json:"metaId"`
-	Protocol        string            `json:"protocol"`
-	SubId           string            `json:"subId"`
-	Code            string            `json:"code"`
-	CreateTimeStr   string            `json:"createTimeStr"`
-	Content         string            `json:"content"`
-	Img             string            `json:"img"`
-	ImgType         string            `json:"imgType"`
-	Amount          string            `json:"amount"`
-	Count           string            `json:"count"`
-	PayList         []*ProInfoPayList `json:"payList"`
-	RedVouts        []*RedOutput      `json:"redVouts"`
-	Type            string            `json:"type"`
-	FtGenesis       string            `json:"ftGenesis"`
-	FtSensibleId    string            `json:"ftSensibleId"`
-	FtCodehash      string            `json:"ftCodehash"`
-	FtDecimalNum    string            `json:"ftDecimalNum"`
-	FtIcon          string            `json:"ftIcon"`
-	FtSymbol        string            `json:"ftSymbol"`
-	FtName          string            `json:"ftName"`
-	RequireType     string            `json:"requireType"`
-	RequireCodehash string            `json:"requireCodehash"`
-	RequireGenesis  string            `json:"requireGenesis"`
-	LimitAmount     uint64            `json:"limitAmount"`
-	Timestamp       int64             `json:"timestamp"` //聊天记录时间戳
+type TalkGroupLuckyBagV3 struct {
+	CommunityId         string            `json:"communityId"` //房间ID 唯一
+	GroupId             string            `json:"groupId"`     //频道ID 唯一
+	TxId                string            `json:"txId"`
+	PinId               string            `json:"pinId"` //
+	MetaId              string            `json:"metaId"`
+	Protocol            string            `json:"protocol"`
+	SubId               string            `json:"subId"`
+	Code                string            `json:"code"`
+	CreateTimeStr       string            `json:"createTimeStr"`
+	Content             string            `json:"content"`
+	Img                 string            `json:"img"`
+	ImgType             string            `json:"imgType"`
+	Amount              string            `json:"amount"`
+	Count               string            `json:"count"`
+	PayList             []*ProInfoPayList `json:"payList"`
+	LuckyBagVouts       []*LuckyBagOutput `json:"luckyBagVouts"`
+	Type                string            `json:"type"`
+	RequireType         string            `json:"requireType"`         //0-无限制，1-FT，2-NFT
+	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	LimitAmount         uint64            `json:"limitAmount"`
+	Timestamp           int64             `json:"timestamp"`   //聊天记录时间戳
+	BlockHeight         int64             `json:"blockHeight"` //区块高度
+	Chain               string            `json:"chain"`       //链类型
 }
 type ProInfoPayList struct {
 	Amount  string `json:"amount"`
 	Address string `json:"address"`
 	Index   int64  `json:"index"`
 }
-type RedOutput struct {
+type LuckyBagOutput struct {
 	ScriptPubKey string `json:"scriptPubKey"`
 	Amount       uint64 `json:"amount"`
 	Address      string `json:"address"`
 	Index        int64  `json:"index"`
 }
 
-type TalkGroupOpenRedEnvelopeV3 struct {
-	CommunityId       string  `json:"communityId"` //房间ID 唯一
-	GroupId           string  `json:"groupId"`     //频道ID 唯一
-	TxId              string  `json:"txId"`
-	PinId             string  `json:"pinId"` //
-	MetaId            string  `json:"metaId"`
-	Protocol          string  `json:"protocol"`
-	SubId             string  `json:"subId"`
-	Code              string  `json:"code"`
-	CreateTimeStr     string  `json:"createTimeStr"`
-	Address           string  `json:"address"`
-	Index             int64   `json:"index"`
-	Amount            string  `json:"amount"`
-	Vins              []*TxIn `json:"vins"`
-	Type              string  `json:"type"`
-	FtGenesis         string  `json:"ftGenesis"`
-	FtSensibleId      string  `json:"ftSensibleId"`
-	FtCodehash        string  `json:"ftCodehash"`
-	FtDecimalNum      string  `json:"ftDecimalNum"`
-	FtIcon            string  `json:"ftIcon"`
-	FtSymbol          string  `json:"ftSymbol"`
-	FtName            string  `json:"ftName"`
-	RedEnvelopeTxId   string  `json:"redEnvelopeTxId"`
-	RedEnvelopeMetaId string  `json:"redEnvelopeMetaId"`
-	OpenNftCodehash   string  `json:"openNftCodehash"`
-	OpenNftGenesis    string  `json:"openNftGenesis"`
-	OpenNftTokenIndex string  `json:"openNftTokenIndex"`
-	IsWithdraw        bool    `json:"isWithdraw"`
-	Timestamp         int64   `json:"timestamp"` //聊天记录时间戳
+type TalkGroupOpenLuckyBagV3 struct {
+	CommunityId         string  `json:"communityId"` //房间ID 唯一
+	GroupId             string  `json:"groupId"`     //频道ID 唯一
+	TxId                string  `json:"txId"`
+	PinId               string  `json:"pinId"` //
+	MetaId              string  `json:"metaId"`
+	Protocol            string  `json:"protocol"`
+	SubId               string  `json:"subId"`
+	Code                string  `json:"code"`
+	CreateTimeStr       string  `json:"createTimeStr"`
+	Address             string  `json:"address"`
+	Index               int64   `json:"index"`
+	Amount              string  `json:"amount"`
+	Vins                []*TxIn `json:"vins"`
+	Type                string  `json:"type"`
+	RequireTickId       string  `json:"requireTickId"`       //FT-限制需要 暂mrc20
+	RequireCollectionId string  `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	LuckyBagTxId        string  `json:"luckyBagTxId"`
+	LuckyBagPinId       string  `json:"luckyBagPinId"`
+	LuckyBagMetaId      string  `json:"luckyBagMetaId"`
+	IsWithdraw          bool    `json:"isWithdraw"`
+	Timestamp           int64   `json:"timestamp"`   //聊天记录时间戳
+	BlockHeight         int64   `json:"blockHeight"` //区块高度
+	Chain               string  `json:"chain"`       //链类型
 }
 type TxIn struct {
 	OutTxID string `json:"outTxId"` //所在out-txId
@@ -272,29 +262,27 @@ type TxIn struct {
 	//OutTxScript string `json:"outTxScript" bson:"outTxScript"`
 }
 
-type TalkGroupResidueRedEnvelopeV3 struct {
-	CommunityId       string            `json:"communityId"` //房间ID 唯一
-	GroupId           string            `json:"groupId"`     //频道ID 唯一
-	TxId              string            `json:"txId"`
-	PinId             string            `json:"pinId"` //
-	MetaId            string            `json:"metaId"`
-	Protocol          string            `json:"protocol"`
-	SubId             string            `json:"subId"`
-	Code              string            `json:"code"`
-	CreateTimeStr     string            `json:"createTimeStr"`
-	UsedList          []*ProInfoPayList `json:"usedList"`
-	Vins              []*TxIn           `json:"vins"`
-	Type              string            `json:"type"`
-	FtGenesis         string            `json:"ftGenesis"`
-	FtSensibleId      string            `json:"ftSensibleId"`
-	FtCodehash        string            `json:"ftCodehash"`
-	FtDecimalNum      string            `json:"ftDecimalNum"`
-	FtIcon            string            `json:"ftIcon"`
-	FtSymbol          string            `json:"ftSymbol"`
-	FtName            string            `json:"ftName"`
-	RedEnvelopeTxId   string            `json:"redEnvelopeTxId"`
-	RedEnvelopeMetaId string            `json:"redEnvelopeMetaId"`
-	Timestamp         int64             `json:"timestamp"` //聊天记录时间戳
+type TalkGroupResidueLuckyBagV3 struct {
+	CommunityId         string            `json:"communityId"` //房间ID 唯一
+	GroupId             string            `json:"groupId"`     //频道ID 唯一
+	TxId                string            `json:"txId"`
+	PinId               string            `json:"pinId"` //
+	MetaId              string            `json:"metaId"`
+	Protocol            string            `json:"protocol"`
+	SubId               string            `json:"subId"`
+	Code                string            `json:"code"`
+	CreateTimeStr       string            `json:"createTimeStr"`
+	UsedList            []*ProInfoPayList `json:"usedList"`
+	Vins                []*TxIn           `json:"vins"`
+	Type                string            `json:"type"`
+	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	LuckyBagTxId        string            `json:"luckyBagTxId"`
+	LuckyBagPinId       string            `json:"luckyBagPinId"`
+	LuckyBagMetaId      string            `json:"luckyBagMetaId"`
+	Timestamp           int64             `json:"timestamp"`   //聊天记录时间戳
+	BlockHeight         int64             `json:"blockHeight"` //区块高度
+	Chain               string            `json:"chain"`       //链类型
 }
 
 // 用户群列表项 + 用户私聊列表项

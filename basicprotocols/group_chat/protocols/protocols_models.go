@@ -170,44 +170,30 @@ type SimpleFileGroupChat struct {
 	    }
 	  ],
 	  "type": "btc",
-	  "ftGenesis": "genesis",
-	  "ftSensibleId": "sensibleId",
-	  "ftCodehash": "codehash",
-	  "ftDecimalNum": 8,
-	  "ftIcon": "icon",
-	  "ftSymbol": "BTC",
-	  "ftName": "Bitcoin",
 	  "requireType": 0,
-	  "requireCodehash": "codehash",
-	  "requireGenesis": "genesis",
+	  "requireTickId": "tickId",
+	  "requireCollectionId": "collectionId",
 	  "limitAmount": 100
 	}
 
 *
 */
-type SimpleGroupRedEnvelope struct {
-	SubId           string            `json:"subId"`
-	GroupId         string            `json:"groupId"`
-	Code            string            `json:"code"`
-	CreateTime      interface{}       `json:"createTime"`
-	Content         string            `json:"content"`
-	Img             string            `json:"img"`
-	ImgType         string            `json:"imgType"`
-	Amount          interface{}       `json:"amount"`
-	Count           interface{}       `json:"count"`
-	PayList         []*ProInfoPayList `json:"payList"`
-	Type            string            `json:"type"`
-	FtGenesis       string            `json:"ftGenesis"`
-	FtSensibleId    string            `json:"ftSensibleId"`
-	FtCodehash      string            `json:"ftCodehash"`
-	FtDecimalNum    interface{}       `json:"ftDecimalNum"`
-	FtIcon          string            `json:"ftIcon"`
-	FtSymbol        string            `json:"ftSymbol"`
-	FtName          string            `json:"ftName"`
-	RequireType     interface{}       `json:"requireType"`
-	RequireCodehash string            `json:"requireCodehash"`
-	RequireGenesis  string            `json:"requireGenesis"`
-	LimitAmount     interface{}       `json:"limitAmount"`
+type SimpleGroupLuckyBag struct {
+	SubId               string            `json:"subId"`
+	GroupId             string            `json:"groupId"`
+	Code                string            `json:"code"`
+	CreateTime          interface{}       `json:"createTime"`
+	Content             string            `json:"content"`
+	Img                 string            `json:"img"`
+	ImgType             string            `json:"imgType"`
+	Amount              interface{}       `json:"amount"`
+	Count               interface{}       `json:"count"`
+	PayList             []*ProInfoPayList `json:"payList"`
+	Type                string            `json:"type"`
+	RequireType         interface{}       `json:"requireType"`         //0-无限制，1-FT，2-NFT
+	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	LimitAmount         interface{}       `json:"limitAmount"`
 }
 
 /*
@@ -231,8 +217,9 @@ type ProInfoPayList struct {
 *
 
 	{
-	  "redEnvelopeTxId": "tx123",
-	  "redEnvelopeMetaId": "metaId123",
+	  "luckyBagTxId": "tx123",
+	  "luckyBagPinId": "pin123",
+	  "luckyBagMetaId": "metaId123",
 	  "subId": "red123",
 	  "groupId": "group123",
 	  "code": "redcode",
@@ -243,35 +230,22 @@ type ProInfoPayList struct {
 	    "index": 0
 	  },
 	  "type": "btc",
-	  "ftGenesis": "genesis",
-	  "ftSensibleId": "sensibleId",
-	  "ftCodehash": "codehash",
-	  "ftDecimalNum": 8,
-	  "ftIcon": "icon",
-	  "ftSymbol": "BTC",
-	  "ftName": "Bitcoin",
 	  "isWithdraw": false
 	}
 
 *
 */
-type SimpleGroupOpenRedEnvelope struct {
-	RedEnvelopeTxId   string      `json:"redEnvelopeTxId"`
-	RedEnvelopeMetaId string      `json:"redEnvelopeMetaId"`
-	SubId             string      `json:"subId"`
-	GroupId           string      `json:"groupId"`
-	Code              string      `json:"code"`
-	CreateTime        interface{} `json:"createTime"`
-	Used              *ProUsed    `json:"used"`
-	Type              string      `json:"type"`
-	FtGenesis         string      `json:"ftGenesis"`
-	FtSensibleId      string      `json:"ftSensibleId"`
-	FtCodehash        string      `json:"ftCodehash"`
-	FtDecimalNum      interface{} `json:"ftDecimalNum"`
-	FtIcon            string      `json:"ftIcon"`
-	FtSymbol          string      `json:"ftSymbol"`
-	FtName            string      `json:"ftName"`
-	IsWithdraw        interface{} `json:"isWithdraw"`
+type SimpleGroupOpenLuckyBag struct {
+	LuckyBagTxId   string      `json:"luckyBagTxId"`
+	LuckyBagPinId  string      `json:"luckyBagPinId"`
+	LuckyBagMetaId string      `json:"luckyBagMetaId"`
+	SubId          string      `json:"subId"`
+	GroupId        string      `json:"groupId"`
+	Code           string      `json:"code"`
+	CreateTime     interface{} `json:"createTime"`
+	Used           *ProUsed    `json:"used"`
+	Type           string      `json:"type"`
+	IsWithdraw     interface{} `json:"isWithdraw"`
 }
 
 /*
@@ -295,8 +269,9 @@ type ProUsed struct {
 *
 
 	{
-	  "redEnvelopeTxId": "tx123",
-	  "redEnvelopeMetaId": "metaId123",
+	  "luckyBagTxId": "tx123",
+	  "luckyBagPinId": "pin123",
+	  "luckyBagMetaId": "metaId123",
 	  "subId": "red123",
 	  "groupId": "group123",
 	  "code": "redcode",
@@ -320,22 +295,16 @@ type ProUsed struct {
 
 *
 */
-type SimpleGroupResidueRedEnvelope struct {
-	RedEnvelopeTxId   string      `json:"redEnvelopeTxId"`
-	RedEnvelopeMetaId string      `json:"redEnvelopeMetaId"`
-	SubId             string      `json:"subId"`
-	GroupId           string      `json:"groupId"`
-	Code              string      `json:"code"`
-	CreateTime        interface{} `json:"createTime"`
-	Used              []*ProUsed  `json:"used"`
-	Type              string      `json:"type"`
-	FtGenesis         string      `json:"ftGenesis"`
-	FtSensibleId      string      `json:"ftSensibleId"`
-	FtCodehash        string      `json:"ftCodehash"`
-	FtDecimalNum      interface{} `json:"ftDecimalNum"`
-	FtIcon            string      `json:"ftIcon"`
-	FtSymbol          string      `json:"ftSymbol"`
-	FtName            string      `json:"ftName"`
+type SimpleGroupResidueLuckyBag struct {
+	LuckyBagTxId   string      `json:"luckyBagTxId"`
+	LuckyBagPinId  string      `json:"luckyBagPinId"`
+	LuckyBagMetaId string      `json:"luckyBagMetaId"`
+	SubId          string      `json:"subId"`
+	GroupId        string      `json:"groupId"`
+	Code           string      `json:"code"`
+	CreateTime     interface{} `json:"createTime"`
+	Used           []*ProUsed  `json:"used"`
+	Type           string      `json:"type"`
 }
 
 //private chat
@@ -385,15 +354,15 @@ type SimpleFileMsg struct {
 
 // 协议常量定义
 const (
-	MonitorSimpleCommunity               = "SimpleCommunity"
-	MonitorSimpleCommunityJoin           = "SimpleCommunityJoin"
-	MonitorSimpleGroupCreate             = "SimpleGroupCreate"
-	MonitorSimpleGroupJoin               = "SimpleGroupJoin"
-	MonitorSimpleGroupChat               = "SimpleGroupChat"
-	MonitorSimpleFileGroupChat           = "SimpleFileGroupChat"
-	MonitorSimpleGroupRedEnvelope        = "SimpleGroupRedEnvelope"
-	MonitorSimpleGroupOpenRedEnvelope    = "SimpleGroupOpenRedEnvelope"
-	MonitorSimpleGroupResidueRedEnvelope = "SimpleGroupResidueRedEnvelope"
+	MonitorSimpleCommunity            = "SimpleCommunity"
+	MonitorSimpleCommunityJoin        = "SimpleCommunityJoin"
+	MonitorSimpleGroupCreate          = "SimpleGroupCreate"
+	MonitorSimpleGroupJoin            = "SimpleGroupJoin"
+	MonitorSimpleGroupChat            = "SimpleGroupChat"
+	MonitorSimpleFileGroupChat        = "SimpleFileGroupChat"
+	MonitorSimpleGroupLuckyBag        = "SimpleGroupLuckyBag"
+	MonitorSimpleGroupOpenLuckyBag    = "SimpleGroupOpenLuckyBag"
+	MonitorSimpleGroupResidueLuckyBag = "SimpleGroupResidueLuckyBag"
 
 	MonitorSimpleMsg     = "SimpleMsg"
 	MonitorSimpleFileMsg = "SimpleFileMsg"

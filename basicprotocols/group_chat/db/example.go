@@ -126,20 +126,20 @@ func ExampleUsage() {
 	}
 
 	// 示例9: 发送红包
-	redEnvelope := &models.TalkGroupRedEnvelopeV3{
+	redEnvelope := &models.TalkGroupLuckyBagV3{
 		CommunityId: "community_123",
 		GroupId:     "group_456",
 		MetaId:      "metaid_123",
-		Protocol:    "red_envelope",
+		Protocol:    "lucky_bag",
 		Content:     "恭喜发财",
 		Amount:      "100",
 		Count:       "10",
 		Type:        "btc",
-		TxId:        "tx_red_001",
+		TxId:        "tx_lucky_bag_001",
 		Timestamp:   1234567890,
 	}
 
-	err = chatDB.SaveRedEnvelope(redEnvelope)
+	err = chatDB.SaveLuckyBag(redEnvelope)
 	if err != nil {
 		log.Printf("保存红包失败: %v", err)
 	} else {
@@ -147,20 +147,20 @@ func ExampleUsage() {
 	}
 
 	// 示例10: 抢红包
-	openRedEnvelope := &models.TalkGroupOpenRedEnvelopeV3{
-		CommunityId:       "community_123",
-		GroupId:           "group_456",
-		MetaId:            "metaid_456",
-		Protocol:          "open_red_envelope",
-		Address:           "address_456",
-		Amount:            "10",
-		RedEnvelopeTxId:   redEnvelope.TxId,
-		RedEnvelopeMetaId: redEnvelope.MetaId,
-		TxId:              "tx_open_001",
-		Timestamp:         1234567890,
+	openRedEnvelope := &models.TalkGroupOpenLuckyBagV3{
+		CommunityId:    "community_123",
+		GroupId:        "group_456",
+		MetaId:         "metaid_456",
+		Protocol:       "open_lucky_bag",
+		Address:        "address_456",
+		Amount:         "10",
+		LuckyBagTxId:   redEnvelope.TxId,
+		LuckyBagMetaId: redEnvelope.MetaId,
+		TxId:           "tx_open_001",
+		Timestamp:      1234567890,
 	}
 
-	err = chatDB.SaveOpenRedEnvelope(openRedEnvelope)
+	err = chatDB.SaveOpenLuckyBag(openRedEnvelope)
 	if err != nil {
 		log.Printf("保存抢红包记录失败: %v", err)
 	} else {

@@ -211,32 +211,32 @@ func (s *DbService) QueryGroupChatByTimestamp(groupId string, startTime, endTime
 
 // 查询红包消息
 func (s *DbService) QueryRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupRedEnvelopePinCollection, pinId)
+	return s.QueryByKey(db.TalkGroupLuckyBagPinCollection, pinId)
 }
 
 // 查询所有红包消息
 func (s *DbService) QueryAllRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupRedEnvelopePinCollection, limit)
+	return s.QueryAll(db.TalkGroupLuckyBagPinCollection, limit)
 }
 
 // 查询抢红包记录
 func (s *DbService) QueryOpenRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupOpenRedEnvelopePinCollection, pinId)
+	return s.QueryByKey(db.TalkGroupOpenLuckyBagPinCollection, pinId)
 }
 
 // 查询所有抢红包记录
 func (s *DbService) QueryAllOpenRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupOpenRedEnvelopePinCollection, limit)
+	return s.QueryAll(db.TalkGroupOpenLuckyBagPinCollection, limit)
 }
 
 // 查询剩余红包
 func (s *DbService) QueryResidueRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupResidueRedEnvelopePinCollection, pinId)
+	return s.QueryByKey(db.TalkGroupResidueLuckyBagPinCollection, pinId)
 }
 
 // 查询所有剩余红包
 func (s *DbService) QueryAllResidueRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupResidueRedEnvelopePinCollection, limit)
+	return s.QueryAll(db.TalkGroupResidueLuckyBagPinCollection, limit)
 }
 
 // 统计相关方法
