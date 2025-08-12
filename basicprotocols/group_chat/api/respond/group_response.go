@@ -57,6 +57,7 @@ type GroupChatItem struct {
 	MetanetId string    `json:"metanetId"` //
 	TxId      string    `json:"txId"`
 	MetaId    string    `json:"metaId"`
+	Address   string    `json:"address"`
 	UserInfo  *UserInfo `json:"userInfo"`
 	// AvatarTxId  string              `json:"avatarTxId"`
 	// AvatarImage string              `json:"avatarImage"`
@@ -80,6 +81,7 @@ type GroupChatItem struct {
 type ReplyInfo struct {
 	PinId       string          `json:"pinId"`
 	MetaId      string          `json:"metaId"`
+	Address     string          `json:"address"`
 	UserInfo    *UserInfo       `json:"userInfo"`
 	NickName    string          `json:"nickName"`
 	Protocol    string          `json:"protocol"`
@@ -105,56 +107,6 @@ type GroupMemberItem struct {
 	TimeStr   string    `json:"timeStr"`
 	Timestamp int64     `json:"timestamp"`
 }
-
-// type RoomPersonItem struct {
-// 	GroupId   string `json:"groupId"`   //房间ID 唯一
-// 	MetanetId string `json:"metanetId"` //房间ID 唯一
-// 	MetaId    string `json:"metaId"`    //用户的MetaId
-// 	Address   string `json:"address"`   //用户的00地址
-// 	// UserInfo    *model.UserInfoResp `json:"userInfo"`
-// 	Name        string `json:"name"`        //用户名称
-// 	AvatarTxId  string `json:"avatarTxId"`  //用户当前头像
-// 	AvatarImage string `json:"avatarImage"` //用户当前头像路由
-// 	// AvatarType  model.AvatarType `json:"avatarType"`  //用户当前头像类型
-// 	RoomState models.RoomState `json:"roomState"`
-// 	Timestamp int64            `json:"timestamp"` //加入或离开房间的时间戳
-// }
-
-// type GroupInfoResponse struct {
-// 	CommunityId           string `json:"communityId"`           //社区Id 唯一
-// 	GroupId               string `json:"groupId"`               //房间ID 唯一
-// 	MetanetId             string `json:"metanetId"`             //房间ID 唯一
-// 	TxId                  string `json:"txId"`                  //房间的TxId
-// 	RoomPublicKey         string `json:"roomPublicKey"`         //房间公钥
-// 	RoomName              string `json:"roomName"`              //创建房间的名称
-// 	RoomNote              string `json:"roomNote"`              //创建房间的公告
-// 	RoomType              string `json:"roomType"`              //创建房间的类型 ”1“不加密 “2”加密 加密采用AES加密算法
-// 	RoomStatus            string `json:"roomStatus"`            //"1" 未加密时为“1” 加密时为加密后的信息, 保留字段
-// 	RoomJoinType          string `json:"roomJoinType"`          //加入方式，1为密码，2为nft
-// 	RoomCodeHash          string `json:"roomCodeHash"`          //roomJoinType为2时有值，codeHash
-// 	RoomGenesis           string `json:"roomGenesis"`           //roomJoinType为2时有值，genesis
-// 	RoomLimitAmount       int64  `json:"roomLimitAmount"`       //roomJoinType为2时有值，token的限制
-// 	RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` //
-// 	RoomAvatarUrl         string `json:"roomAvatarUrl"`         //房间头像url
-// 	RoomNinePersonHash    string `json:"roomNinePersonHash"`    //房间前9位人员的metaId总hash值
-// 	RoomNewestTxId        string `json:"roomNewestTxId"`        //房间最新聊天内容的txId
-// 	RoomNewestMetaId      string `json:"roomNewestMetaId"`      //房间最新聊天内容的MetaId
-// 	RoomNewestUserName    string `json:"roomNewestUserName"`    //房间最新聊天内容的MetaId
-// 	RoomNewestProtocol    string `json:"roomNewestProtocol"`    //房间最新聊天内容的协议类型
-// 	RoomNewestContent     string `json:"roomNewestContent"`     //房间最新聊天内容
-// 	RoomNewestTimestamp   int64  `json:"roomNewestTimestamp"`   //房间最新聊天的时间戳
-// 	CreateUserMetaId      string `json:"createUserMetaId"`      //创建人的metaId
-// 	// CreateUserInfo        *model.UserInfoResp `json:"createUserInfo"`
-// 	CreateUserName        string `json:"createUserName"`        //创建人的metaId
-// 	CreateUserAvatarTxId  string `json:"createUserAvatarTxId"`  //创建人的metaId
-// 	CreateUserAvatarImage string `json:"createUserAvatarImage"` //创建人的头像路由
-// 	// CreateUserAvatarType  model.AvatarType    `json:"createUserAvatarType"`  //创建人的metaId
-// 	UserCount       int64  `json:"userCount"`       //房间人数
-// 	ChatSettingType int64  `json:"chatSettingType"` //用于设置发言限制， 0-所有人，1-管理员
-// 	DeleteStatus    int64  `json:"deleteStatus"`    //删除状态，0-正常，1-删除
-// 	Timestamp       int64  `json:"timestamp"`       //创建你房间的时间戳
-// 	Chain           string `json:"chain"`           //链类型
-// }
 
 // GroupPersonResponse 群组成员信息响应
 type GroupPersonResponse struct {
@@ -188,6 +140,7 @@ type ChatInfoItem struct {
 	Type             string `json:"type"`             // 类型：1-群聊，2-私聊
 	GroupId          string `json:"groupId"`          // 群组ID（群聊时）
 	MetaId           string `json:"metaId"`           // 对方MetaId（私聊时）
+	Address          string `json:"address"`          // 对方地址（私聊时）
 	Timestamp        int64  `json:"timestamp"`        // 最新消息时间戳
 	ChatType         int64  `json:"chatType"`         // 消息类型 0-msg, 1-red, 2-img
 	Content          string `json:"content"`          // 消息内容摘要
@@ -243,4 +196,68 @@ type PrivateChatItem struct {
 	Params      string      `json:"params"`      // 通用字段，便于后续新增参数
 	Chain       string      `json:"chain"`       // 链类型
 	BlockHeight int64       `json:"blockHeight"` // 区块高度
+}
+
+type LuckyBagInfoResponse struct {
+	TxId                string         `json:"txId"`
+	MetaId              string         `json:"metaId"`
+	UserInfo            *UserInfo      `json:"userInfo"`
+	Name                string         `json:"name"`
+	AvatarTxId          string         `json:"avatarTxId"`
+	AvatarImage         string         `json:"avatarImage"`
+	SubId               string         `json:"subId"`
+	Code                string         `json:"code"`
+	CreateTime          string         `json:"createTime"`
+	Content             string         `json:"content"`
+	Img                 string         `json:"img"`
+	ImgType             string         `json:"imgType"`
+	Amount              string         `json:"amount"`
+	Count               string         `json:"count"`
+	UsedCount           string         `json:"usedCount"`
+	PayList             []*InfoPayList `json:"payList"`
+	Type                string         `json:"type"`
+	TokenCount          uint64         `json:"tokenCount"`
+	RequireType         string         `json:"requireType"`
+	RequireTickId       string         `json:"requireTickId"`
+	RequireCollectionId string         `json:"requireCollectionId"`
+	LimitAmount         uint64         `json:"limitAmount"`
+}
+type InfoPayList struct {
+	TxId         string    `json:"txId"`
+	Index        int64     `json:"index"`
+	Amount       string    `json:"amount"`
+	Address      string    `json:"address"`
+	Used         string    `json:"used"`
+	Metaid       string    `json:"metaid"`
+	UserInfo     *UserInfo `json:"userInfo"`
+	Timestamp    int64     `json:"timestamp"`
+	ScriptPubKey string    `json:"scriptPubKey"`
+	IsBest       bool      `json:"isBest"`
+	IsWithdraw   bool      `json:"isWithdraw"`
+}
+
+type LuckyBagUnusedResponse struct {
+	MetaId              string        `json:"metaId"`
+	UserInfo            *UserInfo     `json:"userInfo"`
+	SubId               string        `json:"subId"`
+	Code                string        `json:"code"`
+	CreateTime          string        `json:"createTime"`
+	Amount              string        `json:"amount"`
+	Count               string        `json:"count"`
+	Content             string        `json:"content"`
+	Img                 string        `json:"img"`
+	ImgType             string        `json:"imgType"`
+	Unused              []*UnusedList `json:"unused"`
+	Type                string        `json:"type"`
+	TokenCount          uint64        `json:"tokenCount"`
+	RequireType         string        `json:"requireType"`
+	RequireTickId       string        `json:"requireTickId"`
+	RequireCollectionId string        `json:"requireCollectionId"`
+	LimitAmount         uint64        `json:"limitAmount"`
+}
+type UnusedList struct {
+	Index        int64  `json:"index"`
+	Amount       string `json:"amount"`
+	Address      string `json:"address"`
+	ScriptPubKey string `json:"scriptPubKey"`
 }

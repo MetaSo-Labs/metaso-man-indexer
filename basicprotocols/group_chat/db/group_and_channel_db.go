@@ -1147,6 +1147,44 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 	return persons, nil
 }
 
+// 根据MetaId获取用户加入的群组列表
+func (gdb *GroupDB) GetGroupListByMetaId(metaId string, page, size int64) ([]*models.TalkGroupModel, error) {
+	var groups []*models.TalkGroupModel
+
+	// 获取用户的群组加入列表
+	joinList, err := gdb.getGroupMetaIdJoinList(metaId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 计算分页
+	start := (page - 1) * size
+	end := start + size
+
+	// 获取群组信息
+	for i, item := range joinList.Items {
+		if int64(i) < start {
+			continue
+		}
+		if int64(i) >= end {
+			break
+		}
+
+		// 只返回在群组中的记录
+		if item.GroupState == models.RoomStateIn {
+			group, err := gdb.GetGroupInfoByGroupId(item.JoinPinId)
+			if err != nil {
+				continue
+			}
+			if group != nil {
+				groups = append(groups, group)
+			}
+		}
+	}
+
+	return groups, nil
+}
+
 // 群组MetaId加入记录项
 type GroupMetaIdJoinItem struct {
 	JoinPinId     string           `json:"joinPinId"`     // 加入的PinId

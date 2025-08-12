@@ -351,9 +351,10 @@ func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherM
 
 	// 创建新的私聊联系人项
 	newItem := &models.MetaIdContextItem{
-		GroupId:          "",          //
-		MetaId:           otherMetaId, // 对方的MetaId
-		Type:             "2",         // 2表示私聊
+		GroupId:          "",             //
+		MetaId:           otherMetaId,    // 对方的MetaId
+		Address:          chat.ToAddress, // 对方的地址
+		Type:             "2",            // 2表示私聊
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,

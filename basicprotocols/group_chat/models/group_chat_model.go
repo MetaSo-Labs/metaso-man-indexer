@@ -288,7 +288,8 @@ type TalkGroupResidueLuckyBagV3 struct {
 // 用户群列表项 + 用户私聊列表项
 type MetaIdContextItem struct {
 	GroupId          string   `json:"groupId"`          // 群组ID
-	MetaId           string   `json:"metaId"`           // 消息创建者的MetaId
+	MetaId           string   `json:"metaId"`           // 对方的MetaId
+	Address          string   `json:"address"`          // 对方的地址
 	Type             string   `json:"type"`             // 类型，1-群聊，2-私聊
 	Timestamp        int64    `json:"timestamp"`        // 最新消息时间戳
 	ChatType         ChatType `json:"chatType"`         // 消息类型
@@ -370,4 +371,24 @@ type ResidueLuckyBagListItem struct {
 type ResidueLuckyBagList struct {
 	LuckyBagPinId string                     `json:"luckyBagPinId"` // 红包PinId
 	Items         []*ResidueLuckyBagListItem `json:"items"`         // 回收红包列表项
+}
+
+// 红包统计信息
+type LuckyBagStatistics struct {
+	LuckyBagPinId       string `json:"luckyBagPinId"`       // 红包PinId
+	GroupId             string `json:"groupId"`             // 群组ID
+	TotalCount          int    `json:"totalCount"`          // 总数量
+	OpenedCount         int    `json:"openedCount"`         // 已领取数量
+	ResidueCount        int    `json:"residueCount"`        // 回收数量
+	TotalAmount         uint64 `json:"totalAmount"`         // 总金额
+	OpenedAmount        uint64 `json:"openedAmount"`        // 已领取金额
+	RemainingAmount     uint64 `json:"remainingAmount"`     // 剩余金额
+	IsCompleted         bool   `json:"isCompleted"`         // 是否已完成
+	CreateTime          string `json:"createTime"`          // 创建时间
+	Content             string `json:"content"`             // 红包内容
+	Type                string `json:"type"`                // 红包类型
+	RequireType         string `json:"requireType"`         // 要求类型
+	RequireTickId       string `json:"requireTickId"`       // 要求Token ID
+	RequireCollectionId string `json:"requireCollectionId"` // 要求Collection ID
+	LimitAmount         uint64 `json:"limitAmount"`         // 限制金额
 }

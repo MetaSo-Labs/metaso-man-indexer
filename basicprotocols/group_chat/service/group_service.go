@@ -43,8 +43,17 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 		req.Cursor = 1
 	}
 
-	// 获取群组列表
-	groups, err := groupDB.GetGroupList(req.Cursor, req.Size)
+	var groups []*models.TalkGroupModel
+	var err error
+
+	// 如果metaId不为空，获取用户加入的群组列表
+	if req.MetaId != "" {
+		groups, err = groupDB.GetGroupListByMetaId(req.MetaId, req.Cursor, req.Size)
+	} else {
+		// 获取所有群组列表
+		groups, err = groupDB.GetGroupList(req.Cursor, req.Size)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -347,6 +356,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			GroupId:     chat.GroupId,
 			MetanetId:   chat.GroupId, // 使用 GroupId 作为 MetanetId
 			TxId:        chat.TxId,
+			Address:     chat.Address,
 			MetaId:      chat.MetaId,
 			NickName:    "", // 需要从用户信息中获取
 			Protocol:    chat.Protocol,
@@ -369,6 +379,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			chatItem.ReplyInfo = &respond.ReplyInfo{
 				PinId:       replyChat.PinId,
 				MetaId:      replyChat.MetaId,
+				Address:     replyChat.Address,
 				NickName:    replyChat.NickName,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
@@ -497,6 +508,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			Type:             item.Type,
 			GroupId:          item.GroupId,
 			MetaId:           item.MetaId,
+			Address:          item.Address,
 			Timestamp:        item.Timestamp,
 			ChatType:         int64(item.ChatType),
 			Content:          item.Content,
