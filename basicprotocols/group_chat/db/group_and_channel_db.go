@@ -171,7 +171,13 @@ func (gdb *GroupDB) DeleteGroupCommunity(communityId, groupId string) error {
 // 根据社区ID获取群组列表
 func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
-	iter, err := Pb[TalkGroupCommunityCollection].NewIter(nil)
+
+	// 使用前缀查询，因为key是communityId_groupId格式
+	prefix := []byte(communityId + "_")
+	iter, err := Pb[TalkGroupCommunityCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -183,9 +189,7 @@ func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGr
 		if err != nil {
 			continue
 		}
-		if group.CommunityId == communityId {
-			groups = append(groups, &group)
-		}
+		groups = append(groups, &group)
 	}
 
 	return groups, nil
@@ -1027,7 +1031,14 @@ func (gdb *GroupDB) GetGroupJoinByGroupIdAndPinId(groupId, pinId string) (*model
 // 获取群组成员列表
 func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinModel, error) {
 	var members []*models.TalkGroupJoinModel
-	iter, err := Pb[TalkGroupJoinCollection].NewIter(nil)
+
+	// 使用前缀查询，因为key是groupId_pinId格式
+	prefix := []byte(groupId + "_")
+	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		// iter, err := Pb[TalkGroupJoinCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以groupId_开头的key
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1039,7 +1050,8 @@ func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinMode
 		if err != nil {
 			continue
 		}
-		if join.GroupId == groupId && join.GroupState == models.RoomStateIn {
+		// 只返回在群组中的成员
+		if join.GroupState == models.RoomStateIn {
 			members = append(members, &join)
 		}
 	}
@@ -1127,7 +1139,13 @@ func (gdb *GroupDB) GetGroupPersonByMetaIdAndGroupId(metaId, groupId string) (*m
 // 获取群组成员列表
 func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerson, error) {
 	var persons []*models.TalkGroupPerson
-	iter, err := Pb[TalkGroupPersonCollection].NewIter(nil)
+
+	// 使用前缀查询，因为key是groupId_metaId格式
+	prefix := []byte(groupId + "_")
+	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以groupId_开头的key
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1139,7 +1157,8 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 		if err != nil {
 			continue
 		}
-		if person.GroupId == groupId && person.GroupState == models.RoomStateIn {
+		// 只返回在群组中的成员
+		if person.GroupState == models.RoomStateIn {
 			persons = append(persons, &person)
 		}
 	}

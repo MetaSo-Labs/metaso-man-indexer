@@ -28,7 +28,12 @@ func InitService(indexer *indexer.GroupChatIndexer) error {
 	privateDB = indexer.GetPrivateDB()
 
 	// 启动聊天队列处理器
-	chatDB.StartQueueProcessor(groupDB)
+	// chatDB.StartQueueProcessor(groupDB)
+
+	// 启动私聊队列处理器
+	// privateDB.StartPrivateQueueProcessor()
+
+	StartOpenLuckyBagQueueProcessor()
 
 	return nil
 }
@@ -418,7 +423,7 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		req.Cursor = 1
 	}
 
-	// 获取群组成员
+	// 获取群组成员 - 从TalkGroupPersonCollection获取
 	members, err := groupDB.GetGroupMembers(req.GroupId)
 	if err != nil {
 		return nil, err
@@ -428,8 +433,8 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 	var memberItems []*respond.GroupMemberItem
 	for _, member := range members {
 		memberItem := &respond.GroupMemberItem{
-			MetaId:    member.MetaId,
-			Name:      "", // 暂未实现，需要从用户信息中获取
+			MetaId: member.MetaId,
+			// Name:      member.UserName, // 使用UserName字段
 			Address:   member.Address,
 			TimeStr:   time.Unix(member.Timestamp, 0).Format("2006-01-02 15:04:05"),
 			Timestamp: member.Timestamp,

@@ -161,7 +161,14 @@ func (cdb *CommunityDB) GetCommunityJoinByCommunityIdAndPinId(communityId, pinId
 // 获取社区成员列表
 func (cdb *CommunityDB) GetCommunityMembers(communityId string) ([]*models.TalkCommunityJoinModel, error) {
 	var members []*models.TalkCommunityJoinModel
-	iter, err := Pb[TalkCommunityJoinCollection].NewIter(nil)
+
+	// 使用前缀查询，因为key是communityId_pinId格式
+	prefix := []byte(communityId + "_")
+	// iter, err := Pb[TalkCommunityJoinCollection].NewIter(&pebble.IterOptions{
+	iter, err := Pb[TalkCommunityPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +180,8 @@ func (cdb *CommunityDB) GetCommunityMembers(communityId string) ([]*models.TalkC
 		if err != nil {
 			continue
 		}
-		if join.CommunityId == communityId && join.CommunityState == models.RoomStateIn {
+		// 只返回在社区中的成员
+		if join.CommunityState == models.RoomStateIn {
 			members = append(members, &join)
 		}
 	}
@@ -218,7 +226,13 @@ func (cdb *CommunityDB) GetCommunityPersonByCommunityIdAndMetaId(communityId, me
 // 获取社区成员列表
 func (cdb *CommunityDB) GetCommunityPersonList(communityId string) ([]*models.TalkCommunityPerson, error) {
 	var persons []*models.TalkCommunityPerson
-	iter, err := Pb[TalkCommunityPersonCollection].NewIter(nil)
+
+	// 使用前缀查询，因为key是communityId_metaId格式
+	prefix := []byte(communityId + "_")
+	iter, err := Pb[TalkCommunityPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +244,8 @@ func (cdb *CommunityDB) GetCommunityPersonList(communityId string) ([]*models.Ta
 		if err != nil {
 			continue
 		}
-		if person.CommunityId == communityId && person.CommunityState == models.RoomStateIn {
+		// 只返回在社区中的成员
+		if person.CommunityState == models.RoomStateIn {
 			persons = append(persons, &person)
 		}
 	}

@@ -100,8 +100,8 @@ type GroupMemberResponse struct {
 }
 
 type GroupMemberItem struct {
-	MetaId    string    `json:"metaId"`
-	Name      string    `json:"name"`
+	MetaId string `json:"metaId"`
+	// Name      string    `json:"name"`
 	Address   string    `json:"address"`
 	UserInfo  *UserInfo `json:"userInfo"`
 	TimeStr   string    `json:"timeStr"`
