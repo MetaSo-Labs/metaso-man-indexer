@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/cockroachdb/pebble"
 )
 
@@ -351,7 +353,7 @@ func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*
 }
 
 // 保存抢红包列表记录
-func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createAddress string) error {
+func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndex int64) error {
 	// 获取现有的列表
 	list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
 	if err != nil {
@@ -360,10 +362,12 @@ func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, 
 
 	// 添加新的记录
 	newItem := &models.OpenLuckyBagListItem{
-		OpenPinId:     openPinId,
-		GroupId:       groupId,
-		Timestamp:     timestamp,
-		CreateAddress: createAddress,
+		OpenPinId:        openPinId,
+		GroupId:          groupId,
+		Timestamp:        timestamp,
+		CreateAddress:    createAddress,
+		CreateMetaId:     createMetaId,
+		LuckyBagOutIndex: luckyBagOutIndex,
 	}
 
 	// 检查是否已存在
@@ -411,7 +415,7 @@ func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyB
 }
 
 // 保存回收红包列表记录
-func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createAddress string) error {
+func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndexList []int64) error {
 	// 获取现有的列表
 	list, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
 	if err != nil {
@@ -420,10 +424,12 @@ func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId st
 
 	// 添加新的记录
 	newItem := &models.ResidueLuckyBagListItem{
-		ResiduePinId:  residuePinId,
-		GroupId:       groupId,
-		Timestamp:     timestamp,
-		CreateAddress: createAddress,
+		ResiduePinId:         residuePinId,
+		GroupId:              groupId,
+		Timestamp:            timestamp,
+		CreateMetaId:         createMetaId,
+		CreateAddress:        createAddress,
+		LuckyBagOutIndexList: luckyBagOutIndexList,
 	}
 
 	// 检查是否已存在
@@ -760,6 +766,91 @@ func (cdb *ChatDB) deleteQueueMessage(pinId string) error {
 	return nil
 }
 
+// 抢红包队列消息项
+type QueueOpenLuckyBagMessage struct {
+	PinId        string                          `json:"pinId"`        // 消息PinId
+	OpenLuckyBag *models.TalkGroupOpenLuckyBagV3 `json:"openLuckyBag"` // 抢红包记录
+	Timestamp    int64                           `json:"timestamp"`    // 入队时间戳
+	RetryCount   int                             `json:"retryCount"`   // 重试次数
+	Status       string                          `json:"status"`       // 处理状态：pending, processing, completed, failed
+}
+
+// 将抢红包记录加入队列
+func (cdb *ChatDB) EnqueueOpenLuckyBagMessage(openLuckyBag *models.TalkGroupOpenLuckyBagV3) error {
+	queueMessage := &QueueOpenLuckyBagMessage{
+		PinId:        openLuckyBag.PinId,
+		OpenLuckyBag: openLuckyBag,
+		Timestamp:    time.Now().Unix(),
+		RetryCount:   0,
+		Status:       "pending",
+	}
+
+	data, err := json.Marshal(queueMessage)
+	if err != nil {
+		return err
+	}
+
+	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + openLuckyBag.PinId)
+	return Pb[TalkGroupOpenLuckyBagQueueCollection].Set(key, data, pebble.Sync)
+}
+
+// 获取抢红包队列中的待处理消息
+func (cdb *ChatDB) GetPendingOpenLuckyBagMessages(limit int) ([]*QueueOpenLuckyBagMessage, error) {
+	var messages []*QueueOpenLuckyBagMessage
+	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid() && iter.Key() != nil && count < limit; iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueOpenLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// 只处理pending状态的消息
+		if queueMessage.Status == "pending" {
+			messages = append(messages, &queueMessage)
+			count++
+		}
+	}
+
+	return messages, nil
+}
+
+// 删除抢红包队列消息数据
+func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
+	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	// 查找包含该pinId的队列消息
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueOpenLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// 找到匹配的pinId，删除该队列消息
+		if queueMessage.PinId == pinId {
+			return Pb[TalkGroupOpenLuckyBagQueueCollection].Delete(iter.Key(), pebble.Sync)
+		}
+	}
+
+	return nil
+}
+
 // 批量处理队列消息（异步更新群列表）
 func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 	// 获取待处理的消息
@@ -810,21 +901,61 @@ func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 }
 
 // 总的处理 Group Chat 方法
-func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription) error {
+func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
 	switch pin.Operation {
 	case "create":
 		path := pin.Path
 		protocol := strings.Replace(path, "/protocols/", "", -1)
+
+		var txData *wire.MsgTx
+		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupLuckyBag) ||
+			strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag) ||
+			strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag) {
+			if tx != nil {
+				// 判断tx的类型，如果是wire.MsgTx或*wire.MsgTx，就转成*wire.MsgTx
+				switch txType := tx.(type) {
+				case *wire.MsgTx:
+					txData = txType
+				case wire.MsgTx:
+					txData = &txType
+				default:
+					// 其他类型，尝试直接转换
+					if msgTx, ok := tx.(*wire.MsgTx); ok {
+						txData = msgTx
+					} else if msgTx, ok := tx.(wire.MsgTx); ok {
+						txData = &msgTx
+					}
+				}
+			} else {
+
+				//要改用非man的
+				// var (
+				// 	chain string = "btc"
+				// 	txId  string = ""
+				// )
+				// chain = pin.ChainName
+				// txId = pin.Id[:len(pin.Id)-2]
+				// trst, err := man.ChainAdapter[chain].GetTransaction(txId)
+				// if err != nil {
+				// 	return err
+				// }
+				// txD := trst.(*btcutil.Tx)
+				// if txD != nil {
+				// 	txData = txD.MsgTx()
+				// }
+			}
+		}
+
 		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupChat) {
 			return cdb.processGroupChat(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleFileGroupChat) {
 			return cdb.processFileGroupChat(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupLuckyBag) {
-			return cdb.processGroupLuckyBag(pin)
+			return cdb.processGroupLuckyBag(pin, txData)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag) {
-			return cdb.processGroupOpenLuckyBag(pin)
+			return cdb.processGroupOpenLuckyBag(pin, txData)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag) {
-			return cdb.processGroupResidueLuckyBag(pin)
+			return cdb.processGroupResidueLuckyBag(pin, txData)
 		}
 	default:
 		return nil // 未知操作类型，跳过
@@ -1089,7 +1220,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 }
 
 // 处理群组红包
-func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
+func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
 	// 检查是否已经保存过该 PinId
 	existingRed, err := cdb.GetLuckyBagByPinId(pin.Id)
 	if err == nil && existingRed != nil {
@@ -1112,13 +1243,26 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
 	}
 
 	// 转换支付列表
-	var payList []*models.ProInfoPayList
+	var (
+		payList       []*models.ProInfoPayList
+		luckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+	)
 	for _, pay := range simpleLuckyBag.PayList {
 		payList = append(payList, &models.ProInfoPayList{
 			Amount:  toString(pay.Amount),
 			Address: pay.Address,
 			Index:   toInt64(pay.Index),
 		})
+	}
+	if txData != nil {
+		for i, vout := range txData.TxOut {
+			luckyBagVouts = append(luckyBagVouts, &models.LuckyBagOutput{
+				ScriptPubKey: hex.EncodeToString(vout.PkScript),
+				Amount:       uint64(vout.Value),
+				Address:      "",
+				Index:        int64(i),
+			})
+		}
 	}
 
 	// 创建红包模型
@@ -1138,7 +1282,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
 		Amount:              toString(simpleLuckyBag.Amount),
 		Count:               toString(simpleLuckyBag.Count),
 		PayList:             payList,
-		LuckyBagVouts:       []*models.LuckyBagOutput{}, // 需要从交易中解析
+		LuckyBagVouts:       luckyBagVouts,
 		Type:                simpleLuckyBag.Type,
 		RequireType:         toString(simpleLuckyBag.RequireType),
 		RequireTickId:       simpleLuckyBag.RequireTickId,
@@ -1198,7 +1342,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription) error {
 }
 
 // 处理群组抢红包
-func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
+func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
 	// 检查是否已经保存过该 PinId
 	existingOpen, err := cdb.GetOpenLuckyBagByPinId(pin.Id)
 	if err == nil && existingOpen != nil {
@@ -1221,12 +1365,27 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 	}
 
 	// 转换输入交易
-	var vins []*models.TxIn
+	var (
+		vins   []*models.TxIn
+		amount int64  = 0
+		index  uint32 = 0
+	)
+
 	if simpleOpenLuckyBag.Used != nil {
-		vins = append(vins, &models.TxIn{
-			OutTxID: simpleOpenLuckyBag.LuckyBagTxId,
-			Index:   toUint64(simpleOpenLuckyBag.Used.Index),
-		})
+		if txData != nil {
+			for _, vin := range txData.TxIn {
+				if vin.PreviousOutPoint.Hash.String() == simpleOpenLuckyBag.LuckyBagTxId &&
+					vin.PreviousOutPoint.Index == uint32(toInt64(simpleOpenLuckyBag.Used.Index)) {
+					vins = append(vins, &models.TxIn{
+						OutTxID: simpleOpenLuckyBag.LuckyBagTxId,
+						Index:   uint64(vin.PreviousOutPoint.Index),
+					})
+					amount = toInt64(simpleOpenLuckyBag.Used.Amount)
+					index = vin.PreviousOutPoint.Index
+				}
+			}
+		}
+
 	}
 
 	// 创建抢红包模型
@@ -1241,8 +1400,8 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 		Code:                simpleOpenLuckyBag.Code,
 		CreateTimeStr:       toString(simpleOpenLuckyBag.CreateTime),
 		Address:             pin.CreateAddress,
-		Index:               0,  // 需要从交易中解析
-		Amount:              "", // 需要从交易中解析
+		Index:               int64(index),
+		Amount:              toString(amount),
 		Vins:                vins,
 		Type:                simpleOpenLuckyBag.Type,
 		RequireTickId:       "",
@@ -1254,6 +1413,9 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 		Timestamp:           pin.Timestamp,
 		BlockHeight:         pin.GenesisHeight,
 		Chain:               pin.ChainName,
+		GrabState:           models.GrabStateChain,
+		GrabTxId:            pin.Id[:len(pin.Id)-2],
+		GrabMsg:             "success",
 	}
 
 	// 保存抢红包信息
@@ -1263,7 +1425,7 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 	}
 
 	// 保存抢红包列表记录
-	err = cdb.SaveOpenLuckyBagList(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateAddress)
+	err = cdb.SaveOpenLuckyBagList(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, int64(index))
 	if err != nil {
 		log.Printf("SaveOpenLuckyBagList err: %v", err)
 		// 不返回错误，因为主流程已经成功
@@ -1277,12 +1439,12 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 		MetaId:      pin.CreateMetaId,
 		Address:     pin.CreateAddress,
 		Protocol:    pin.Path,
-		Content:     "[Grab LuckyBag]:" + simpleOpenLuckyBag.Code, // 可以根据实际金额显示
+		Content:     "[Grab LuckyBag]", // 可以根据实际金额显示
 		ContentType: "text/plain",
 		Encryption:  "",
 		ChatType:    models.ChatTypeOpenLuckyBag, // 抢红包类型
 		InsideIndex: models.ChatInsideIndexIn,    // 默认为进入状态
-		ReplyPin:    "",
+		ReplyPin:    simpleOpenLuckyBag.LuckyBagPinId,
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
@@ -1310,7 +1472,7 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription) error {
 }
 
 // 处理群组回收红包
-func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription) error {
+func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
 	// 检查是否已经保存过该 PinId
 	existingResidue, err := cdb.GetResidueLuckyBagByLuckyBagPinId(pin.Id)
 	if err == nil && existingResidue != nil {
@@ -1333,18 +1495,30 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription) error {
 	}
 
 	// 转换已使用列表
-	var usedList []*models.ProInfoPayList
+	var (
+		usedList             []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
+		vins                 []*models.TxIn           = make([]*models.TxIn, 0)
+		luckyBagOutIndexList []int64                  = make([]int64, 0)
+	)
 	for _, used := range simpleResidueLuckyBag.Used {
 		usedList = append(usedList, &models.ProInfoPayList{
 			Amount:  toString(used.Amount),
 			Address: used.Address,
 			Index:   toInt64(used.Index),
 		})
+		if txData != nil {
+			for _, vin := range txData.TxIn {
+				if vin.PreviousOutPoint.Hash.String() == simpleResidueLuckyBag.LuckyBagTxId &&
+					vin.PreviousOutPoint.Index == uint32(toInt64(used.Index)) {
+					vins = append(vins, &models.TxIn{
+						OutTxID: simpleResidueLuckyBag.LuckyBagTxId,
+						Index:   uint64(vin.PreviousOutPoint.Index),
+					})
+					luckyBagOutIndexList = append(luckyBagOutIndexList, int64(vin.PreviousOutPoint.Index))
+				}
+			}
+		}
 	}
-
-	// 转换输入交易
-	var vins []*models.TxIn
-	// 这里需要根据实际情况解析输入交易
 
 	// 创建回收红包模型
 	residueLuckyBag := &models.TalkGroupResidueLuckyBagV3{
@@ -1377,48 +1551,50 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription) error {
 	}
 
 	// 保存回收红包列表记录
-	err = cdb.SaveResidueLuckyBagList(simpleResidueLuckyBag.LuckyBagPinId, pin.Id, simpleResidueLuckyBag.GroupId, pin.Timestamp, pin.CreateAddress)
+	err = cdb.SaveResidueLuckyBagList(simpleResidueLuckyBag.LuckyBagPinId, pin.Id, simpleResidueLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, luckyBagOutIndexList)
 	if err != nil {
 		log.Printf("SaveResidueLuckyBagList err: %v", err)
 		// 不返回错误，因为主流程已经成功
 	}
 
-	// 创建聊天消息模型（用于群聊显示）
-	chat := &models.TalkGroupChatV3{
-		GroupId:     simpleResidueLuckyBag.GroupId,
-		TxId:        pin.Id[:len(pin.Id)-2],
-		PinId:       pin.Id,
-		MetaId:      pin.CreateMetaId,
-		Address:     pin.CreateAddress,
-		Protocol:    pin.Path,
-		Content:     "[Recycle LuckyBag]:" + simpleResidueLuckyBag.Code, // 可以根据实际情况显示
-		ContentType: "text/plain",
-		Encryption:  "",
-		ChatType:    models.ChatTypeRecycleLuckyBag, // 回收红包类型
-		InsideIndex: models.ChatInsideIndexIn,       // 默认为进入状态
-		ReplyPin:    "",
-		Timestamp:   pin.Timestamp,
-		Chain:       pin.ChainName,
-		BlockHeight: pin.GenesisHeight,
-	}
+	return nil
 
-	// 保存聊天消息到 TalkGroupChatPinCollection
-	err = cdb.SaveChat(chat)
-	if err != nil {
-		return err
-	}
+	// // 创建聊天消息模型（用于群聊显示）
+	// chat := &models.TalkGroupChatV3{
+	// 	GroupId:     simpleResidueLuckyBag.GroupId,
+	// 	TxId:        pin.Id[:len(pin.Id)-2],
+	// 	PinId:       pin.Id,
+	// 	MetaId:      pin.CreateMetaId,
+	// 	Address:     pin.CreateAddress,
+	// 	Protocol:    pin.Path,
+	// 	Content:     "[Recycle LuckyBag]:" + simpleResidueLuckyBag.Code, // 可以根据实际情况显示
+	// 	ContentType: "text/plain",
+	// 	Encryption:  "",
+	// 	ChatType:    models.ChatTypeRecycleLuckyBag, // 回收红包类型
+	// 	InsideIndex: models.ChatInsideIndexIn,       // 默认为进入状态
+	// 	ReplyPin:    "",
+	// 	Timestamp:   pin.Timestamp,
+	// 	Chain:       pin.ChainName,
+	// 	BlockHeight: pin.GenesisHeight,
+	// }
 
-	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
-	err = cdb.SaveChatTimestampWithState(chat)
-	if err != nil {
-		return err
-	}
+	// // 保存聊天消息到 TalkGroupChatPinCollection
+	// err = cdb.SaveChat(chat)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// 将消息加入队列，异步更新群列表
-	err = cdb.EnqueueChatMessage(chat)
-	if err != nil {
-		return err
-	}
+	// // 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// err = cdb.SaveChatTimestampWithState(chat)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// // 将消息加入队列，异步更新群列表
+	// err = cdb.EnqueueChatMessage(chat)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

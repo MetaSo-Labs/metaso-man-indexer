@@ -1,128 +1,559 @@
 package service
 
-// import (
-// 	"manindexer/basicprotocols/group_chat/api/respond"
-// 	"manindexer/basicprotocols/group_chat/db"
-// 	"manindexer/basicprotocols/group_chat/models"
-// 	"strconv"
-// )
+import (
+	"errors"
+	"fmt"
+	"log"
+	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/models"
+	"strconv"
+	"time"
+)
 
-// // GetLuckyBagWithOpenList 根据groupId和pinId获取红包对象和已领取列表
-// func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoResponse, error) {
-// 	chatDB := db.NewChatDB(&db.Pebble{})
+// GetLuckyBagWithOpenList 根据groupId和pinId获取红包对象和已领取列表
+func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoResponse, error) {
+	// 获取红包对象
+	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return nil, err
+	}
 
-// 	// 获取红包对象
-// 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
+	if luckyBag == nil {
+		return nil, errors.New("lucky bag not found")
+	}
 
-// 	if luckyBag == nil {
-// 		return nil, nil, nil, nil
-// 	}
+	// 验证groupId是否匹配
+	if luckyBag.GroupId != groupId {
+		return nil, errors.New("lucky bag not match")
+	}
 
-// 	// 验证groupId是否匹配
-// 	if luckyBag.GroupId != groupId {
-// 		return nil, nil, nil, nil
-// 	}
+	// 获取已领取的抢红包列表
+	openList, err := chatDB.GetOpenLuckyBagList(pinId)
+	if err != nil {
+		return nil, err
+	}
 
-// 	// 获取已领取的抢红包列表
-// 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
+	// 构建LuckyBagInfoResponse
+	response := &respond.LuckyBagInfoResponse{
+		TxId:                luckyBag.TxId,
+		MetaId:              luckyBag.MetaId,
+		UserInfo:            nil, // 需要从用户信息中获取
+		SubId:               luckyBag.SubId,
+		Code:                luckyBag.Code,
+		CreateTime:          luckyBag.CreateTimeStr,
+		Content:             luckyBag.Content,
+		Img:                 luckyBag.Img,
+		ImgType:             luckyBag.ImgType,
+		Amount:              luckyBag.Amount,
+		Count:               luckyBag.Count,
+		UsedCount:           "0",
+		PayList:             make([]*respond.InfoPayList, 0),
+		Type:                luckyBag.Type,
+		TokenCount:          0, // TalkGroupLuckyBagV3 没有 TokenCount 字段
+		RequireType:         luckyBag.RequireType,
+		RequireTickId:       luckyBag.RequireTickId,
+		RequireCollectionId: luckyBag.RequireCollectionId,
+		LimitAmount:         luckyBag.LimitAmount,
+	}
 
-// 	// 获取已领取的回收红包列表
-// 	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
+	usedCount := 0
+	// 转换PayList - 注意ProInfoPayList字段较少，需要填充默认值
+	for _, payItem := range luckyBag.PayList {
+		infoPayList := &respond.InfoPayList{
+			TxId:         luckyBag.TxId,
+			Index:        payItem.Index,
+			Amount:       payItem.Amount,
+			Address:      payItem.Address,
+			Used:         false,
+			GradTxId:     "",
+			GradPinId:    "",
+			GradMetaId:   "",
+			GradAddress:  "",
+			UserInfo:     nil,
+			Timestamp:    0,
+			ScriptPubKey: "",
+			IsBest:       false,
+			IsWithdraw:   false,
+		}
 
-// 	return luckyBag, openList, residueList, nil
-// }
+		if openList != nil {
+			for _, openItem := range openList.Items {
+				if openItem.LuckyBagOutIndex == payItem.Index {
+					infoPayList.Used = true
+					infoPayList.GradTxId = openItem.OpenPinId[:len(openItem.OpenPinId)-2]
+					infoPayList.GradPinId = openItem.OpenPinId
+					infoPayList.GradMetaId = openItem.CreateMetaId
+					infoPayList.GradAddress = openItem.CreateAddress
+					infoPayList.IsWithdraw = true
+					usedCount++
+				}
+			}
+		}
+		response.PayList = append(response.PayList, infoPayList)
+	}
+	response.UsedCount = strconv.Itoa(usedCount)
 
-// // GetLuckyBagDetail 获取红包详细信息，包括已领取的列表
-// func GetLuckyBagDetail(groupId, pinId string) (*models.TalkGroupLuckyBagV3, []*models.TalkGroupOpenLuckyBagV3, []*models.TalkGroupResidueLuckyBagV3, error) {
-// 	chatDB := db.NewChatDB(&db.Pebble{})
+	return response, nil
+}
 
-// 	// 获取红包对象
-// 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
+// 临时的OpenRedMetaId结构，用于匹配参考代码
+type OpenRedMetaId struct {
+	MetaId             string
+	ProOpenRedenvelope *ProOpenRedenvelope
+	Vins               []*models.TxIn
+	Timestamp          int64
+}
 
-// 	if luckyBag == nil {
-// 		return nil, nil, nil, nil
-// 	}
+type ProOpenRedenvelope struct {
+	SubId      string
+	Code       string
+	CreateTime string
+	Used       *ProUsed
+}
 
-// 	// 验证groupId是否匹配
-// 	if luckyBag.GroupId != groupId {
-// 		return nil, nil, nil, nil
-// 	}
+type ProUsed struct {
+	Amount  string
+	Address string
+	Index   int64
+}
 
-// 	// 获取已领取的抢红包详细列表
-// 	openLuckyBags, err := chatDB.GetOpenLuckyBagsByLuckyBagTxId(luckyBag.TxId)
-// 	if err != nil {
-// 		return nil, nil, nil, err
-// 	}
+func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
+	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return "", err
+	}
+	if luckyBag == nil {
+		return "", errors.New("lucky bag not found")
+	}
 
-// 	// 获取已领取的回收红包详细列表
-// 	residueLuckyBags := make([]*models.TalkGroupResidueLuckyBagV3, 0)
-// 	// 注意：这里需要根据实际情况调整，因为回收红包可能没有直接的查询方法
-// 	// 暂时返回空列表，后续可以根据需要添加查询方法
+	// 验证groupId是否匹配
+	if luckyBag.GroupId != groupId {
+		return "", errors.New("lucky bag not match")
+	}
 
-// 	return luckyBag, openLuckyBags, residueLuckyBags, nil
-// }
+	// 获取已领取的抢红包列表
+	openList, err := chatDB.GetOpenLuckyBagList(pinId)
+	if err != nil {
+		return "", err
+	}
 
-// // GetLuckyBagStatistics 获取红包统计信息
-// func GetLuckyBagStatistics(groupId, pinId string) (*models.LuckyBagStatistics, error) {
-// 	luckyBag, openList, residueList, err := GetLuckyBagWithOpenList(groupId, pinId)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	// 构建已抢红包列表
+	openRedList := make([]*OpenRedMetaId, 0)
+	for _, v := range openList.Items {
+		// 获取抢红包详细信息
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(v.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
 
-// 	if luckyBag == nil {
-// 		return nil, nil
-// 	}
+		openMetaId := &OpenRedMetaId{
+			MetaId: openLuckyBag.MetaId,
+			ProOpenRedenvelope: &ProOpenRedenvelope{
+				SubId:      openLuckyBag.SubId,
+				Code:       openLuckyBag.Code,
+				CreateTime: openLuckyBag.CreateTimeStr,
+				Used: &ProUsed{
+					Amount:  openLuckyBag.Amount,
+					Address: openLuckyBag.Address,
+					Index:   openLuckyBag.Index,
+				},
+			},
+			Vins:      openLuckyBag.Vins,
+			Timestamp: openLuckyBag.Timestamp,
+		}
+		openRedList = append(openRedList, openMetaId)
 
-// 	// 计算统计信息
-// 	totalCount := len(luckyBag.PayList)
-// 	openedCount := len(openList.Items)
-// 	residueCount := len(residueList.Items)
+		// 检查当前用户是否已经抢过
+		if openLuckyBag.Address == address || openLuckyBag.MetaId == metaId {
+			return "", errors.New("already grab")
+		}
+	}
 
-// 	// 计算已领取金额
-// 	openedAmount := uint64(0)
-// 	// 这里需要根据openList.Items获取具体的金额信息
-// 	// 暂时使用默认值，后续可以根据需要完善
-// 	_ = openList.Items // 避免未使用变量警告
+	// 获取回收红包列表
+	residueRedEnvelopeList, err := chatDB.GetResidueLuckyBagList(pinId)
+	if err != nil {
+		return "", err
+	}
 
-// 	// 计算剩余金额
-// 	totalAmount := uint64(0)
-// 	for _, payItem := range luckyBag.PayList {
-// 		if amount, err := strconv.ParseUint(payItem.Amount, 10, 64); err == nil {
-// 			totalAmount += amount
-// 		}
-// 	}
-// 	remainingAmount := totalAmount - openedAmount
+	if residueRedEnvelopeList != nil && len(residueRedEnvelopeList.Items) != 0 {
+		for _, residueItem := range residueRedEnvelopeList.Items {
+			// 获取回收红包详细信息
+			residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+			if err != nil || residueLuckyBag == nil {
+				continue
+			}
 
-// 	statistics := &models.LuckyBagStatistics{
-// 		LuckyBagPinId:       pinId,
-// 		GroupId:             groupId,
-// 		TotalCount:          totalCount,
-// 		OpenedCount:         openedCount,
-// 		ResidueCount:        residueCount,
-// 		TotalAmount:         totalAmount,
-// 		OpenedAmount:        openedAmount,
-// 		RemainingAmount:     remainingAmount,
-// 		IsCompleted:         openedCount >= totalCount,
-// 		CreateTime:          luckyBag.CreateTimeStr,
-// 		Content:             luckyBag.Content,
-// 		Type:                luckyBag.Type,
-// 		RequireType:         luckyBag.RequireType,
-// 		RequireTickId:       luckyBag.RequireTickId,
-// 		RequireCollectionId: luckyBag.RequireCollectionId,
-// 		LimitAmount:         luckyBag.LimitAmount,
-// 	}
+			if residueLuckyBag.UsedList == nil || len(residueLuckyBag.UsedList) == 0 {
+				continue
+			}
+			for _, v := range residueLuckyBag.UsedList {
+				openMetaId := &OpenRedMetaId{
+					MetaId: residueLuckyBag.MetaId,
+					ProOpenRedenvelope: &ProOpenRedenvelope{
+						SubId:      residueLuckyBag.SubId,
+						Code:       residueLuckyBag.Code,
+						CreateTime: residueLuckyBag.CreateTimeStr,
+						Used: &ProUsed{
+							Amount:  v.Amount,
+							Address: v.Address,
+							Index:   v.Index,
+						},
+					},
+					Vins:      residueLuckyBag.Vins,
+					Timestamp: residueLuckyBag.Timestamp,
+				}
 
-// 	return statistics, nil
-// }
+				openRedList = append(openRedList, openMetaId)
+			}
+		}
+	}
+
+	// 获取未抢的红包列表
+	unusedList := make([]*respond.UnusedList, 0)
+	for _, v := range luckyBag.PayList {
+		used := false
+		for _, openV := range openRedList {
+			if openV.Vins == nil {
+				continue
+			}
+			vins := openV.Vins
+			isVaildRedOpen := false
+			for _, in := range vins {
+				if in.Index == uint64(v.Index) && in.OutTxID == luckyBag.TxId {
+					isVaildRedOpen = true
+				}
+			}
+			if !isVaildRedOpen {
+				continue
+			}
+
+			if openV.ProOpenRedenvelope != nil && openV.ProOpenRedenvelope.Used != nil && openV.ProOpenRedenvelope.Used.Index == v.Index {
+				used = true
+			}
+		}
+		if used {
+			continue
+		}
+
+		unused := &respond.UnusedList{
+			Index:   v.Index,
+			Amount:  v.Amount,
+			Address: v.Address,
+		}
+		unusedList = append(unusedList, unused)
+	}
+
+	if len(unusedList) <= 0 {
+		return "", errors.New("LuckyBag had been all grab.")
+	}
+
+	err = commonGrab(luckyBag, unusedList, metaId, address)
+	if err != nil {
+		return "", err
+	}
+
+	return "success", nil
+}
+
+func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.UnusedList, metaId, address string) error {
+	type grabEntity struct {
+		unusedIndex   int64
+		unusedAmount  string
+		unusedAddress string
+		tokenIndex    string
+	}
+	grabEntityList := make([]*grabEntity, 0)
+	has := false
+
+	for _, unused := range unusedList {
+		//redis
+		// usedMetaId, _ := redis.GetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, unused.Index)
+		// if usedMetaId != "" {
+		// 	if usedMetaId != metaId {
+		// 		continue
+		// 	}else {
+		// 		has = true
+		// 		grabEntityList = append(grabEntityList, &grabEntity{
+		// 			unusedIndex:   unused.Index,
+		// 			unusedAmount:  unused.Amount,
+		// 			unusedAddress: unused.Address,
+		// 			tokenIndex:    "",
+		// 		})
+		// 		break
+		// 	}
+		// }else {
+		// 	_, err := redis.SetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, metaId, unused.Index)
+		// 	if err != nil {
+		// 		major.Println(fmt.Sprintf("[REDIS] Set userinfo err:%s", err.Error()))
+		// 		continue
+		// 	}else {
+		// 		has = true
+		// 		grabEntityList = append(grabEntityList, &grabEntity{
+		// 			unusedIndex:   unused.Index,
+		// 			unusedAmount:  unused.Amount,
+		// 			unusedAddress: unused.Address,
+		// 			tokenIndex:    "",
+		// 		})
+		// 		break
+		// 	}
+		// }
+		has = true
+		grabEntityList = append(grabEntityList, &grabEntity{
+			unusedIndex:   unused.Index,
+			unusedAmount:  unused.Amount,
+			unusedAddress: unused.Address,
+			tokenIndex:    "",
+		})
+		break // 只抢一个红包
+	}
+
+	if !has {
+		return errors.New("LuckyBag had been all grab.")
+	}
+
+	hasSuccess := false
+	for _, v := range grabEntityList {
+		vins := make([]*models.TxIn, 0)
+		vins = append(vins, &models.TxIn{
+			OutTxID: luckyBag.TxId,
+			Index:   uint64(v.unusedIndex),
+		})
+
+		// 生成唯一的TxId和PinId
+		txId := fmt.Sprintf("%s_%d_%s_%s", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
+		pinId := fmt.Sprintf("%s_%d_%s_%s_pin", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
+
+		// 检查是否已经保存过该 PinId
+		existingOpen, err := chatDB.GetOpenLuckyBagByPinId(pinId)
+		if err == nil && existingOpen != nil {
+			// 已经存在，跳过处理
+			return errors.New("already grab")
+		}
+
+		// 创建抢红包记录
+		openLuckyBag := &models.TalkGroupOpenLuckyBagV3{
+			CommunityId:         "", // 需要从群组信息中获取
+			GroupId:             luckyBag.GroupId,
+			TxId:                txId,
+			PinId:               pinId,
+			MetaId:              metaId,
+			Protocol:            luckyBag.Protocol,
+			SubId:               luckyBag.SubId,
+			Code:                luckyBag.Code,
+			CreateTimeStr:       luckyBag.CreateTimeStr,
+			Address:             address,
+			Index:               v.unusedIndex,
+			Amount:              v.unusedAmount,
+			Vins:                vins,
+			Type:                luckyBag.Type,
+			RequireTickId:       luckyBag.RequireTickId,
+			RequireCollectionId: luckyBag.RequireCollectionId,
+			LuckyBagTxId:        luckyBag.TxId,
+			LuckyBagPinId:       luckyBag.PinId,
+			LuckyBagMetaId:      luckyBag.MetaId,
+			IsWithdraw:          false,
+			Timestamp:           time.Now().Unix(),
+			BlockHeight:         0, // 需要从实际交易中获取
+			Chain:               luckyBag.Chain,
+			GrabState:           models.GrabStateOpen,
+			GrabTxId:            "",
+			GrabMsg:             "",
+		}
+
+		// 保存抢红包记录到 TalkGroupOpenLuckyBagPinCollection
+		err = chatDB.SaveOpenLuckyBag(openLuckyBag)
+		if err != nil {
+			log.Printf("SaveOpenLuckyBag err: %v", err)
+			continue
+		}
+
+		// 保存抢红包列表记录到 TalkGroupOpenLuckyBagListCollection
+		err = chatDB.SaveOpenLuckyBagList(luckyBag.PinId, openLuckyBag.PinId, luckyBag.GroupId, openLuckyBag.Timestamp, metaId, address, v.unusedIndex)
+		if err != nil {
+			log.Printf("SaveOpenLuckyBagList err: %v", err)
+			continue
+		}
+
+		// 将抢红包记录加入队列，等待处理
+		err = chatDB.EnqueueOpenLuckyBagMessage(openLuckyBag)
+		if err != nil {
+			log.Printf("EnqueueOpenLuckyBagMessage err: %v", err)
+			continue
+		}
+
+		// 创建聊天消息模型（用于群聊显示）
+		chat := &models.TalkGroupChatV3{
+			GroupId:     luckyBag.GroupId,
+			TxId:        openLuckyBag.PinId[:len(openLuckyBag.PinId)-2],
+			PinId:       openLuckyBag.PinId,
+			MetaId:      openLuckyBag.MetaId,
+			Address:     openLuckyBag.Address,
+			Protocol:    openLuckyBag.Protocol,
+			Content:     "[Grab LuckyBag]", // 可以根据实际金额显示
+			ContentType: "text/plain",
+			Encryption:  "",
+			ChatType:    models.ChatTypeOpenLuckyBag, // 抢红包类型
+			InsideIndex: models.ChatInsideIndexIn,    // 默认为进入状态
+			ReplyPin:    luckyBag.PinId,
+			Timestamp:   openLuckyBag.Timestamp,
+			Chain:       openLuckyBag.Chain,
+			BlockHeight: openLuckyBag.BlockHeight,
+		}
+
+		// 保存聊天消息到 TalkGroupChatPinCollection
+		err = chatDB.SaveChat(chat)
+		if err != nil {
+			return err
+		}
+
+		// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+		err = chatDB.SaveChatTimestampWithState(chat)
+		if err != nil {
+			return err
+		}
+
+		// 将消息加入队列，异步更新群列表
+		err = chatDB.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
+
+		hasSuccess = true
+		break // 只处理一个红包
+	}
+
+	if !hasSuccess {
+		return errors.New("Grab err.")
+	}
+
+	return nil
+}
+
+// 处理抢红包队列中的记录
+func ProcessOpenLuckyBagQueue() {
+	// 获取待处理的抢红包消息
+	messages, err := chatDB.GetPendingOpenLuckyBagMessages(10) // 每次处理10条
+	if err != nil {
+		log.Printf("GetPendingOpenLuckyBagMessages err: %v", err)
+		return
+	}
+
+	for _, message := range messages {
+		// 处理抢红包记录
+		err := disposingGrabLuckyBag(message.OpenLuckyBag)
+		if err != nil {
+			log.Printf("disposingGrabLuckyBag err: %v", err)
+			continue
+		}
+
+		// 处理成功，删除队列消息
+		err = chatDB.DeleteOpenLuckyBagQueueMessage(message.PinId)
+		if err != nil {
+			log.Printf("deleteOpenLuckyBagQueueMessage err: %v", err)
+		}
+	}
+}
+
+// 处理抢红包逻辑
+func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
+	if grabEntity.GrabState != models.GrabStateOpen {
+		return nil
+	}
+	if grabEntity.Vins == nil || len(grabEntity.Vins) == 0 {
+		return errors.New("no vins found")
+	}
+
+	_ = grabEntity.Vins[0] // utxo, 暂时未使用
+	wifStr := makeGiftWif(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
+	if wifStr == "" {
+		return errors.New("failed to generate wif")
+	}
+
+	value, err := strconv.ParseUint(grabEntity.Amount, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse amount: %v", err)
+	}
+
+	toAddress := grabEntity.Address
+	_ = toAddress
+
+	// TODO: 计算手续费
+	fee := uint64(300) // 临时固定手续费
+	_ = value - fee    // toAmount, 暂时未使用
+
+	// TODO: 构建交易
+	// input := tx_service.Input{
+	//     TxID:    utxo.OutTxID,
+	//     Index:   uint32(grabEntity.Index),
+	//     Address: grabEntity.Address,
+	//     Value:   value,
+	//     Wif:     wifStr,
+	// }
+	// output := tx_service.Output{
+	//     Address: toAddress,
+	//     Value:   toAmount,
+	// }
+	// tx, txId, err := tx_service.TxBuild([]tx_service.Input{input}, []tx_service.Output{output}, nil, tx_service.GetChangeAddress(), tx_service.GetFee())
+	// if err != nil {
+	//     return fmt.Errorf("failed to build tx: %v", err)
+	// }
+
+	// TODO: 广播交易
+	// resultTxId, resultMessage := metasv_service.MetaSVInstance().BroadcastTx(tx.String())
+	// if resultTxId != "" {
+	//     grabEntity.GrabState = models.GrabStateOpenAndSend
+	//     grabEntity.GrabTxId = resultTxId
+	//     log.Printf("Success: %s", resultTxId)
+	// } else {
+	//     log.Printf("Failure: %s", resultMessage)
+	//     grabEntity.GrabState = models.GrabStateOpenAndSendErr
+	// }
+	// grabEntity.GrabMsg = resultMessage
+
+	// 临时模拟成功
+	grabEntity.GrabState = models.GrabStateOpenAndSend
+	grabEntity.GrabTxId = "temp_tx_id_" + strconv.FormatInt(time.Now().Unix(), 10)
+	grabEntity.GrabMsg = "success"
+
+	// 更新数据库中的抢红包记录
+	err = chatDB.SaveOpenLuckyBag(grabEntity)
+	if err != nil {
+		return fmt.Errorf("failed to save open lucky bag: %v", err)
+	}
+
+	return nil
+}
+
+// 启动抢红包队列处理器
+func StartOpenLuckyBagQueueProcessor() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Second) // 每10秒处理一次
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// 处理抢红包队列
+				ProcessOpenLuckyBagQueue()
+			}
+		}
+	}()
+}
+
+func makeGiftWif(subId, code, createTimeStr string) string {
+	// key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(createTimeStr))
+	// masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
+	// xpri, _ := masterKey.NewChildKey(0)
+	// xpri, _ = xpri.NewChildKey(0)
+	// net := &chaincfg.MainNet
+	// if conf.IsTestMVC() {
+	// 	net = &chaincfg.TestNet
+	// }
+	// priKey, _ := bec.PrivKeyFromBytes(bec.S256(), xpri.Key)
+	// wifKey, _ := wif.NewWIF(priKey, net, true)
+	// //address, _ := bscript.NewAddressFromPublicKey(priKey.PubKey(), false)
+	// //fmt.Println(address.AddressString)
+	// //fmt.Println(wifKey.String())
+	// return wifKey.String()
+	return ""
+}

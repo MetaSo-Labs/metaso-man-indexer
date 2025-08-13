@@ -227,31 +227,42 @@ type LuckyBagOutput struct {
 	Address      string `json:"address"`
 	Index        int64  `json:"index"`
 }
+type GrabState int
+
+const (
+	GrabStateChain          GrabState = 0
+	GrabStateOpen           GrabState = 1
+	GrabStateOpenAndSend    GrabState = 2
+	GrabStateOpenAndSendErr GrabState = 3
+)
 
 type TalkGroupOpenLuckyBagV3 struct {
-	CommunityId         string  `json:"communityId"` //房间ID 唯一
-	GroupId             string  `json:"groupId"`     //频道ID 唯一
-	TxId                string  `json:"txId"`
-	PinId               string  `json:"pinId"` //
-	MetaId              string  `json:"metaId"`
-	Protocol            string  `json:"protocol"`
-	SubId               string  `json:"subId"`
-	Code                string  `json:"code"`
-	CreateTimeStr       string  `json:"createTimeStr"`
-	Address             string  `json:"address"`
-	Index               int64   `json:"index"`
-	Amount              string  `json:"amount"`
-	Vins                []*TxIn `json:"vins"`
-	Type                string  `json:"type"`
-	RequireTickId       string  `json:"requireTickId"`       //FT-限制需要 暂mrc20
-	RequireCollectionId string  `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
-	LuckyBagTxId        string  `json:"luckyBagTxId"`
-	LuckyBagPinId       string  `json:"luckyBagPinId"`
-	LuckyBagMetaId      string  `json:"luckyBagMetaId"`
-	IsWithdraw          bool    `json:"isWithdraw"`
-	Timestamp           int64   `json:"timestamp"`   //聊天记录时间戳
-	BlockHeight         int64   `json:"blockHeight"` //区块高度
-	Chain               string  `json:"chain"`       //链类型
+	CommunityId         string    `json:"communityId"` //房间ID 唯一
+	GroupId             string    `json:"groupId"`     //频道ID 唯一
+	TxId                string    `json:"txId"`
+	PinId               string    `json:"pinId"` //
+	MetaId              string    `json:"metaId"`
+	Protocol            string    `json:"protocol"`
+	SubId               string    `json:"subId"`
+	Code                string    `json:"code"`
+	CreateTimeStr       string    `json:"createTimeStr"`
+	Address             string    `json:"address"`
+	Index               int64     `json:"index"`
+	Amount              string    `json:"amount"`
+	Vins                []*TxIn   `json:"vins"`
+	Type                string    `json:"type"`
+	RequireTickId       string    `json:"requireTickId"`       //FT-限制需要 暂mrc20
+	RequireCollectionId string    `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	LuckyBagTxId        string    `json:"luckyBagTxId"`
+	LuckyBagPinId       string    `json:"luckyBagPinId"`
+	LuckyBagMetaId      string    `json:"luckyBagMetaId"`
+	IsWithdraw          bool      `json:"isWithdraw"`
+	Timestamp           int64     `json:"timestamp"`   //聊天记录时间戳
+	BlockHeight         int64     `json:"blockHeight"` //区块高度
+	Chain               string    `json:"chain"`       //链类型
+	GrabState           GrabState `json:"grabState"`   //抢红包状态, 0-链上开，1-中心化开，2-中心化开且发送, 3-中心化开且发送异常
+	GrabTxId            string    `json:"grabTxId"`    //
+	GrabMsg             string    `json:"grabMsg"`     //
 }
 type TxIn struct {
 	OutTxID string `json:"outTxId"` //所在out-txId
@@ -347,10 +358,12 @@ type TalkPrivateChatV3 struct {
 
 // 抢红包列表项
 type OpenLuckyBagListItem struct {
-	OpenPinId     string `json:"openPinId"`     // 抢红包的PinId
-	GroupId       string `json:"groupId"`       // 群组ID
-	Timestamp     int64  `json:"timestamp"`     // 时间戳
-	CreateAddress string `json:"createAddress"` // 创建地址
+	OpenPinId        string `json:"openPinId"`        // 抢红包的PinId
+	GroupId          string `json:"groupId"`          // 群组ID
+	Timestamp        int64  `json:"timestamp"`        // 时间戳
+	CreateMetaId     string `json:"createMetaId"`     // 创建者的MetaId
+	CreateAddress    string `json:"createAddress"`    // 创建地址
+	LuckyBagOutIndex int64  `json:"luckyBagOutIndex"` // 红包输出索引
 }
 
 // 抢红包列表
@@ -361,34 +374,16 @@ type OpenLuckyBagList struct {
 
 // 回收红包列表项
 type ResidueLuckyBagListItem struct {
-	ResiduePinId  string `json:"residuePinId"`  // 回收红包的PinId
-	GroupId       string `json:"groupId"`       // 群组ID
-	Timestamp     int64  `json:"timestamp"`     // 时间戳
-	CreateAddress string `json:"createAddress"` // 创建地址
+	ResiduePinId         string  `json:"residuePinId"`         // 回收红包的PinId
+	GroupId              string  `json:"groupId"`              // 群组ID
+	Timestamp            int64   `json:"timestamp"`            // 时间戳
+	CreateMetaId         string  `json:"createMetaId"`         // 创建者的MetaId
+	CreateAddress        string  `json:"createAddress"`        // 创建地址
+	LuckyBagOutIndexList []int64 `json:"luckyBagOutIndexList"` // 红包输出索引列表
 }
 
 // 回收红包列表
 type ResidueLuckyBagList struct {
 	LuckyBagPinId string                     `json:"luckyBagPinId"` // 红包PinId
 	Items         []*ResidueLuckyBagListItem `json:"items"`         // 回收红包列表项
-}
-
-// 红包统计信息
-type LuckyBagStatistics struct {
-	LuckyBagPinId       string `json:"luckyBagPinId"`       // 红包PinId
-	GroupId             string `json:"groupId"`             // 群组ID
-	TotalCount          int    `json:"totalCount"`          // 总数量
-	OpenedCount         int    `json:"openedCount"`         // 已领取数量
-	ResidueCount        int    `json:"residueCount"`        // 回收数量
-	TotalAmount         uint64 `json:"totalAmount"`         // 总金额
-	OpenedAmount        uint64 `json:"openedAmount"`        // 已领取金额
-	RemainingAmount     uint64 `json:"remainingAmount"`     // 剩余金额
-	IsCompleted         bool   `json:"isCompleted"`         // 是否已完成
-	CreateTime          string `json:"createTime"`          // 创建时间
-	Content             string `json:"content"`             // 红包内容
-	Type                string `json:"type"`                // 红包类型
-	RequireType         string `json:"requireType"`         // 要求类型
-	RequireTickId       string `json:"requireTickId"`       // 要求Token ID
-	RequireCollectionId string `json:"requireCollectionId"` // 要求Collection ID
-	LimitAmount         uint64 `json:"limitAmount"`         // 限制金额
 }

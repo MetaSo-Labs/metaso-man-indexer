@@ -127,9 +127,9 @@ type SimpleGroupChat struct {
 
 	{
 	  "encrypt": "0",
-	  "attachment": "metafile://txId.jpg",
+	  "attachment": "metafile://pinId.jpg",
 	  "groupId": "group123",
-	  "channelId": "channel123",
+	//   "channelId": "channel123",
 	  "fileType": "png/jpg/gif",
 	  "nickName": "用户昵称",
 	  "timestamp": 1234567890,
@@ -139,14 +139,14 @@ type SimpleGroupChat struct {
 *
 */
 type SimpleFileGroupChat struct {
-	Encrypt    string      `json:"encrypt"`    //是否加密和加密方式,0 为不加密；1为采用AES加密。默认不加密
-	Attachment string      `json:"attachment"` //metafile://txId.jpg
-	GroupId    string      `json:"groupId"`
-	ChannelId  string      `json:"channelId"`
-	FileType   string      `json:"fileType"` //png/jpg/gif
-	NickName   string      `json:"nickName"`
-	Timestamp  interface{} `json:"timestamp"`
-	ReplyPin   string      `json:"replyPin"`
+	Encrypt    string `json:"encrypt"`    //是否加密和加密方式,0 为不加密；1为采用AES加密。默认不加密
+	Attachment string `json:"attachment"` //metafile://pinId.jpg
+	GroupId    string `json:"groupId"`
+	// ChannelId  string      `json:"channelId"`
+	FileType  string      `json:"fileType"` //png/jpg/gif
+	NickName  string      `json:"nickName"`
+	Timestamp interface{} `json:"timestamp"`
+	ReplyPin  string      `json:"replyPin"`
 }
 
 /*

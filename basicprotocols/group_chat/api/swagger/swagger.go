@@ -182,6 +182,67 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/lucky-bag-info": {
+            "get": {
+                "description": "根据groupId和pinId获取红包对象和已领取列表",
+                "produces": ["application/json"],
+                "tags": ["红包功能"],
+                "summary": "获取红包信息",
+                "parameters": [
+                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "红包PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "成功返回红包信息", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/grab-lucky-bag": {
+            "post": {
+                "description": "根据groupId、pinId、metaId和address抢红包",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["红包功能"],
+                "summary": "抢红包",
+                "parameters": [
+                    {
+                        "description": "抢红包请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "groupId": {
+                                    "type": "string",
+                                    "description": "群组ID"
+                                },
+                                "pinId": {
+                                    "type": "string",
+                                    "description": "红包PinId"
+                                },
+                                "metaId": {
+                                    "type": "string",
+                                    "description": "用户MetaId"
+                                },
+                                "address": {
+                                    "type": "string",
+                                    "description": "用户地址"
+                                }
+                            },
+                            "required": ["groupId", "pinId", "metaId", "address"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "成功返回抢红包结果", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/api/db/community/version": {
             "get": {
                 "description": "根据communityId或pinId查询TalkCommunityVersionInfoCollection数据",
@@ -466,6 +527,10 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "用户管理相关API，包括用户信息、群列表等",
             "name": "用户管理"
+        },
+        {
+            "description": "红包功能相关API，包括红包信息查询、抢红包等",
+            "name": "红包功能"
         }
     ]
 }`

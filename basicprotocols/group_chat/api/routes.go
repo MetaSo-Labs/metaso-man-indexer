@@ -32,6 +32,13 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// 获取群组成员信息
 		group.GET("/group-person", GetGroupPerson)
+
+		// 红包相关路由
+		// 获取红包信息
+		group.GET("/lucky-bag-info", GetLuckyBagInfo)
+
+		// 抢红包
+		group.POST("/grab-lucky-bag", GrabLuckyBag)
 	}
 }
 

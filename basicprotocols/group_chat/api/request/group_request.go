@@ -81,3 +81,17 @@ type FetchPrivateChatListRequest struct {
 	Timestamp int64 `form:"timestamp"`
 	// TimestampType int64 `form:"timestampType"` //0为查历史，1为查最新
 }
+
+// FetchLuckyBagInfoRequest 获取红包信息请求
+type FetchLuckyBagInfoRequest struct {
+	GroupId string `form:"groupId"` // 群组ID
+	PinId   string `form:"pinId"`   // 红包PinId
+}
+
+// GrabLuckyBagRequest 抢红包请求
+type GrabLuckyBagRequest struct {
+	GroupId string `form:"groupId"` // 群组ID
+	PinId   string `form:"pinId"`   // 红包PinId
+	MetaId  string `form:"metaId"`  // 用户MetaId
+	Address string `form:"address"` // 用户地址
+}

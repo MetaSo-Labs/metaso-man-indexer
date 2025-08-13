@@ -190,7 +190,9 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 			} else if pinNode.IsTransfered {
 				handleMempoolTransferPin(pinNode)
 			}
-			group_chat.ProcessGroupChatPin(pinNode)
+
+			//group chat
+			group_chat.ProcessGroupChatPin(pinNode, x.Tx)
 
 		}
 		list := []interface{}{x.Tx}

@@ -30,7 +30,7 @@ func ExampleUsage() {
 		Timestamp:     1234567890,
 	}
 
-	err = indexer.ProcessPin(communityPin)
+	err = indexer.ProcessPin(communityPin, nil)
 	if err != nil {
 		log.Printf("Failed to process community pin: %v", err)
 	}
@@ -46,7 +46,7 @@ func ExampleUsage() {
 		Timestamp:     1234567890,
 	}
 
-	err = indexer.ProcessPin(groupPin)
+	err = indexer.ProcessPin(groupPin, nil)
 	if err != nil {
 		log.Printf("Failed to process group pin: %v", err)
 	}
@@ -62,7 +62,7 @@ func ExampleUsage() {
 		Timestamp:     1234567890,
 	}
 
-	err = indexer.ProcessPin(chatPin)
+	err = indexer.ProcessPin(chatPin, nil)
 	if err != nil {
 		log.Printf("Failed to process chat pin: %v", err)
 	}
@@ -78,7 +78,7 @@ func ExampleUsage() {
 		Timestamp:     1234567890,
 	}
 
-	err = indexer.ProcessPin(joinPin)
+	err = indexer.ProcessPin(joinPin, nil)
 	if err != nil {
 		log.Printf("Failed to process join pin: %v", err)
 	}

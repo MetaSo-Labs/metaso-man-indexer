@@ -357,3 +357,90 @@ func GetPrivateChatList(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary 获取红包信息
+// @Description 根据groupId和pinId获取红包对象和已领取列表
+// @Produce json
+// @Param groupId query string true "群组ID"
+// @Param pinId query string true "红包PinId"
+// @Tags LuckyBag
+// @Success 200 {object} respond.Message{data=respond.LuckyBagInfoResponse} "成功返回红包信息"
+// @Router /group-chat/lucky-bag-info [get]
+func GetLuckyBagInfo(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchLuckyBagInfoRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			PinId:   c.DefaultQuery("pinId", ""),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetLuckyBagWithOpenList(req.GroupId, req.PinId)
+	if err != nil {
+		log.Printf("Failed to get lucky bag info for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary 抢红包
+// @Description 根据groupId、pinId、metaId和address抢红包
+// @Accept json
+// @Produce json
+// @Param request body request.GrabLuckyBagRequest true "抢红包请求参数"
+// @Tags LuckyBag
+// @Success 200 {object} respond.Message{data=string} "成功返回抢红包结果"
+// @Router /group-chat/grab-lucky-bag [post]
+func GrabLuckyBag(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.GrabLuckyBagRequest{}
+	)
+
+	// 绑定JSON请求体
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.Address == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("address is empty"), t, 1))
+		return
+	}
+
+	result, err := service.GrabLuckyBag(req.GroupId, req.PinId, req.MetaId, req.Address)
+	if err != nil {
+		log.Printf("Failed to grab lucky bag for groupId %s, pinId %s, metaId %s: %v", req.GroupId, req.PinId, req.MetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
+}

@@ -83,7 +83,7 @@ func RegisterRoutes(router *gin.Engine) error {
 }
 
 // ProcessPin 处理单个 Pin（对外暴露的接口）
-func ProcessGroupChatPin(pin *pin.PinInscription) error {
+func ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
 	if !initialized {
 		err := Init()
 		if err != nil {
@@ -91,7 +91,7 @@ func ProcessGroupChatPin(pin *pin.PinInscription) error {
 		}
 	}
 
-	err := groupChatIndexer.ProcessPin(pin)
+	err := groupChatIndexer.ProcessPin(pin, tx)
 	if err != nil {
 		log.Printf("Failed to process group chat pin: %v", err)
 	}

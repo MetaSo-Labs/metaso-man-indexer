@@ -202,9 +202,6 @@ type LuckyBagInfoResponse struct {
 	TxId                string         `json:"txId"`
 	MetaId              string         `json:"metaId"`
 	UserInfo            *UserInfo      `json:"userInfo"`
-	Name                string         `json:"name"`
-	AvatarTxId          string         `json:"avatarTxId"`
-	AvatarImage         string         `json:"avatarImage"`
 	SubId               string         `json:"subId"`
 	Code                string         `json:"code"`
 	CreateTime          string         `json:"createTime"`
@@ -227,8 +224,11 @@ type InfoPayList struct {
 	Index        int64     `json:"index"`
 	Amount       string    `json:"amount"`
 	Address      string    `json:"address"`
-	Used         string    `json:"used"`
-	Metaid       string    `json:"metaid"`
+	Used         bool      `json:"used"`
+	GradTxId     string    `json:"gradTxId"`
+	GradPinId    string    `json:"gradPinId"`
+	GradMetaId   string    `json:"gradMetaId"`
+	GradAddress  string    `json:"gradAddress"`
 	UserInfo     *UserInfo `json:"userInfo"`
 	Timestamp    int64     `json:"timestamp"`
 	ScriptPubKey string    `json:"scriptPubKey"`

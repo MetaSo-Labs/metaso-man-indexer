@@ -53,7 +53,7 @@ func ExampleProcessPin() {
 	}
 
 	// 处理 Pin
-	err = ProcessGroupChatPin(examplePin)
+	err = ProcessGroupChatPin(examplePin, nil)
 	if err != nil {
 		log.Printf("Failed to process pin: %v", err)
 		return

@@ -63,7 +63,7 @@ func (gci *GroupChatIndexer) Stop() error {
 }
 
 // ProcessPin 处理单个 Pin
-func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription) error {
+func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{}) error {
 	if pin == nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription) error {
 	case strings.ToLower(protocols.MonitorSimpleGroupChat), strings.ToLower(protocols.MonitorSimpleFileGroupChat):
 		log.Printf("Chat protocol: %s", pin.Path)
 		// 聊天相关协议
-		return gci.chatDB.ProcessGroupChatPin(pin)
+		return gci.chatDB.ProcessGroupChatPin(pin, tx)
 	case strings.ToLower(protocols.MonitorSimpleMsg), strings.ToLower(protocols.MonitorSimpleFileMsg):
 		log.Printf("Private chat protocol: %s", pin.Path)
 		// 私聊相关协议

@@ -32,7 +32,9 @@ const (
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
 	// 消息队列相关数据库
-	TalkGroupChatQueueCollection string = "talk_group_chat_queue" // key: timestamp_pinId，value: chat消息数据
+	TalkGroupChatQueueCollection         string = "talk_group_chat_queue"           // key: timestamp_pinId，value: chat消息数据
+	TalkGroupOpenLuckyBagQueueCollection string = "talk_group_open_lucky_bag_queue" // key: timestamp_pinId，value:
+
 	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
 
 	// 聊天相关数据库
@@ -134,6 +136,11 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupChatQueueCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueCollection, err)
+	}
+	// 初始化抢红包队列数据库
+	err = open(TalkGroupOpenLuckyBagQueueCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupOpenLuckyBagQueueCollection, err)
 	}
 	// err = open(TalkGroupChatQueueProcessingCollection)
 	// if err != nil {
