@@ -186,7 +186,7 @@ func SetupSwagger(router *gin.Engine) {
             "get": {
                 "description": "根据groupId和pinId获取红包对象和已领取列表",
                 "produces": ["application/json"],
-                "tags": ["红包功能"],
+                "tags": ["群组管理"],
                 "summary": "获取红包信息",
                 "parameters": [
                     {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
@@ -204,7 +204,7 @@ func SetupSwagger(router *gin.Engine) {
                 "description": "根据groupId、pinId、metaId和address抢红包",
                 "consumes": ["application/json"],
                 "produces": ["application/json"],
-                "tags": ["红包功能"],
+                "tags": ["群组管理"],
                 "summary": "抢红包",
                 "parameters": [
                     {
@@ -515,22 +515,6 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "群组管理相关API，包括群组信息、成员管理等",
             "name": "群组管理"
-        },
-        {
-            "description": "社区管理相关API，包括社区信息、成员管理等",
-            "name": "社区管理"
-        },
-        {
-            "description": "聊天功能相关API，包括消息、队列等",
-            "name": "聊天功能"
-        },
-        {
-            "description": "用户管理相关API，包括用户信息、群列表等",
-            "name": "用户管理"
-        },
-        {
-            "description": "红包功能相关API，包括红包信息查询、抢红包等",
-            "name": "红包功能"
         }
     ]
 }`

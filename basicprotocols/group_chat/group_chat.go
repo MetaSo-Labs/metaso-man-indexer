@@ -2,6 +2,7 @@ package group_chat
 
 import (
 	"log"
+	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/service"
@@ -18,7 +19,7 @@ var (
 )
 
 // Init 初始化 group_chat 模块
-func Init() error {
+func Init(indexerChainAdapter map[string]adapter.Chain) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -44,7 +45,7 @@ func Init() error {
 	}
 
 	// 3. 初始化服务（使用索引器的数据库实例）
-	err = service.InitService(groupChatIndexer)
+	err = service.InitService(groupChatIndexer, indexerChainAdapter)
 	if err != nil {
 		log.Printf("Failed to initialize service: %v", err)
 		return err
@@ -59,7 +60,7 @@ func Init() error {
 func GetIndexer() *indexer.GroupChatIndexer {
 	if !initialized {
 		log.Println("Warning: Group Chat module not initialized, calling Init()...")
-		err := Init()
+		err := Init(nil)
 		if err != nil {
 			log.Printf("Failed to initialize Group Chat module: %v", err)
 			return nil
@@ -71,7 +72,7 @@ func GetIndexer() *indexer.GroupChatIndexer {
 // RegisterRoutes 注册 API 路由到 Gin 路由
 func RegisterRoutes(router *gin.Engine) error {
 	if !initialized {
-		err := Init()
+		err := Init(nil)
 		if err != nil {
 			return err
 		}
@@ -85,7 +86,7 @@ func RegisterRoutes(router *gin.Engine) error {
 // ProcessPin 处理单个 Pin（对外暴露的接口）
 func ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
 	if !initialized {
-		err := Init()
+		err := Init(nil)
 		if err != nil {
 			return err
 		}

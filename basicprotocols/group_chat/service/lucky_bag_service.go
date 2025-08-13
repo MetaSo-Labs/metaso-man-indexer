@@ -6,6 +6,7 @@ import (
 	"log"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/models"
+	"manindexer/common"
 	"strconv"
 	"time"
 )
@@ -319,6 +320,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			Index:   uint64(v.unusedIndex),
 		})
 
+		pkScript := ""
+		for _, vout := range luckyBag.LuckyBagVouts {
+			if vout.Index == v.unusedIndex {
+				pkScript = vout.ScriptPubKey
+			}
+		}
+
 		// 生成唯一的TxId和PinId
 		txId := fmt.Sprintf("%s_%d_%s_%s", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
 		pinId := fmt.Sprintf("%s_%d_%s_%s_pin", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
@@ -344,6 +352,7 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			Address:             address,
 			Index:               v.unusedIndex,
 			Amount:              v.unusedAmount,
+			PkScript:            pkScript,
 			Vins:                vins,
 			Type:                luckyBag.Type,
 			RequireTickId:       luckyBag.RequireTickId,
@@ -464,9 +473,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 	}
 
 	_ = grabEntity.Vins[0] // utxo, 暂时未使用
-	wifStr := makeGiftWif(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
-	if wifStr == "" {
-		return errors.New("failed to generate wif")
+	wifStr, hexStr := makeGiftKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
+	if wifStr == "" || hexStr == "" {
+		return errors.New("failed to generate wif or hex")
 	}
 
 	value, err := strconv.ParseUint(grabEntity.Amount, 10, 64)
@@ -477,43 +486,41 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 	toAddress := grabEntity.Address
 	_ = toAddress
 
-	// TODO: 计算手续费
-	fee := uint64(300) // 临时固定手续费
-	_ = value - fee    // toAmount, 暂时未使用
+	input := common.TxInputUtxo{
+		TxId:     grabEntity.LuckyBagTxId,
+		TxIndex:  int64(grabEntity.Index),
+		PkScript: grabEntity.PkScript,
+		Amount:   value,
+		PriHex:   hexStr,
+	}
+	output := common.TxOutput{
+		Address: toAddress,
+		Amount:  int64(value),
+	}
+	tx, err := common.BuildMvcTransferAllTx(nil, []*common.TxInputUtxo{&input}, &output, 1, false)
+	if err != nil {
+		return fmt.Errorf("failed to build tx: %v", err)
+	}
 
-	// TODO: 构建交易
-	// input := tx_service.Input{
-	//     TxID:    utxo.OutTxID,
-	//     Index:   uint32(grabEntity.Index),
-	//     Address: grabEntity.Address,
-	//     Value:   value,
-	//     Wif:     wifStr,
-	// }
-	// output := tx_service.Output{
-	//     Address: toAddress,
-	//     Value:   toAmount,
-	// }
-	// tx, txId, err := tx_service.TxBuild([]tx_service.Input{input}, []tx_service.Output{output}, nil, tx_service.GetChangeAddress(), tx_service.GetFee())
-	// if err != nil {
-	//     return fmt.Errorf("failed to build tx: %v", err)
-	// }
+	txRaw, err := common.MvcToRaw(tx)
+	if err != nil {
+		return fmt.Errorf("failed to convert tx to raw: %v", err)
+	}
+	if chainAdapter == nil || chainAdapter[grabEntity.Chain] == nil {
+		return fmt.Errorf("chain adapter not found")
+	}
 
-	// TODO: 广播交易
-	// resultTxId, resultMessage := metasv_service.MetaSVInstance().BroadcastTx(tx.String())
-	// if resultTxId != "" {
-	//     grabEntity.GrabState = models.GrabStateOpenAndSend
-	//     grabEntity.GrabTxId = resultTxId
-	//     log.Printf("Success: %s", resultTxId)
-	// } else {
-	//     log.Printf("Failure: %s", resultMessage)
-	//     grabEntity.GrabState = models.GrabStateOpenAndSendErr
-	// }
-	// grabEntity.GrabMsg = resultMessage
-
-	// 临时模拟成功
-	grabEntity.GrabState = models.GrabStateOpenAndSend
-	grabEntity.GrabTxId = "temp_tx_id_" + strconv.FormatInt(time.Now().Unix(), 10)
-	grabEntity.GrabMsg = "success"
+	resultTxId, err := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
+	if resultTxId != "" {
+		grabEntity.GrabState = models.GrabStateOpenAndSend
+		grabEntity.GrabTxId = resultTxId
+		grabEntity.GrabMsg = "success"
+		log.Printf("Success: %s", resultTxId)
+	} else {
+		log.Printf("Failure: %s", err.Error())
+		grabEntity.GrabState = models.GrabStateOpenAndSendErr
+		grabEntity.GrabMsg = err.Error()
+	}
 
 	// 更新数据库中的抢红包记录
 	err = chatDB.SaveOpenLuckyBag(grabEntity)
@@ -540,7 +547,7 @@ func StartOpenLuckyBagQueueProcessor() {
 	}()
 }
 
-func makeGiftWif(subId, code, createTimeStr string) string {
+func makeGiftKey(subId, code, createTimeStr string) (string, string) {
 	// key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(createTimeStr))
 	// masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
 	// xpri, _ := masterKey.NewChildKey(0)
@@ -555,5 +562,5 @@ func makeGiftWif(subId, code, createTimeStr string) string {
 	// //fmt.Println(address.AddressString)
 	// //fmt.Println(wifKey.String())
 	// return wifKey.String()
-	return ""
+	return "", ""
 }

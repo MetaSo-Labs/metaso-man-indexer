@@ -1,6 +1,8 @@
 package bitcoin
 
 import (
+	"bytes"
+	"encoding/hex"
 	"manindexer/common"
 	"manindexer/pin"
 	"time"
@@ -175,5 +177,23 @@ func (chain *BitcoinChain) GetTxSizeAndFees(txHash string) (fee int64, size int6
 	fee = inputAmount - outputAmount
 	size = int64(tx.Size)
 	blockHash = tx.BlockHash
+	return
+}
+
+func (chain *BitcoinChain) BroadcastTx(txRaw string) (txId string, err error) {
+	txByte, err := hex.DecodeString(txRaw)
+	if err != nil {
+		return "", err
+	}
+	tx := wire.NewMsgTx(2)
+	err = tx.Deserialize(bytes.NewReader(txByte))
+	if err != nil {
+		return "", err
+	}
+	txHash, err := client.SendRawTransaction(tx, true)
+	if err != nil {
+		return "", err
+	}
+	txId = txHash.String()
 	return
 }

@@ -249,6 +249,7 @@ type TalkGroupOpenLuckyBagV3 struct {
 	Address             string    `json:"address"`
 	Index               int64     `json:"index"`
 	Amount              string    `json:"amount"`
+	PkScript            string    `json:"pkScript"`
 	Vins                []*TxIn   `json:"vins"`
 	Type                string    `json:"type"`
 	RequireTickId       string    `json:"requireTickId"`       //FT-限制需要 暂mrc20

@@ -56,7 +56,7 @@ func main() {
 	}
 
 	// 运行服务器
-	err := group_chat.RunWithConfig(config)
+	err := group_chat.RunWithConfig(config, nil)
 	if err != nil {
 		log.Printf("Failed to start server: %v", err)
 		os.Exit(1)

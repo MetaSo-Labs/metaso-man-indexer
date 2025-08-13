@@ -10,7 +10,7 @@ import (
 // ExampleUsage 展示如何使用 group_chat 模块
 func ExampleUsage() {
 	// 1. 初始化模块
-	err := Init()
+	err := Init(nil)
 	if err != nil {
 		log.Printf("Failed to initialize group chat module: %v", err)
 		return
@@ -38,7 +38,7 @@ func ExampleUsage() {
 // ExampleProcessPin 展示如何处理 Pin
 func ExampleProcessPin() {
 	// 初始化模块
-	err := Init()
+	err := Init(nil)
 	if err != nil {
 		log.Printf("Failed to initialize group chat module: %v", err)
 		return

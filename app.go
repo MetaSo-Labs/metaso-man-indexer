@@ -51,7 +51,7 @@ func main() {
 	}
 
 	if common.ModuleExist("group_chat") {
-		go group_chat.Run()
+		go group_chat.Run(man.ChainAdapter)
 	}
 	ms := metaso.MetaSo{}
 	if common.ModuleExist("metaso") || common.ModuleExist("metaso_pev") {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/db"
@@ -11,14 +12,15 @@ import (
 )
 
 var (
-	groupDB   *db.GroupDB
-	chatDB    *db.ChatDB
-	privateDB *db.PrivateChatDB
-	pebbleDB  *db.Pebble
+	groupDB      *db.GroupDB
+	chatDB       *db.ChatDB
+	privateDB    *db.PrivateChatDB
+	pebbleDB     *db.Pebble
+	chainAdapter map[string]adapter.Chain
 )
 
 // InitService 初始化服务
-func InitService(indexer *indexer.GroupChatIndexer) error {
+func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.Chain) error {
 	// 使用 indexer 的数据库实例
 
 	// 获取数据库实例
@@ -26,6 +28,7 @@ func InitService(indexer *indexer.GroupChatIndexer) error {
 	groupDB = indexer.GetGroupDB()
 	chatDB = indexer.GetChatDB()
 	privateDB = indexer.GetPrivateDB()
+	chainAdapter = adapter
 
 	// 启动聊天队列处理器
 	// chatDB.StartQueueProcessor(groupDB)

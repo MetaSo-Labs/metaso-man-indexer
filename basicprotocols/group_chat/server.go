@@ -2,6 +2,7 @@ package group_chat
 
 import (
 	"log"
+	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/swagger"
 	"manindexer/common"
 	"net/http"
@@ -113,9 +114,9 @@ func (s *Server) SetupRoutes() error {
 }
 
 // Start 启动服务器
-func (s *Server) Start() error {
+func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
 	// 初始化 group_chat 模块
-	err := Init()
+	err := Init(indexerChainAdapter)
 	if err != nil {
 		log.Printf("Failed to initialize group chat module: %v", err)
 		return err
@@ -163,14 +164,14 @@ func (s *Server) Start() error {
 }
 
 // Run 运行服务器的便捷方法
-func Run() error {
+func Run(indexerChainAdapter map[string]adapter.Chain) error {
 	config := DefaultConfig()
 	server := NewServer(config)
-	return server.Start()
+	return server.Start(indexerChainAdapter)
 }
 
 // RunWithConfig 使用自定义配置运行服务器
-func RunWithConfig(config *ServerConfig) error {
+func RunWithConfig(config *ServerConfig, indexerChainAdapter map[string]adapter.Chain) error {
 	server := NewServer(config)
-	return server.Start()
+	return server.Start(indexerChainAdapter)
 }

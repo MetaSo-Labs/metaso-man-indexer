@@ -1,6 +1,8 @@
 package microvisionchain
 
 import (
+	"bytes"
+	"encoding/hex"
 	"log"
 	"manindexer/common"
 	"manindexer/pin"
@@ -185,5 +187,23 @@ func (chain *MicroVisionChain) GetTxSizeAndFees(txHash string) (fee int64, size 
 	fee = inputAmount - outputAmount
 	size = int64(tx.Size)
 	blockHash = tx.BlockHash
+	return
+}
+
+func (chain *MicroVisionChain) BroadcastTx(txRaw string) (txId string, err error) {
+	txByte, err := hex.DecodeString(txRaw)
+	if err != nil {
+		return "", err
+	}
+	tx := wire.NewMsgTx(2)
+	err = tx.Deserialize(bytes.NewReader(txByte))
+	if err != nil {
+		return "", err
+	}
+	txHash, err := client.SendRawTransaction(tx, true)
+	if err != nil {
+		return "", err
+	}
+	txId = txHash.String()
 	return
 }

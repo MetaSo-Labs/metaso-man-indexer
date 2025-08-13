@@ -23,7 +23,7 @@ func ExampleSetup() {
 	}
 
 	// 3. 初始化服务（使用索引器的数据库实例）
-	err = service.InitService(groupChatIndexer)
+	err = service.InitService(groupChatIndexer, nil)
 	if err != nil {
 		log.Fatalf("Failed to initialize service: %v", err)
 	}

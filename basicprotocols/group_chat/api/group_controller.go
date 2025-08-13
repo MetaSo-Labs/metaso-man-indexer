@@ -363,7 +363,7 @@ func GetPrivateChatList(c *gin.Context) {
 // @Produce json
 // @Param groupId query string true "群组ID"
 // @Param pinId query string true "红包PinId"
-// @Tags LuckyBag
+// @Tags Group
 // @Success 200 {object} respond.Message{data=respond.LuckyBagInfoResponse} "成功返回红包信息"
 // @Router /group-chat/lucky-bag-info [get]
 func GetLuckyBagInfo(c *gin.Context) {
@@ -400,7 +400,7 @@ func GetLuckyBagInfo(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body request.GrabLuckyBagRequest true "抢红包请求参数"
-// @Tags LuckyBag
+// @Tags Group
 // @Success 200 {object} respond.Message{data=string} "成功返回抢红包结果"
 // @Router /group-chat/grab-lucky-bag [post]
 func GrabLuckyBag(c *gin.Context) {

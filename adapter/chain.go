@@ -12,4 +12,5 @@ type Chain interface {
 	GetBlockMsg(height int64) (blockMsg *pin.BlockMsg)
 	GetMempoolTransactionList() (list []interface{}, err error)
 	GetTxSizeAndFees(txHash string) (fee int64, size int64, blockHash string, err error)
+	BroadcastTx(txRaw string) (txId string, err error)
 }
