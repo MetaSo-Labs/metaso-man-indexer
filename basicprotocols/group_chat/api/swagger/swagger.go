@@ -243,6 +243,50 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/reclaim-lucky-bag": {
+            "post": {
+                "description": "发红包的人回收过时红包剩余的UTXO",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["群组管理"],
+                "summary": "回收红包",
+                "parameters": [
+                    {
+                        "description": "回收红包请求参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "groupId": {
+                                    "type": "string",
+                                    "description": "群组ID"
+                                },
+                                "pinId": {
+                                    "type": "string",
+                                    "description": "红包PinId"
+                                },
+                                "metaId": {
+                                    "type": "string",
+                                    "description": "用户MetaId"
+                                },
+                                "address": {
+                                    "type": "string",
+                                    "description": "用户地址"
+                                }
+                            },
+                            "required": ["groupId", "pinId", "metaId", "address"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "成功返回回收红包结果", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/api/db/community/version": {
             "get": {
                 "description": "根据communityId或pinId查询TalkCommunityVersionInfoCollection数据",

@@ -624,6 +624,11 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 		return "", errors.New("only lucky bag creator can reclaim")
 	}
 
+	//如果未超过半个小时，则不能回收
+	if time.Now().Unix()-luckyBag.Timestamp < 30*60 {
+		return "", errors.New("lucky bag has not expired")
+	}
+
 	// 获取已领取的抢红包列表
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {

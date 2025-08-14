@@ -39,6 +39,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// 抢红包
 		group.POST("/grab-lucky-bag", GrabLuckyBag)
+
+		// 回收红包
+		group.POST("/reclaim-lucky-bag", ReclaimLuckyBag)
 	}
 }
 

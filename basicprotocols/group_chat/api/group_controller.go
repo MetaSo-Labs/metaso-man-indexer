@@ -444,3 +444,53 @@ func GrabLuckyBag(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
 }
+
+// @Summary 回收红包
+// @Description 发红包的人回收过时红包剩余的UTXO
+// @Accept json
+// @Produce json
+// @Param request body request.ReclaimLuckyBagRequest true "回收红包请求参数"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=string} "成功返回回收红包结果"
+// @Router /group-chat/reclaim-lucky-bag [post]
+func ReclaimLuckyBag(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.ReclaimLuckyBagRequest{}
+	)
+
+	// 绑定JSON请求体
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.Address == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("address is empty"), t, 1))
+		return
+	}
+
+	result, err := service.ReclaimExpiredLuckyBag(req.GroupId, req.PinId, req.MetaId, req.Address)
+	if err != nil {
+		log.Printf("Failed to reclaim lucky bag for groupId %s, pinId %s, metaId %s: %v", req.GroupId, req.PinId, req.MetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
+}

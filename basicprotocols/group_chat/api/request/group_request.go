@@ -95,3 +95,11 @@ type GrabLuckyBagRequest struct {
 	MetaId  string `form:"metaId"`  // 用户MetaId
 	Address string `form:"address"` // 用户地址
 }
+
+// ReclaimLuckyBagRequest 回收红包请求
+type ReclaimLuckyBagRequest struct {
+	GroupId string `form:"groupId"` // 群组ID
+	PinId   string `form:"pinId"`   // 红包PinId
+	MetaId  string `form:"metaId"`  // 用户MetaId
+	Address string `form:"address"` // 用户地址
+}
