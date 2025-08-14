@@ -56,6 +56,7 @@ type GroupChatItem struct {
 	GroupId   string    `json:"groupId"`   //房间ID 唯一
 	MetanetId string    `json:"metanetId"` //
 	TxId      string    `json:"txId"`
+	PinId     string    `json:"pinId"`
 	MetaId    string    `json:"metaId"`
 	Address   string    `json:"address"`
 	UserInfo  *UserInfo `json:"userInfo"`

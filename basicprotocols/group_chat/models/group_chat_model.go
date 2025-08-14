@@ -179,6 +179,7 @@ type TalkGroupChatV3 struct {
 
 type ReplyInfo struct {
 	TxId        string          `json:"txId"`
+	PinId       string          `json:"pinId"`
 	MetaId      string          `json:"metaId"`
 	NickName    string          `json:"nickName"`
 	Protocol    string          `json:"protocol"`
@@ -217,9 +218,10 @@ type TalkGroupLuckyBagV3 struct {
 	Chain               string            `json:"chain"`       //链类型
 }
 type ProInfoPayList struct {
-	Amount  string `json:"amount"`
-	Address string `json:"address"`
-	Index   int64  `json:"index"`
+	Amount   string `json:"amount"`
+	Address  string `json:"address"`
+	PkScript string `json:"pkScript"`
+	Index    int64  `json:"index"`
 }
 type LuckyBagOutput struct {
 	ScriptPubKey string `json:"scriptPubKey"`
@@ -280,10 +282,14 @@ type TalkGroupResidueLuckyBagV3 struct {
 	TxId                string            `json:"txId"`
 	PinId               string            `json:"pinId"` //
 	MetaId              string            `json:"metaId"`
+	Address             string            `json:"address"`
 	Protocol            string            `json:"protocol"`
 	SubId               string            `json:"subId"`
 	Code                string            `json:"code"`
 	CreateTimeStr       string            `json:"createTimeStr"`
+	PkScript            string            `json:"pkScript"`
+	Amount              string            `json:"amount"`
+	Index               int64             `json:"index"`
 	UsedList            []*ProInfoPayList `json:"usedList"`
 	Vins                []*TxIn           `json:"vins"`
 	Type                string            `json:"type"`
@@ -292,9 +298,12 @@ type TalkGroupResidueLuckyBagV3 struct {
 	LuckyBagTxId        string            `json:"luckyBagTxId"`
 	LuckyBagPinId       string            `json:"luckyBagPinId"`
 	LuckyBagMetaId      string            `json:"luckyBagMetaId"`
-	Timestamp           int64             `json:"timestamp"`   //聊天记录时间戳
-	BlockHeight         int64             `json:"blockHeight"` //区块高度
-	Chain               string            `json:"chain"`       //链类型
+	Timestamp           int64             `json:"timestamp"`    //聊天记录时间戳
+	BlockHeight         int64             `json:"blockHeight"`  //区块高度
+	Chain               string            `json:"chain"`        //链类型
+	ReclaimState        GrabState         `json:"reclaimState"` //抢红包状态, 0-链上开，1-中心化开，2-中心化开且发送, 3-中心化开且发送异常
+	ReclaimTxId         string            `json:"reclaimTxId"`  //
+	ReclaimMsg          string            `json:"reclaimMsg"`   //
 }
 
 // 用户群列表项 + 用户私聊列表项

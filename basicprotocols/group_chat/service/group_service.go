@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	communityDB  *db.CommunityDB
 	groupDB      *db.GroupDB
 	chatDB       *db.ChatDB
 	privateDB    *db.PrivateChatDB
@@ -25,6 +26,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 
 	// 获取数据库实例
 	pebbleDB = indexer.GetPebble()
+	communityDB = indexer.GetCommunityDB()
 	groupDB = indexer.GetGroupDB()
 	chatDB = indexer.GetChatDB()
 	privateDB = indexer.GetPrivateDB()
@@ -37,6 +39,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	// privateDB.StartPrivateQueueProcessor()
 
 	StartOpenLuckyBagQueueProcessor()
+	StartResidueLuckyBagQueueProcessor()
+
+	db.SetHandleGroupChatItem(wsForGroupChatItem)
 
 	return nil
 }
@@ -353,7 +358,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("chats: %+v\n", chats)
+	// fmt.Printf("chats: %+v\n", chats)
 
 	// 转换为响应格式
 	var chatItems []*respond.GroupChatItem
@@ -364,6 +369,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			GroupId:     chat.GroupId,
 			MetanetId:   chat.GroupId, // 使用 GroupId 作为 MetanetId
 			TxId:        chat.TxId,
+			PinId:       chat.PinId,
 			Address:     chat.Address,
 			MetaId:      chat.MetaId,
 			NickName:    "", // 需要从用户信息中获取
@@ -617,7 +623,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("private chats: %+v\n", chats)
+	// fmt.Printf("private chats: %+v\n", chats)
 
 	// 转换为响应格式
 	var chatItems []*respond.PrivateChatItem
@@ -680,4 +686,9 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 		NextTimestamp: nextTimestamp,
 		List:          chatItems,
 	}, nil
+}
+
+func wsForGroupChatItem(chat *models.TalkGroupChatV3) error {
+	wsPostGroupMsg(chat)
+	return nil
 }

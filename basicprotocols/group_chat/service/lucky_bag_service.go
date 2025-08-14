@@ -603,3 +603,358 @@ func makeGiftKey(subId, code, createTimeStr string) (string, string) {
 	return "", hex.EncodeToString(priKey.Serialise())
 	// return "", ""
 }
+
+// ReclaimExpiredLuckyBag 发红包的人回收过时红包剩余的UTXO
+func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, error) {
+	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return "", err
+	}
+	if luckyBag == nil {
+		return "", errors.New("lucky bag not found")
+	}
+
+	// 验证groupId是否匹配
+	if luckyBag.GroupId != groupId {
+		return "", errors.New("lucky bag not match")
+	}
+
+	// 验证是否为红包创建者
+	if luckyBag.MetaId != metaId {
+		return "", errors.New("only lucky bag creator can reclaim")
+	}
+
+	// 获取已领取的抢红包列表
+	openList, err := chatDB.GetOpenLuckyBagList(pinId)
+	if err != nil {
+		return "", err
+	}
+
+	// 获取已回收的红包列表
+	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
+	if err != nil {
+		return "", err
+	}
+
+	// 构建已使用的UTXO索引集合
+	usedIndices := make(map[int64]bool)
+
+	// 添加已抢红包的索引
+	for _, openItem := range openList.Items {
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
+		usedIndices[openLuckyBag.Index] = true
+	}
+
+	// 添加已回收红包的索引
+	for _, residueItem := range residueList.Items {
+		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+		if err != nil || residueLuckyBag == nil {
+			continue
+		}
+		if residueLuckyBag.UsedList != nil {
+			for _, used := range residueLuckyBag.UsedList {
+				usedIndices[used.Index] = true
+			}
+		}
+	}
+
+	// 获取未使用的UTXO列表
+	unusedList := make([]*respond.UnusedList, 0)
+	for _, v := range luckyBag.PayList {
+		if !usedIndices[v.Index] {
+			unused := &respond.UnusedList{
+				Index:   v.Index,
+				Amount:  v.Amount,
+				Address: v.Address,
+			}
+			unusedList = append(unusedList, unused)
+		}
+	}
+
+	if len(unusedList) <= 0 {
+		return "", errors.New("no unused UTXOs to reclaim")
+	}
+
+	// 执行回收逻辑
+	err = commonReclaim(luckyBag, unusedList, metaId, address)
+	if err != nil {
+		return "", err
+	}
+
+	return "success", nil
+}
+
+// commonReclaim 执行回收红包剩余UTXO的通用逻辑
+func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.UnusedList, metaId, address string) error {
+	type reclaimEntity struct {
+		unusedIndex   int64
+		unusedAmount  string
+		unusedAddress string
+	}
+	reclaimEntityList := make([]*reclaimEntity, 0)
+
+	// 收集所有未使用的UTXO
+	for _, unused := range unusedList {
+		reclaimEntityList = append(reclaimEntityList, &reclaimEntity{
+			unusedIndex:   unused.Index,
+			unusedAmount:  unused.Amount,
+			unusedAddress: unused.Address,
+		})
+	}
+
+	hasSuccess := false
+	for _, v := range reclaimEntityList {
+		vins := make([]*models.TxIn, 0)
+		vins = append(vins, &models.TxIn{
+			OutTxID: luckyBag.TxId,
+			Index:   uint64(v.unusedIndex),
+		})
+		proInfoPayList := make([]*models.ProInfoPayList, 0)
+
+		pkScript := ""
+		for _, vout := range luckyBag.LuckyBagVouts {
+			if vout.Index == v.unusedIndex {
+				pkScript = vout.ScriptPubKey
+				proInfoPayList = append(proInfoPayList, &models.ProInfoPayList{
+					Amount:   strconv.FormatInt(int64(vout.Amount), 10),
+					Address:  vout.Address,
+					Index:    vout.Index,
+					PkScript: vout.ScriptPubKey,
+				})
+			}
+		}
+
+		// 生成唯一的TxId和PinId
+		txId := fmt.Sprintf("%s_%d_%s_reclaim", luckyBag.TxId, v.unusedIndex, metaId)
+		pinId := fmt.Sprintf("%s_%d_%s_reclaim_pin", luckyBag.TxId, v.unusedIndex, metaId)
+
+		// 检查是否已经保存过该 PinId
+		existingResidue, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(pinId)
+		if err == nil && existingResidue != nil {
+			// 已经存在，跳过处理
+			continue
+		}
+
+		// 创建回收红包记录
+		residueLuckyBag := &models.TalkGroupResidueLuckyBagV3{
+			CommunityId:         "", // 需要从群组信息中获取
+			GroupId:             luckyBag.GroupId,
+			TxId:                txId,
+			PinId:               pinId,
+			MetaId:              metaId,
+			Protocol:            luckyBag.Protocol,
+			SubId:               luckyBag.SubId,
+			Code:                luckyBag.Code,
+			CreateTimeStr:       luckyBag.CreateTimeStr,
+			Address:             address,
+			PkScript:            pkScript,
+			Amount:              v.unusedAmount,
+			Index:               v.unusedIndex,
+			Vins:                vins,
+			UsedList:            proInfoPayList, // 初始化为空列表
+			Type:                luckyBag.Type,
+			RequireTickId:       luckyBag.RequireTickId,
+			RequireCollectionId: luckyBag.RequireCollectionId,
+			LuckyBagTxId:        luckyBag.TxId,
+			LuckyBagPinId:       luckyBag.PinId,
+			LuckyBagMetaId:      luckyBag.MetaId,
+			Timestamp:           time.Now().Unix(),
+			BlockHeight:         0, // 需要从实际交易中获取
+			Chain:               luckyBag.Chain,
+			ReclaimState:        models.GrabStateOpen,
+			ReclaimTxId:         "",
+			ReclaimMsg:          "",
+		}
+
+		// 保存回收红包记录到 TalkGroupResidueLuckyBagPinCollection
+		err = chatDB.SaveResidueLuckyBag(residueLuckyBag)
+		if err != nil {
+			log.Printf("SaveResidueLuckyBag err: %v", err)
+			continue
+		}
+
+		// 保存回收红包列表记录到 TalkGroupResidueLuckyBagListCollection
+		err = chatDB.SaveResidueLuckyBagList(luckyBag.PinId, residueLuckyBag.PinId, luckyBag.GroupId, residueLuckyBag.Timestamp, metaId, address, []int64{v.unusedIndex})
+		if err != nil {
+			log.Printf("SaveResidueLuckyBagList err: %v", err)
+			continue
+		}
+
+		// 将回收红包记录加入队列，等待处理
+		err = chatDB.EnqueueResidueLuckyBagMessage(residueLuckyBag)
+		if err != nil {
+			log.Printf("EnqueueResidueLuckyBagMessage err: %v", err)
+			continue
+		}
+
+		hasSuccess = true
+	}
+
+	if !hasSuccess {
+		return errors.New("Reclaim err.")
+	}
+
+	return nil
+}
+
+// 处理回收红包队列中的记录
+func ProcessResidueLuckyBagQueue() {
+	// 获取待处理的回收红包消息
+	messages, err := chatDB.GetPendingResidueLuckyBagMessages(10) // 每次处理10条
+	if err != nil {
+		log.Printf("GetPendingResidueLuckyBagMessages err: %v", err)
+		return
+	}
+
+	for _, message := range messages {
+		// 处理回收红包记录
+		err := disposingReclaimLuckyBag(message.ResidueLuckyBag)
+		if err != nil {
+			log.Printf("disposingReclaimLuckyBag err: %v", err)
+			continue
+		}
+
+		// 处理成功，删除队列消息
+		err = chatDB.DeleteResidueLuckyBagQueueMessage(message.PinId)
+		if err != nil {
+			log.Printf("deleteResidueLuckyBagQueueMessage err: %v", err)
+		}
+	}
+}
+
+// 处理回收红包逻辑
+func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) error {
+	if chainAdapter == nil || chainAdapter[reclaimEntity.Chain] == nil {
+		return fmt.Errorf("chain adapter not found")
+	}
+
+	if reclaimEntity.ReclaimState != models.GrabStateOpen {
+		return nil
+	}
+	if reclaimEntity.Vins == nil || len(reclaimEntity.Vins) == 0 {
+		return errors.New("no vins found")
+	}
+
+	_ = reclaimEntity.Vins[0] // utxo, 暂时未使用
+	wifStr, hexStr := makeGiftKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr)
+	if wifStr == "" || hexStr == "" {
+		return errors.New("failed to generate wif or hex")
+	}
+
+	// 计算总金额（所有未使用的UTXO）
+	totalAmount := uint64(0)
+	for _, used := range reclaimEntity.UsedList {
+		amount, err := strconv.ParseUint(used.Amount, 10, 64)
+		if err != nil {
+			continue
+		}
+		totalAmount += amount
+	}
+
+	if totalAmount == 0 {
+		return errors.New("no amount to reclaim")
+	}
+
+	toAddress := reclaimEntity.Address
+
+	// 构建输入
+	inputs := make([]*common.TxInputUtxo, 0)
+	for _, used := range reclaimEntity.UsedList {
+		amount, err := strconv.ParseUint(used.Amount, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		input := common.TxInputUtxo{
+			TxId:     reclaimEntity.LuckyBagTxId,
+			TxIndex:  used.Index,
+			PkScript: reclaimEntity.PkScript,
+			Amount:   amount,
+			PriHex:   hexStr,
+		}
+		inputs = append(inputs, &input)
+	}
+
+	output := common.TxOutput{
+		Address: toAddress,
+		Amount:  int64(totalAmount),
+	}
+
+	netParam := chainAdapter[reclaimEntity.Chain].GetNetParam()
+
+	// 根据链类型进行类型转换
+	var tx interface{}
+	var buildErr error
+
+	switch strings.ToLower(reclaimEntity.Chain) {
+	case "mvc":
+		// MVC链使用 chaincfg2.Params
+		if mvcNetParam, ok := netParam.(*chaincfg2.Params); ok {
+			tx, buildErr = common.BuildMvcTransferAllTx(mvcNetParam, inputs, &output, 1, false)
+		} else {
+			return fmt.Errorf("failed to convert netParam to chaincfg2.Params for MVC chain")
+		}
+	case "btc":
+		// BTC链使用 chaincfg.Params
+		if btcNetParam, ok := netParam.(*chaincfg.Params); ok {
+			tx, buildErr = common.BuildMvcTransferAllTx(btcNetParam, inputs, &output, 1, false)
+		} else {
+			return fmt.Errorf("failed to convert netParam to chaincfg.Params for BTC chain")
+		}
+	default:
+		return fmt.Errorf("unsupported chain type: %s", reclaimEntity.Chain)
+	}
+	if buildErr != nil {
+		return fmt.Errorf("failed to build tx: %v", buildErr)
+	}
+
+	// 类型断言，确保tx是正确的类型
+	msgTx, ok := tx.(*wire.MsgTx)
+	if !ok {
+		return fmt.Errorf("failed to convert tx to *wire.MsgTx")
+	}
+
+	txRaw, err := common.MvcToRaw(msgTx)
+	if err != nil {
+		return fmt.Errorf("failed to convert tx to raw: %v", err)
+	}
+
+	resultTxId, err := chainAdapter[reclaimEntity.Chain].BroadcastTx(txRaw)
+	if resultTxId != "" {
+		reclaimEntity.ReclaimState = models.GrabStateOpenAndSend
+		reclaimEntity.ReclaimTxId = resultTxId
+		reclaimEntity.ReclaimMsg = "success"
+		log.Printf("Success: %s", resultTxId)
+	} else {
+		log.Printf("Failure: %s", err.Error())
+		reclaimEntity.ReclaimState = models.GrabStateOpenAndSendErr
+		reclaimEntity.ReclaimMsg = err.Error()
+	}
+
+	// 更新数据库中的回收红包记录
+	err = chatDB.SaveResidueLuckyBag(reclaimEntity)
+	if err != nil {
+		return fmt.Errorf("failed to save residue lucky bag: %v", err)
+	}
+
+	return nil
+}
+
+// 启动回收红包队列处理器
+func StartResidueLuckyBagQueueProcessor() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Second) // 每10秒处理一次
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// 处理回收红包队列
+				ProcessResidueLuckyBagQueue()
+			}
+		}
+	}()
+}

@@ -851,6 +851,91 @@ func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	return nil
 }
 
+// 回收红包队列消息项
+type QueueResidueLuckyBagMessage struct {
+	PinId           string                             `json:"pinId"`           // 消息PinId
+	ResidueLuckyBag *models.TalkGroupResidueLuckyBagV3 `json:"residueLuckyBag"` // 回收红包记录
+	Timestamp       int64                              `json:"timestamp"`       // 入队时间戳
+	RetryCount      int                                `json:"retryCount"`      // 重试次数
+	Status          string                             `json:"status"`          // 处理状态：pending, processing, completed, failed
+}
+
+// 将回收红包记录加入队列
+func (cdb *ChatDB) EnqueueResidueLuckyBagMessage(residueLuckyBag *models.TalkGroupResidueLuckyBagV3) error {
+	queueMessage := &QueueResidueLuckyBagMessage{
+		PinId:           residueLuckyBag.PinId,
+		ResidueLuckyBag: residueLuckyBag,
+		Timestamp:       time.Now().Unix(),
+		RetryCount:      0,
+		Status:          "pending",
+	}
+
+	data, err := json.Marshal(queueMessage)
+	if err != nil {
+		return err
+	}
+
+	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + residueLuckyBag.PinId)
+	return Pb[TalkGroupResidueLuckyBagQueueCollection].Set(key, data, pebble.Sync)
+}
+
+// 获取回收红包队列中的待处理消息
+func (cdb *ChatDB) GetPendingResidueLuckyBagMessages(limit int) ([]*QueueResidueLuckyBagMessage, error) {
+	var messages []*QueueResidueLuckyBagMessage
+	iter, err := Pb[TalkGroupResidueLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid() && iter.Key() != nil && count < limit; iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueResidueLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// 只处理pending状态的消息
+		if queueMessage.Status == "pending" {
+			messages = append(messages, &queueMessage)
+			count++
+		}
+	}
+
+	return messages, nil
+}
+
+// 删除回收红包队列消息数据
+func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
+	iter, err := Pb[TalkGroupResidueLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	// 查找包含该pinId的队列消息
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueResidueLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// 找到匹配的pinId，删除该队列消息
+		if queueMessage.PinId == pinId {
+			return Pb[TalkGroupResidueLuckyBagQueueCollection].Delete(iter.Key(), pebble.Sync)
+		}
+	}
+
+	return nil
+}
+
 // 批量处理队列消息（异步更新群列表）
 func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 	// 获取待处理的消息
@@ -1155,7 +1240,12 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 
 	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
-	return Pb[collection].Set(key, []byte(value), pebble.Sync)
+	if err = Pb[collection].Set(key, []byte(value), pebble.Sync); err != nil {
+		return err
+	}
+
+	go dealGroupChatItem(chat)
+	return nil
 }
 
 // 处理文件群组聊天

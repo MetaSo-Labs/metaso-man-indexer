@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log"
+	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/common"
 	"os"
 	"path/filepath"
@@ -32,9 +33,9 @@ const (
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
 	// 消息队列相关数据库
-	TalkGroupChatQueueCollection         string = "talk_group_chat_queue"           // key: timestamp_pinId，value: chat消息数据
-	TalkGroupOpenLuckyBagQueueCollection string = "talk_group_open_lucky_bag_queue" // key: timestamp_pinId，value:
-
+	TalkGroupChatQueueCollection            string = "talk_group_chat_queue"              // key: timestamp_pinId，value: chat消息数据
+	TalkGroupOpenLuckyBagQueueCollection    string = "talk_group_open_lucky_bag_queue"    // key: timestamp_pinId，value:
+	TalkGroupResidueLuckyBagQueueCollection string = "talk_group_residue_lucky_bag_queue" // key: timestamp_pinId，value:
 	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
 
 	// 聊天相关数据库
@@ -142,6 +143,10 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupOpenLuckyBagQueueCollection, err)
 	}
+	err = open(TalkGroupResidueLuckyBagQueueCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupResidueLuckyBagQueueCollection, err)
+	}
 	// err = open(TalkGroupChatQueueProcessingCollection)
 	// if err != nil {
 	// 	return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueProcessingCollection, err)
@@ -238,4 +243,19 @@ func (pb *Pebble) CloseAll() {
 			log.Printf("Close database %s success\n", name)
 		}
 	}
+}
+
+var (
+	handleGroupChatItem func(chat *models.TalkGroupChatV3) error
+)
+
+func SetHandleGroupChatItem(handle func(chat *models.TalkGroupChatV3) error) {
+	handleGroupChatItem = handle
+}
+
+func dealGroupChatItem(chat *models.TalkGroupChatV3) error {
+	if handleGroupChatItem != nil {
+		return handleGroupChatItem(chat)
+	}
+	return nil
 }
