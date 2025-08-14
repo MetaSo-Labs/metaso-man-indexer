@@ -15,6 +15,8 @@ import (
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+
+	chaincfg2 "github.com/bitcoinsv/bsvd/chaincfg"
 )
 
 var (
@@ -206,4 +208,14 @@ func (chain *MicroVisionChain) BroadcastTx(txRaw string) (txId string, err error
 	}
 	txId = txHash.String()
 	return
+}
+
+func (chain *MicroVisionChain) GetNetParam() interface{} {
+	if common.TestNet == "1" {
+		return &chaincfg2.TestNet3Params
+	} else if common.TestNet == "2" {
+		return &chaincfg2.RegressionNetParams
+	} else {
+		return &chaincfg2.MainNetParams
+	}
 }

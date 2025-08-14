@@ -197,3 +197,13 @@ func (chain *BitcoinChain) BroadcastTx(txRaw string) (txId string, err error) {
 	txId = txHash.String()
 	return
 }
+
+func (chain *BitcoinChain) GetNetParam() interface{} {
+	if common.TestNet == "1" {
+		return &chaincfg.TestNet3Params
+	} else if common.TestNet == "2" {
+		return &chaincfg.RegressionNetParams
+	} else {
+		return &chaincfg.MainNetParams
+	}
+}

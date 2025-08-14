@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -8,7 +9,14 @@ import (
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/common"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/bitcoinsv/bsvd/chaincfg"
+	chaincfg2 "github.com/bitcoinsv/bsvd/chaincfg"
+	"github.com/bitcoinsv/bsvd/wire"
+	"github.com/libsv/go-bk/bec"
+	"github.com/tyler-smith/go-bip32"
 )
 
 // GetLuckyBagWithOpenList 根据groupId和pinId获取红包对象和已领取列表
@@ -465,6 +473,10 @@ func ProcessOpenLuckyBagQueue() {
 
 // 处理抢红包逻辑
 func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
+	if chainAdapter == nil || chainAdapter[grabEntity.Chain] == nil {
+		return fmt.Errorf("chain adapter not found")
+	}
+
 	if grabEntity.GrabState != models.GrabStateOpen {
 		return nil
 	}
@@ -497,17 +509,44 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		Address: toAddress,
 		Amount:  int64(value),
 	}
-	tx, err := common.BuildMvcTransferAllTx(nil, []*common.TxInputUtxo{&input}, &output, 1, false)
-	if err != nil {
-		return fmt.Errorf("failed to build tx: %v", err)
+
+	netParam := chainAdapter[grabEntity.Chain].GetNetParam()
+
+	// 根据链类型进行类型转换
+	var tx interface{}
+	var buildErr error
+
+	switch strings.ToLower(grabEntity.Chain) {
+	case "mvc":
+		// MVC链使用 chaincfg2.Params
+		if mvcNetParam, ok := netParam.(*chaincfg2.Params); ok {
+			tx, buildErr = common.BuildMvcTransferAllTx(mvcNetParam, []*common.TxInputUtxo{&input}, &output, 1, false)
+		} else {
+			return fmt.Errorf("failed to convert netParam to chaincfg2.Params for MVC chain")
+		}
+	case "btc":
+		// BTC链使用 chaincfg.Params
+		if btcNetParam, ok := netParam.(*chaincfg.Params); ok {
+			tx, buildErr = common.BuildMvcTransferAllTx(btcNetParam, []*common.TxInputUtxo{&input}, &output, 1, false)
+		} else {
+			return fmt.Errorf("failed to convert netParam to chaincfg.Params for BTC chain")
+		}
+	default:
+		return fmt.Errorf("unsupported chain type: %s", grabEntity.Chain)
+	}
+	if buildErr != nil {
+		return fmt.Errorf("failed to build tx: %v", buildErr)
 	}
 
-	txRaw, err := common.MvcToRaw(tx)
+	// 类型断言，确保tx是正确的类型
+	msgTx, ok := tx.(*wire.MsgTx)
+	if !ok {
+		return fmt.Errorf("failed to convert tx to *wire.MsgTx")
+	}
+
+	txRaw, err := common.MvcToRaw(msgTx)
 	if err != nil {
 		return fmt.Errorf("failed to convert tx to raw: %v", err)
-	}
-	if chainAdapter == nil || chainAdapter[grabEntity.Chain] == nil {
-		return fmt.Errorf("chain adapter not found")
 	}
 
 	resultTxId, err := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
@@ -548,19 +587,19 @@ func StartOpenLuckyBagQueueProcessor() {
 }
 
 func makeGiftKey(subId, code, createTimeStr string) (string, string) {
-	// key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(createTimeStr))
-	// masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
-	// xpri, _ := masterKey.NewChildKey(0)
-	// xpri, _ = xpri.NewChildKey(0)
-	// net := &chaincfg.MainNet
+	key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(createTimeStr))
+	masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
+	xpri, _ := masterKey.NewChildKey(0)
+	xpri, _ = xpri.NewChildKey(0)
+	// net := &chaincfg2.MainNet
 	// if conf.IsTestMVC() {
 	// 	net = &chaincfg.TestNet
 	// }
-	// priKey, _ := bec.PrivKeyFromBytes(bec.S256(), xpri.Key)
+	priKey, _ := bec.PrivKeyFromBytes(bec.S256(), xpri.Key)
 	// wifKey, _ := wif.NewWIF(priKey, net, true)
-	// //address, _ := bscript.NewAddressFromPublicKey(priKey.PubKey(), false)
-	// //fmt.Println(address.AddressString)
-	// //fmt.Println(wifKey.String())
-	// return wifKey.String()
-	return "", ""
+	//address, _ := bscript.NewAddressFromPublicKey(priKey.PubKey(), false)
+	//fmt.Println(address.AddressString)
+	//fmt.Println(wifKey.String())
+	return "", hex.EncodeToString(priKey.Serialise())
+	// return "", ""
 }

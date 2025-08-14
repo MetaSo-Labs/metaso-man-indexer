@@ -14,12 +14,16 @@ require (
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/gin-contrib/cors v1.5.0
 	github.com/gin-gonic/gin v1.10.0
+	github.com/libsv/go-bk v0.1.6
 	github.com/swaggo/swag v1.16.4
+	github.com/tyler-smith/go-bip32 v1.0.0
 	github.com/yanyiwu/gojieba v1.4.5
 )
 
 require (
 	github.com/DataDog/zstd v1.5.6-0.20230824185856-869dae002e5e // indirect
+	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e // indirect
+	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/aead/siphash v1.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

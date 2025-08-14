@@ -1,6 +1,8 @@
 package adapter
 
-import "manindexer/pin"
+import (
+	"manindexer/pin"
+)
 
 type Chain interface {
 	InitChain()
@@ -13,4 +15,5 @@ type Chain interface {
 	GetMempoolTransactionList() (list []interface{}, err error)
 	GetTxSizeAndFees(txHash string) (fee int64, size int64, blockHash string, err error)
 	BroadcastTx(txRaw string) (txId string, err error)
+	GetNetParam() interface{}
 }

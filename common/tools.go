@@ -160,3 +160,14 @@ func ConcatBytesOptimized(values []string, sep string) string {
 	}
 	return b.String()
 }
+
+func SHA256(message []byte) []byte {
+	hash := sha256.New()
+	hash.Write(message)
+	bytes := hash.Sum(nil)
+	return bytes
+}
+
+func DoubleSHA256(message []byte) []byte {
+	return SHA256(SHA256(message))
+}
