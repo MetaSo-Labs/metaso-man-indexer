@@ -494,3 +494,40 @@ func ReclaimLuckyBag(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
 }
+
+// @Summary 获取红包未领取信息
+// @Description 根据groupId和pinId获取红包对象和未领取列表
+// @Produce json
+// @Param groupId query string true "群组ID"
+// @Param pinId query string true "红包PinId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.LuckyBagUnusedResponse} "成功返回红包未领取信息"
+// @Router /group-chat/lucky-bag-unused-info [get]
+func GetLuckyBagUnusedInfo(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchLuckyBagInfoRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			PinId:   c.DefaultQuery("pinId", ""),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetLuckyBagWithUnusedList(req.GroupId, req.PinId)
+	if err != nil {
+		log.Printf("Failed to get lucky bag unused info for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

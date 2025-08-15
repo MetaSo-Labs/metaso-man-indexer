@@ -37,6 +37,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// 获取红包信息
 		group.GET("/lucky-bag-info", GetLuckyBagInfo)
 
+		// 获取红包未领取信息
+		group.GET("/lucky-bag-unused-info", GetLuckyBagUnusedInfo)
+
 		// 抢红包
 		group.POST("/grab-lucky-bag", GrabLuckyBag)
 

@@ -80,7 +80,11 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		log.Printf("Group protocol: %s", pin.Path)
 		// 群组相关协议
 		return gci.groupDB.ProcessGroupPin(pin)
-	case strings.ToLower(protocols.MonitorSimpleGroupChat), strings.ToLower(protocols.MonitorSimpleFileGroupChat):
+	case strings.ToLower(protocols.MonitorSimpleGroupChat),
+		strings.ToLower(protocols.MonitorSimpleFileGroupChat),
+		strings.ToLower(protocols.MonitorSimpleGroupLuckyBag),
+		strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag),
+		strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag):
 		log.Printf("Chat protocol: %s", pin.Path)
 		// 聊天相关协议
 		return gci.chatDB.ProcessGroupChatPin(pin, tx)

@@ -105,6 +105,106 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 	return response, nil
 }
 
+// GetLuckyBagWithUnusedList 根据groupId和pinId获取红包对象和未领取列表
+func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedResponse, error) {
+	// 获取红包对象
+	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return nil, err
+	}
+
+	if luckyBag == nil {
+		return nil, errors.New("lucky bag not found")
+	}
+
+	// 验证groupId是否匹配
+	if luckyBag.GroupId != groupId {
+		return nil, errors.New("lucky bag not match")
+	}
+
+	// 获取已领取的抢红包列表
+	openList, err := chatDB.GetOpenLuckyBagList(pinId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取已回收的红包列表
+	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建已使用的UTXO索引集合
+	usedIndices := make(map[int64]bool)
+
+	// 添加已抢红包的索引
+	for _, openItem := range openList.Items {
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
+		usedIndices[openLuckyBag.Index] = true
+	}
+
+	// 添加已回收红包的索引
+	for _, residueItem := range residueList.Items {
+		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+		if err != nil || residueLuckyBag == nil {
+			continue
+		}
+		if residueLuckyBag.UsedList != nil {
+			for _, used := range residueLuckyBag.UsedList {
+				usedIndices[used.Index] = true
+			}
+		}
+	}
+
+	// 构建LuckyBagUnusedResponse
+	response := &respond.LuckyBagUnusedResponse{
+		MetaId:              luckyBag.MetaId,
+		UserInfo:            nil, // 需要从用户信息中获取
+		SubId:               luckyBag.SubId,
+		Code:                luckyBag.Code,
+		CreateTime:          luckyBag.CreateTimeStr,
+		Amount:              luckyBag.Amount,
+		Count:               luckyBag.Count,
+		Content:             luckyBag.Content,
+		Img:                 luckyBag.Img,
+		ImgType:             luckyBag.ImgType,
+		Unused:              make([]*respond.UnusedList, 0),
+		Type:                luckyBag.Type,
+		TokenCount:          0, // TalkGroupLuckyBagV3 没有 TokenCount 字段
+		RequireType:         luckyBag.RequireType,
+		RequireTickId:       luckyBag.RequireTickId,
+		RequireCollectionId: luckyBag.RequireCollectionId,
+		LimitAmount:         luckyBag.LimitAmount,
+	}
+
+	// 获取未使用的UTXO列表
+	for _, v := range luckyBag.PayList {
+		if !usedIndices[v.Index] {
+			unused := &respond.UnusedList{
+				Index:        v.Index,
+				Amount:       v.Amount,
+				Address:      v.Address,
+				ScriptPubKey: "", // 需要从LuckyBagVouts中获取
+			}
+
+			// 从LuckyBagVouts中获取ScriptPubKey
+			for _, vout := range luckyBag.LuckyBagVouts {
+				if vout.Index == v.Index {
+					unused.ScriptPubKey = vout.ScriptPubKey
+					break
+				}
+			}
+
+			response.Unused = append(response.Unused, unused)
+		}
+	}
+
+	return response, nil
+}
+
 // 临时的OpenRedMetaId结构，用于匹配参考代码
 type OpenRedMetaId struct {
 	MetaId             string
@@ -591,17 +691,8 @@ func makeGiftKey(subId, code, createTimeStr string) (string, string) {
 	masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
 	xpri, _ := masterKey.NewChildKey(0)
 	xpri, _ = xpri.NewChildKey(0)
-	// net := &chaincfg2.MainNet
-	// if conf.IsTestMVC() {
-	// 	net = &chaincfg.TestNet
-	// }
 	priKey, _ := bec.PrivKeyFromBytes(bec.S256(), xpri.Key)
-	// wifKey, _ := wif.NewWIF(priKey, net, true)
-	//address, _ := bscript.NewAddressFromPublicKey(priKey.PubKey(), false)
-	//fmt.Println(address.AddressString)
-	//fmt.Println(wifKey.String())
 	return "", hex.EncodeToString(priKey.Serialise())
-	// return "", ""
 }
 
 // ReclaimExpiredLuckyBag 发红包的人回收过时红包剩余的UTXO

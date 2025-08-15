@@ -11,3 +11,5 @@ ssl.txt
 pebble_data/
 basicprotocols/group_chat/api/swagger/README.md
 go.sum
+docker-compose.testnet.simple.yml
+Dockerfile.testne

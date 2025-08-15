@@ -199,6 +199,23 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/lucky-bag-unused-info": {
+            "get": {
+                "description": "根据groupId和pinId获取红包对象和未领取列表",
+                "produces": ["application/json"],
+                "tags": ["群组管理"],
+                "summary": "获取红包未领取信息",
+                "parameters": [
+                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "红包PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "成功返回红包未领取信息", "schema": {"type": "object"}},
+                    "400": {"description": "参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/grab-lucky-bag": {
             "post": {
                 "description": "根据groupId、pinId、metaId和address抢红包",
