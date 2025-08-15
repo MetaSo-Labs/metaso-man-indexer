@@ -197,6 +197,7 @@ type TalkGroupLuckyBagV3 struct {
 	TxId                string            `json:"txId"`
 	PinId               string            `json:"pinId"` //
 	MetaId              string            `json:"metaId"`
+	Address             string            `json:"address"`
 	Protocol            string            `json:"protocol"`
 	SubId               string            `json:"subId"`
 	Code                string            `json:"code"`

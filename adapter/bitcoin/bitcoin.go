@@ -3,6 +3,7 @@ package bitcoin
 import (
 	"bytes"
 	"encoding/hex"
+	"log"
 	"manindexer/common"
 	"manindexer/pin"
 	"time"
@@ -181,17 +182,21 @@ func (chain *BitcoinChain) GetTxSizeAndFees(txHash string) (fee int64, size int6
 }
 
 func (chain *BitcoinChain) BroadcastTx(txRaw string) (txId string, err error) {
+	log.Printf("[BTC]BroadcastTx broadcasting : %s", txRaw)
 	txByte, err := hex.DecodeString(txRaw)
 	if err != nil {
+		log.Printf("[BTC]BroadcastTx decoding txRaw failed: %s", err)
 		return "", err
 	}
 	tx := wire.NewMsgTx(2)
 	err = tx.Deserialize(bytes.NewReader(txByte))
 	if err != nil {
+		log.Printf("[BTC]BroadcastTx deserializing tx failed: %s", err)
 		return "", err
 	}
 	txHash, err := client.SendRawTransaction(tx, true)
 	if err != nil {
+		log.Printf("[BTC]BroadcastTx sending tx failed: %s", err)
 		return "", err
 	}
 	txId = txHash.String()

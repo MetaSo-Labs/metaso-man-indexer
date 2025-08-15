@@ -12,4 +12,5 @@ pebble_data/
 basicprotocols/group_chat/api/swagger/README.md
 go.sum
 docker-compose.testnet.simple.yml
-Dockerfile.testne
+Dockerfile.testnet
+.idea/

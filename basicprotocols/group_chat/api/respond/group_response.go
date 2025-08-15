@@ -33,6 +33,7 @@ type GroupItem struct {
 	RoomNewestContent   string    `json:"roomNewestContent"`   //Room's latest chat content
 	RoomNewestTimestamp int64     `json:"roomNewestTimestamp"` //Room's latest chat timestamp
 	CreateUserMetaId    string    `json:"createUserMetaId"`    //Creator's metaId
+	CreateUserAddress   string    `json:"createUserAddress"`   //Creator's address
 	CreateUserInfo      *UserInfo `json:"createUserInfo"`      //Creator's info
 	UserCount           int64     `json:"userCount"`           //Room member count
 	ChatSettingType     int64     `json:"chatSettingType"`     //Used for setting speech restrictions, 0-everyone, 1-admin
@@ -147,17 +148,18 @@ type ChatInfoItem struct {
 	UserInfo *UserInfo `json:"userInfo,omitempty"`
 
 	// Group chat specific fields
-	CommunityId      string `json:"communityId,omitempty"`     // Community ID (for group chat)
-	RoomName         string `json:"roomName,omitempty"`        // Room name (for group chat)
-	RoomNote         string `json:"roomNote,omitempty"`        // Room announcement (for group chat)
-	RoomType         string `json:"roomType,omitempty"`        // Room type (for group chat)
-	RoomStatus       string `json:"roomStatus,omitempty"`      // Room status (for group chat)
-	RoomJoinType     string `json:"roomJoinType,omitempty"`    // Join method (for group chat)
-	RoomAvatarUrl    string `json:"roomAvatarUrl,omitempty"`   // Room avatar (for group chat)
-	CreateUserMetaId string `json:"createUserMetaId"`          // Creator MetaId (for group chat)
-	UserCount        int64  `json:"userCount,omitempty"`       // User count (for group chat)
-	ChatSettingType  int64  `json:"chatSettingType,omitempty"` // Chat setting type (for group chat)
-	DeleteStatus     int64  `json:"deleteStatus,omitempty"`    // Delete status (for group chat)
+	CommunityId       string `json:"communityId,omitempty"`     // Community ID (for group chat)
+	RoomName          string `json:"roomName,omitempty"`        // Room name (for group chat)
+	RoomNote          string `json:"roomNote,omitempty"`        // Room announcement (for group chat)
+	RoomType          string `json:"roomType,omitempty"`        // Room type (for group chat)
+	RoomStatus        string `json:"roomStatus,omitempty"`      // Room status (for group chat)
+	RoomJoinType      string `json:"roomJoinType,omitempty"`    // Join method (for group chat)
+	RoomAvatarUrl     string `json:"roomAvatarUrl,omitempty"`   // Room avatar (for group chat)
+	CreateUserMetaId  string `json:"createUserMetaId"`          // Creator MetaId (for group chat)
+	CreateUserAddress string `json:"createUserAddress"`         // Creator address (for group chat)
+	UserCount         int64  `json:"userCount,omitempty"`       // User count (for group chat)
+	ChatSettingType   int64  `json:"chatSettingType,omitempty"` // Chat setting type (for group chat)
+	DeleteStatus      int64  `json:"deleteStatus,omitempty"`    // Delete status (for group chat)
 }
 
 // PrivateChatResponse Private chat records response
@@ -174,6 +176,7 @@ type PrivateChatItem struct {
 	TxId        string      `json:"txId"`
 	PinId       string      `json:"pinId"`
 	MetaId      string      `json:"metaId"`   // Message creator MetaId
+	Address     string      `json:"address"`  // Message creator address
 	UserInfo    *UserInfo   `json:"userInfo"` // User info
 	NickName    string      `json:"nickName"`
 	Protocol    string      `json:"protocol"`
@@ -193,7 +196,9 @@ type PrivateChatItem struct {
 
 type LuckyBagInfoResponse struct {
 	TxId                string         `json:"txId"`
+	PinId               string         `json:"pinId"`
 	MetaId              string         `json:"metaId"`
+	Address             string         `json:"address"`
 	UserInfo            *UserInfo      `json:"userInfo"`
 	SubId               string         `json:"subId"`
 	Code                string         `json:"code"`
@@ -213,24 +218,28 @@ type LuckyBagInfoResponse struct {
 	LimitAmount         uint64         `json:"limitAmount"`
 }
 type InfoPayList struct {
-	TxId         string    `json:"txId"`
-	Index        int64     `json:"index"`
-	Amount       string    `json:"amount"`
-	Address      string    `json:"address"`
-	Used         bool      `json:"used"`
-	GradTxId     string    `json:"gradTxId"`
-	GradPinId    string    `json:"gradPinId"`
-	GradMetaId   string    `json:"gradMetaId"`
-	GradAddress  string    `json:"gradAddress"`
-	UserInfo     *UserInfo `json:"userInfo"`
-	Timestamp    int64     `json:"timestamp"`
-	ScriptPubKey string    `json:"scriptPubKey"`
-	IsBest       bool      `json:"isBest"`
-	IsWithdraw   bool      `json:"isWithdraw"`
+	TxId         string           `json:"txId"`
+	Index        int64            `json:"index"`
+	Amount       string           `json:"amount"`
+	Address      string           `json:"address"`
+	Used         bool             `json:"used"`
+	GradPinId    string           `json:"gradPinId"`
+	GradMetaId   string           `json:"gradMetaId"`
+	GradAddress  string           `json:"gradAddress"`
+	GradTxId     string           `json:"gradTxId"`
+	GradState    models.GrabState `json:"gradState"`
+	GradMsg      string           `json:"gradMsg"`
+	UserInfo     *UserInfo        `json:"userInfo"`
+	Timestamp    int64            `json:"timestamp"`
+	ScriptPubKey string           `json:"scriptPubKey"`
+	IsBest       bool             `json:"isBest"`
+	IsWithdraw   bool             `json:"isWithdraw"`
 }
 
 type LuckyBagUnusedResponse struct {
+	PinId               string        `json:"pinId"`
 	MetaId              string        `json:"metaId"`
+	Address             string        `json:"address"`
 	UserInfo            *UserInfo     `json:"userInfo"`
 	SubId               string        `json:"subId"`
 	Code                string        `json:"code"`

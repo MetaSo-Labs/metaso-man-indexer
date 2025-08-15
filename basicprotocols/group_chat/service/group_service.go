@@ -137,13 +137,14 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 				}
 				return 0
 			}(),
-			CreateUserMetaId: group.CreateUserMetaId,
-			UserCount:        userCount,
-			ChatSettingType:  group.ChatSettingType,
-			DeleteStatus:     group.DeleteStatus,
-			Timestamp:        group.Timestamp,
-			Chain:            group.Chain,
-			BlockHeight:      group.BlockHeight,
+			CreateUserMetaId:  group.CreateUserMetaId,
+			CreateUserAddress: group.CreateUserAddress,
+			UserCount:         userCount,
+			ChatSettingType:   group.ChatSettingType,
+			DeleteStatus:      group.DeleteStatus,
+			Timestamp:         group.Timestamp,
+			Chain:             group.Chain,
+			BlockHeight:       group.BlockHeight,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -246,13 +247,14 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 				}
 				return 0
 			}(),
-			CreateUserMetaId: group.CreateUserMetaId,
-			UserCount:        userCount,
-			ChatSettingType:  group.ChatSettingType,
-			DeleteStatus:     group.DeleteStatus,
-			Timestamp:        group.Timestamp,
-			Chain:            group.Chain,
-			BlockHeight:      group.BlockHeight,
+			CreateUserMetaId:  group.CreateUserMetaId,
+			CreateUserAddress: group.CreateUserAddress,
+			UserCount:         userCount,
+			ChatSettingType:   group.ChatSettingType,
+			DeleteStatus:      group.DeleteStatus,
+			Timestamp:         group.Timestamp,
+			Chain:             group.Chain,
+			BlockHeight:       group.BlockHeight,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -342,13 +344,14 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 			}
 			return 0
 		}(),
-		CreateUserMetaId: group.CreateUserMetaId,
-		UserCount:        userCount,
-		ChatSettingType:  group.ChatSettingType,
-		DeleteStatus:     group.DeleteStatus,
-		Timestamp:        group.Timestamp,
-		Chain:            group.Chain,
-		BlockHeight:      group.BlockHeight,
+		CreateUserMetaId:  group.CreateUserMetaId,
+		CreateUserAddress: group.CreateUserAddress,
+		UserCount:         userCount,
+		ChatSettingType:   group.ChatSettingType,
+		DeleteStatus:      group.DeleteStatus,
+		Timestamp:         group.Timestamp,
+		Chain:             group.Chain,
+		BlockHeight:       group.BlockHeight,
 	}
 
 	return groupItem, nil
@@ -574,6 +577,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.RoomJoinType = group.RoomJoinType
 			chatInfoItem.RoomAvatarUrl = group.RoomAvatarUrl
 			chatInfoItem.CreateUserMetaId = group.CreateUserMetaId
+			chatInfoItem.CreateUserAddress = group.CreateUserAddress
 			chatInfoItem.UserCount = 0 // Need to calculate
 			chatInfoItem.ChatSettingType = group.ChatSettingType
 			chatInfoItem.DeleteStatus = group.DeleteStatus
@@ -653,7 +657,8 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
 			MetaId:      chat.From, // Message creator MetaId
-			NickName:    "",        // Need to get from user info
+			Address:     chat.FromAddress,
+			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
 			Content:     chat.Content,
 			ContentType: chat.ContentType,
@@ -677,6 +682,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 				chatItem.ReplyInfo = &respond.ReplyInfo{
 					PinId:       replyChat.PinId,
 					MetaId:      replyChat.From,
+					Address:     replyChat.FromAddress,
 					NickName:    "", // Private chat message doesn't have NickName field
 					Protocol:    replyChat.Protocol,
 					Content:     replyChat.Content,

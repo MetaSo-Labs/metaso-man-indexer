@@ -185,6 +185,5 @@ func MvcToRaw(tx *wire2.MsgTx) (string, error) {
 		return "", err
 	}
 	txHex := hex.EncodeToString(buf.Bytes())
-	tx.TxHash()
 	return txHex, nil
 }

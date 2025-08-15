@@ -1,9 +1,8 @@
 package microvisionchain
 
 import (
-	"bytes"
-	"encoding/hex"
 	"log"
+	"manindexer/adapter/microvisionchain/rpc_client"
 	"manindexer/common"
 	"manindexer/pin"
 	"time"
@@ -193,21 +192,33 @@ func (chain *MicroVisionChain) GetTxSizeAndFees(txHash string) (fee int64, size 
 }
 
 func (chain *MicroVisionChain) BroadcastTx(txRaw string) (txId string, err error) {
-	txByte, err := hex.DecodeString(txRaw)
+	log.Printf("[MVC]BroadcastTx broadcasting : %s", txRaw)
+	rpcClient := rpc_client.NewClientController(common.Config.Mvc.RpcUser, common.Config.Mvc.RpcPass, "http://"+common.Config.Mvc.RpcHost)
+	txId, err = rpcClient.BroadcastTx("mvc", txRaw)
 	if err != nil {
+		log.Printf("[MVC]BroadcastTx broadcasting failed: %s", err)
 		return "", err
 	}
-	tx := wire.NewMsgTx(2)
-	err = tx.Deserialize(bytes.NewReader(txByte))
-	if err != nil {
-		return "", err
-	}
-	txHash, err := client.SendRawTransaction(tx, true)
-	if err != nil {
-		return "", err
-	}
-	txId = txHash.String()
-	return
+	return txId, nil
+
+	// txByte, err := hex.DecodeString(txRaw)
+	// if err != nil {
+	// 	log.Printf("[MVC]BroadcastTx decoding txRaw failed: %s", err)
+	// 	return "", err
+	// }
+	// tx := wire.NewMsgTx(2)
+	// err = tx.Deserialize(bytes.NewReader(txByte))
+	// if err != nil {
+	// 	log.Printf("[MVC]BroadcastTx deserializing tx failed: %s", err)
+	// 	return "", err
+	// }
+	// txHash, err := client.SendRawTransaction(tx, true)
+	// if err != nil {
+	// 	log.Printf("[MVC]BroadcastTx sending tx failed: %s", err)
+	// 	return "", err
+	// }
+	// txId = txHash.String()
+	// return
 }
 
 func (chain *MicroVisionChain) GetNetParam() interface{} {

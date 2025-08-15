@@ -8,10 +8,18 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-type DbService struct{}
-
 // Generic query method - Query data by prefix
-func (s *DbService) QueryByPrefix(collectionName, prefix string, limit int) ([]map[string]interface{}, error) {
+func QueryByPrefix(collectionName, prefix string, limit int) ([]map[string]interface{}, error) {
+	return QueryByPrefixWithOrder(collectionName, prefix, limit, false)
+}
+
+// Generic query method - Query data by prefix in reverse order
+func QueryByPrefixReverse(collectionName, prefix string, limit int) ([]map[string]interface{}, error) {
+	return QueryByPrefixWithOrder(collectionName, prefix, limit, true)
+}
+
+// Generic query method - Query data by prefix with order control
+func QueryByPrefixWithOrder(collectionName, prefix string, limit int, reverse bool) ([]map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
 		return nil, fmt.Errorf("database %s does not exist", collectionName)
@@ -25,29 +33,52 @@ func (s *DbService) QueryByPrefix(collectionName, prefix string, limit int) ([]m
 	defer iter.Close()
 
 	count := 0
-	for iter.First(); iter.Valid() && count < limit; iter.Next() {
-		key := string(iter.Key())
-		value := string(iter.Value())
 
-		// Try to parse JSON
-		var jsonData interface{}
-		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
-			// If not JSON, use string directly
-			jsonData = value
+	if reverse {
+		// Reverse order: start from last and go backwards
+		for iter.Last(); iter.Valid() && count < limit; iter.Prev() {
+			key := string(iter.Key())
+			value := string(iter.Value())
+
+			// Try to parse JSON
+			var jsonData interface{}
+			if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+				// If not JSON, use string directly
+				jsonData = value
+			}
+
+			results = append(results, map[string]interface{}{
+				"key":   key,
+				"value": jsonData,
+			})
+			count++
 		}
+	} else {
+		// Forward order: start from first and go forwards
+		for iter.First(); iter.Valid() && count < limit; iter.Next() {
+			key := string(iter.Key())
+			value := string(iter.Value())
 
-		results = append(results, map[string]interface{}{
-			"key":   key,
-			"value": jsonData,
-		})
-		count++
+			// Try to parse JSON
+			var jsonData interface{}
+			if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+				// If not JSON, use string directly
+				jsonData = value
+			}
+
+			results = append(results, map[string]interface{}{
+				"key":   key,
+				"value": jsonData,
+			})
+			count++
+		}
 	}
 
 	return results, nil
 }
 
 // Generic query method - Query single data by key
-func (s *DbService) QueryByKey(collectionName, key string) (map[string]interface{}, error) {
+func QueryByKey(collectionName, key string) (map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
 		return nil, fmt.Errorf("database %s does not exist", collectionName)
@@ -73,7 +104,7 @@ func (s *DbService) QueryByKey(collectionName, key string) (map[string]interface
 }
 
 // Generic query method - Get all data (with limit)
-func (s *DbService) QueryAll(collectionName string, limit int) ([]map[string]interface{}, error) {
+func QueryAll(collectionName string, limit int) ([]map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
 		return nil, fmt.Errorf("database %s does not exist", collectionName)
@@ -108,141 +139,141 @@ func (s *DbService) QueryAll(collectionName string, limit int) ([]map[string]int
 // Community-related query methods
 
 // Query community info
-func (s *DbService) QueryCommunityInfo(communityId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkCommunityInfoCollection, communityId)
+func QueryCommunityInfo(communityId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkCommunityInfoCollection, communityId)
 }
 
 // Query all community info
-func (s *DbService) QueryAllCommunityInfo(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkCommunityInfoCollection, limit)
+func QueryAllCommunityInfo(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkCommunityInfoCollection, limit)
 }
 
 // Query community version info
-func (s *DbService) QueryCommunityVersionInfo(communityId string, limit int) ([]map[string]interface{}, error) {
+func QueryCommunityVersionInfo(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
-	return s.QueryByPrefix(db.TalkCommunityVersionInfoCollection, prefix, limit)
+	return QueryByPrefix(db.TalkCommunityVersionInfoCollection, prefix, limit)
 }
 
 // Query community address info
-func (s *DbService) QueryCommunityAddress(communityId string, limit int) ([]map[string]interface{}, error) {
+func QueryCommunityAddress(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
-	return s.QueryByPrefix(db.TalkCommunityAddressCollection, prefix, limit)
+	return QueryByPrefix(db.TalkCommunityAddressCollection, prefix, limit)
 }
 
 // Query community join records
-func (s *DbService) QueryCommunityJoin(communityId string, limit int) ([]map[string]interface{}, error) {
+func QueryCommunityJoin(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
-	return s.QueryByPrefix(db.TalkCommunityJoinCollection, prefix, limit)
+	return QueryByPrefix(db.TalkCommunityJoinCollection, prefix, limit)
 }
 
 // Query community members
-func (s *DbService) QueryCommunityPerson(communityId string, limit int) ([]map[string]interface{}, error) {
+func QueryCommunityPerson(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
-	return s.QueryByPrefix(db.TalkCommunityPersonCollection, prefix, limit)
+	return QueryByPrefix(db.TalkCommunityPersonCollection, prefix, limit)
 }
 
 // Group-related query methods
 
 // Query group info
-func (s *DbService) QueryGroupInfo(groupId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupInfoCollection, groupId)
+func QueryGroupInfo(groupId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupInfoCollection, groupId)
 }
 
 // Query all group info
-func (s *DbService) QueryAllGroupInfo(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupInfoCollection, limit)
+func QueryAllGroupInfo(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkGroupInfoCollection, limit)
 }
 
 // Query group version info
-func (s *DbService) QueryGroupVersionInfo(groupId string, limit int) ([]map[string]interface{}, error) {
+func QueryGroupVersionInfo(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
-	return s.QueryByPrefix(db.TalkGroupVersionInfoCollection, prefix, limit)
+	return QueryByPrefix(db.TalkGroupVersionInfoCollection, prefix, limit)
 }
 
 // Query group community association
-func (s *DbService) QueryGroupCommunity(communityId string, limit int) ([]map[string]interface{}, error) {
+func QueryGroupCommunity(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
-	return s.QueryByPrefix(db.TalkGroupCommunityCollection, prefix, limit)
+	return QueryByPrefix(db.TalkGroupCommunityCollection, prefix, limit)
 }
 
 // Query group join records
-func (s *DbService) QueryGroupJoin(groupId string, limit int) ([]map[string]interface{}, error) {
+func QueryGroupJoin(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
-	return s.QueryByPrefix(db.TalkGroupJoinCollection, prefix, limit)
+	return QueryByPrefix(db.TalkGroupJoinCollection, prefix, limit)
 }
 
 // Query group members
-func (s *DbService) QueryGroupPerson(groupId string, limit int) ([]map[string]interface{}, error) {
+func QueryGroupPerson(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
-	return s.QueryByPrefix(db.TalkGroupPersonCollection, prefix, limit)
+	return QueryByPrefix(db.TalkGroupPersonCollection, prefix, limit)
 }
 
 // User group list related query methods
 
 // Query user's group list
-func (s *DbService) QueryMetaIdContextList(metaId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkMetaIdContextListCollection, metaId)
+func QueryMetaIdContextList(metaId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkMetaIdContextListCollection, metaId)
 }
 
 // Query all users' group lists
-func (s *DbService) QueryAllMetaIdContextList(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkMetaIdContextListCollection, limit)
+func QueryAllMetaIdContextList(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkMetaIdContextListCollection, limit)
 }
 
 // Message queue related query methods
 
 // Query chat queue
-func (s *DbService) QueryGroupChatQueue(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupChatQueueCollection, limit)
+func QueryGroupChatQueue(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkGroupChatQueueCollection, limit)
 }
 
 // Chat related query methods
 
 // Query group chat message
-func (s *DbService) QueryGroupChatPin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupChatPinCollection, pinId)
+func QueryGroupChatPin(pinId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupChatPinCollection, pinId)
 }
 
 // Query group chat message (by timestamp range)
-func (s *DbService) QueryGroupChatByTimestamp(groupId string, startTime, endTime int64, limit int) ([]map[string]interface{}, error) {
+func QueryGroupChatByTimestamp(groupId string, startTime, endTime int64, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
-	return s.QueryByPrefix(db.TalkGroupChatTimestampCollection, prefix, limit)
+	return QueryByPrefixReverse(db.TalkGroupChatTimestampCollection, prefix, limit)
 }
 
 // Query lucky bag message
-func (s *DbService) QueryRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupLuckyBagPinCollection, pinId)
+func QueryRedEnvelopePin(pinId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupLuckyBagPinCollection, pinId)
 }
 
 // Query all lucky bag messages
-func (s *DbService) QueryAllRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupLuckyBagPinCollection, limit)
+func QueryAllRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkGroupLuckyBagPinCollection, limit)
 }
 
 // Query grab lucky bag records
-func (s *DbService) QueryOpenRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupOpenLuckyBagPinCollection, pinId)
+func QueryOpenRedEnvelopePin(pinId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupOpenLuckyBagPinCollection, pinId)
 }
 
 // Query all grab lucky bag records
-func (s *DbService) QueryAllOpenRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupOpenLuckyBagPinCollection, limit)
+func QueryAllOpenRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkGroupOpenLuckyBagPinCollection, limit)
 }
 
 // Query remaining lucky bag
-func (s *DbService) QueryResidueRedEnvelopePin(pinId string) (map[string]interface{}, error) {
-	return s.QueryByKey(db.TalkGroupResidueLuckyBagPinCollection, pinId)
+func QueryResidueRedEnvelopePin(pinId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupResidueLuckyBagPinCollection, pinId)
 }
 
 // Query all remaining lucky bags
-func (s *DbService) QueryAllResidueRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
-	return s.QueryAll(db.TalkGroupResidueLuckyBagPinCollection, limit)
+func QueryAllResidueRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
+	return QueryAll(db.TalkGroupResidueLuckyBagPinCollection, limit)
 }
 
 // Statistics related methods
 
 // Get database statistics
-func (s *DbService) GetDatabaseStats() (map[string]interface{}, error) {
+func GetDatabaseStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	for collectionName, dbInstance := range db.Pb {
@@ -264,7 +295,7 @@ func (s *DbService) GetDatabaseStats() (map[string]interface{}, error) {
 }
 
 // Get record count for specified database
-func (s *DbService) GetCollectionCount(collectionName string) (int, error) {
+func GetCollectionCount(collectionName string) (int, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
 		return 0, fmt.Errorf("database %s does not exist", collectionName)
@@ -282,7 +313,7 @@ func (s *DbService) GetCollectionCount(collectionName string) (int, error) {
 }
 
 // Get all available database names
-func (s *DbService) GetAvailableCollections() []string {
+func GetAvailableCollections() []string {
 	var collections []string
 	for collectionName := range db.Pb {
 		collections = append(collections, collectionName)

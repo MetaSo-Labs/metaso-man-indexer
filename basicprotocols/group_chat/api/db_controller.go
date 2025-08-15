@@ -11,16 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type DbController struct {
-	dbService *service.DbService
-}
-
-func NewDbController() *DbController {
-	return &DbController{
-		dbService: &service.DbService{},
-	}
-}
-
 // @Summary Get community version info by communityId or pinId
 // @Description Query TalkCommunityVersionInfoCollection data by communityId or pinId
 // @Tags Database Query
@@ -33,7 +23,7 @@ func NewDbController() *DbController {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/version [get]
-func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
+func GetCommunityVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	communityId := ctx.Query("communityId")
 	pinId := ctx.Query("pinId")
@@ -50,10 +40,10 @@ func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 
 	if communityId != "" {
 		prefix := communityId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_community_version_info", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_community_version_info", prefix, limit)
 	} else if pinId != "" {
 		prefix := pinId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_community_version_info", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_community_version_info", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or pinId parameter"), t, 1))
 		return
@@ -80,7 +70,7 @@ func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/info [get]
-func (c *DbController) GetCommunityInfo(ctx *gin.Context) {
+func GetCommunityInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	communityId := ctx.Query("communityId")
 	if communityId == "" {
@@ -88,7 +78,7 @@ func (c *DbController) GetCommunityInfo(ctx *gin.Context) {
 		return
 	}
 
-	result, err := c.dbService.QueryCommunityInfo(communityId)
+	result, err := service.QueryCommunityInfo(communityId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -109,7 +99,7 @@ func (c *DbController) GetCommunityInfo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/join [get]
-func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
+func GetCommunityJoin(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	communityId := ctx.Query("communityId")
 	pinId := ctx.Query("pinId")
@@ -125,10 +115,10 @@ func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 	var queryErr error
 
 	if communityId != "" {
-		results, queryErr = c.dbService.QueryCommunityJoin(communityId, limit)
+		results, queryErr = service.QueryCommunityJoin(communityId, limit)
 	} else if pinId != "" {
 		prefix := pinId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_community_join", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_community_join", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or pinId parameter"), t, 1))
 		return
@@ -157,7 +147,7 @@ func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/person [get]
-func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
+func GetCommunityPerson(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	communityId := ctx.Query("communityId")
 	metaId := ctx.Query("metaId")
@@ -173,10 +163,10 @@ func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 	var queryErr error
 
 	if communityId != "" {
-		results, queryErr = c.dbService.QueryCommunityPerson(communityId, limit)
+		results, queryErr = service.QueryCommunityPerson(communityId, limit)
 	} else if metaId != "" {
 		prefix := metaId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_community_person", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_community_person", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or metaId parameter"), t, 1))
 		return
@@ -203,7 +193,7 @@ func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/info [get]
-func (c *DbController) GetGroupInfo(ctx *gin.Context) {
+func GetDbGroupInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
@@ -211,7 +201,7 @@ func (c *DbController) GetGroupInfo(ctx *gin.Context) {
 		return
 	}
 
-	result, err := c.dbService.QueryGroupInfo(groupId)
+	result, err := service.QueryGroupInfo(groupId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -232,7 +222,7 @@ func (c *DbController) GetGroupInfo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version [get]
-func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
+func GetGroupVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	pinId := ctx.Query("pinId")
@@ -248,10 +238,10 @@ func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 	var queryErr error
 
 	if groupId != "" {
-		results, queryErr = c.dbService.QueryGroupVersionInfo(groupId, limit)
+		results, queryErr = service.QueryGroupVersionInfo(groupId, limit)
 	} else if pinId != "" {
 		prefix := pinId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_group_version_info", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_group_version_info", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or pinId parameter"), t, 1))
 		return
@@ -280,7 +270,7 @@ func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/join [get]
-func (c *DbController) GetGroupJoin(ctx *gin.Context) {
+func GetGroupJoin(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	pinId := ctx.Query("pinId")
@@ -296,10 +286,10 @@ func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 	var queryErr error
 
 	if groupId != "" {
-		results, queryErr = c.dbService.QueryGroupJoin(groupId, limit)
+		results, queryErr = service.QueryGroupJoin(groupId, limit)
 	} else if pinId != "" {
 		prefix := pinId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_group_join", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_group_join", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or pinId parameter"), t, 1))
 		return
@@ -328,7 +318,7 @@ func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/person [get]
-func (c *DbController) GetGroupPerson(ctx *gin.Context) {
+func GetDbGroupPerson(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	metaId := ctx.Query("metaId")
@@ -344,10 +334,10 @@ func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 	var queryErr error
 
 	if groupId != "" {
-		results, queryErr = c.dbService.QueryGroupPerson(groupId, limit)
+		results, queryErr = service.QueryGroupPerson(groupId, limit)
 	} else if metaId != "" {
 		prefix := metaId + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_group_person", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_group_person", prefix, limit)
 	} else {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or metaId parameter"), t, 1))
 		return
@@ -375,7 +365,7 @@ func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/queue [get]
-func (c *DbController) GetChatQueue(ctx *gin.Context) {
+func GetChatQueue(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	timestamp := ctx.Query("timestamp")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -391,9 +381,9 @@ func (c *DbController) GetChatQueue(ctx *gin.Context) {
 
 	if timestamp != "" {
 		prefix := timestamp + "_"
-		results, queryErr = c.dbService.QueryByPrefix("talk_group_chat_queue", prefix, limit)
+		results, queryErr = service.QueryByPrefix("talk_group_chat_queue", prefix, limit)
 	} else {
-		results, queryErr = c.dbService.QueryGroupChatQueue(limit)
+		results, queryErr = service.QueryGroupChatQueue(limit)
 	}
 
 	if queryErr != nil {
@@ -417,7 +407,7 @@ func (c *DbController) GetChatQueue(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin [get]
-func (c *DbController) GetChatPin(ctx *gin.Context) {
+func GetChatPin(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	pinId := ctx.Query("pinId")
 	if pinId == "" {
@@ -425,7 +415,7 @@ func (c *DbController) GetChatPin(ctx *gin.Context) {
 		return
 	}
 
-	result, err := c.dbService.QueryGroupChatPin(pinId)
+	result, err := service.QueryGroupChatPin(pinId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -445,7 +435,7 @@ func (c *DbController) GetChatPin(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/timestamp [get]
-func (c *DbController) GetChatTimestamp(ctx *gin.Context) {
+func GetChatTimestamp(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
@@ -460,7 +450,7 @@ func (c *DbController) GetChatTimestamp(ctx *gin.Context) {
 		return
 	}
 
-	results, err := c.dbService.QueryGroupChatByTimestamp(groupId, 0, 0, limit)
+	results, err := service.QueryGroupChatByTimestamp(groupId, 0, 0, limit)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -482,7 +472,7 @@ func (c *DbController) GetChatTimestamp(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/user/context [get]
-func (c *DbController) GetUserContext(ctx *gin.Context) {
+func GetUserContext(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	metaId := ctx.Query("metaId")
 	if metaId == "" {
@@ -490,7 +480,7 @@ func (c *DbController) GetUserContext(ctx *gin.Context) {
 		return
 	}
 
-	result, err := c.dbService.QueryMetaIdContextList(metaId)
+	result, err := service.QueryMetaIdContextList(metaId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -507,9 +497,9 @@ func (c *DbController) GetUserContext(ctx *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Statistics"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/stats [get]
-func (c *DbController) GetDatabaseStats(ctx *gin.Context) {
+func GetDatabaseStats(ctx *gin.Context) {
 	var t = time.Now().Unix()
-	stats, err := c.dbService.GetDatabaseStats()
+	stats, err := service.GetDatabaseStats()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -525,9 +515,9 @@ func (c *DbController) GetDatabaseStats(ctx *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{} "Collection list"
 // @Router /api/db/collections [get]
-func (c *DbController) GetCollections(ctx *gin.Context) {
+func GetCollections(ctx *gin.Context) {
 	var t = time.Now().Unix()
-	collections := c.dbService.GetAvailableCollections()
+	collections := service.GetAvailableCollections()
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
 		"data":  collections,
@@ -546,7 +536,7 @@ func (c *DbController) GetCollections(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version/all [get]
-func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
+func GetAllGroupVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	pageStr := ctx.DefaultQuery("page", "1")
 	sizeStr := ctx.DefaultQuery("size", "20")
@@ -567,14 +557,14 @@ func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 	skip := (page - 1) * size
 
 	// Get total data count (for pagination info)
-	totalCount, err := c.dbService.GetCollectionCount("talk_group_version_info")
+	totalCount, err := service.GetCollectionCount("talk_group_version_info")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
 	// Get paginated data
-	results, err := c.dbService.QueryAll("talk_group_version_info", skip+size)
+	results, err := service.QueryAll("talk_group_version_info", skip+size)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -617,7 +607,7 @@ func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin/all [get]
-func (c *DbController) GetAllChatPin(ctx *gin.Context) {
+func GetAllChatPin(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	pageStr := ctx.DefaultQuery("page", "1")
 	sizeStr := ctx.DefaultQuery("size", "20")
@@ -638,14 +628,14 @@ func (c *DbController) GetAllChatPin(ctx *gin.Context) {
 	skip := (page - 1) * size
 
 	// Get total data count (for pagination info)
-	totalCount, err := c.dbService.GetCollectionCount("talk_group_chat_pin")
+	totalCount, err := service.GetCollectionCount("talk_group_chat_pin")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
 	// Get paginated data
-	results, err := c.dbService.QueryAll("talk_group_chat_pin", skip+size)
+	results, err := service.QueryAll("talk_group_chat_pin", skip+size)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return

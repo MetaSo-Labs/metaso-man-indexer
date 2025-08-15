@@ -1361,14 +1361,15 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		TxId:                pin.Id[:len(pin.Id)-2],
 		PinId:               pin.Id,
 		MetaId:              pin.CreateMetaId,
+		Address:             pin.CreateAddress,
 		Protocol:            pin.Path,
 		SubId:               simpleLuckyBag.SubId,
 		Code:                simpleLuckyBag.Code,
-		CreateTimeStr:       toString(simpleLuckyBag.CreateTime),
+		CreateTimeStr:       formatInt64(simpleLuckyBag.CreateTime),
 		Content:             simpleLuckyBag.Content,
 		Img:                 simpleLuckyBag.Img,
 		ImgType:             simpleLuckyBag.ImgType,
-		Amount:              toString(simpleLuckyBag.Amount),
+		Amount:              formatInt64(simpleLuckyBag.Amount),
 		Count:               toString(simpleLuckyBag.Count),
 		PayList:             payList,
 		LuckyBagVouts:       luckyBagVouts,
@@ -1487,10 +1488,10 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 		Protocol:            pin.Path,
 		SubId:               simpleOpenLuckyBag.SubId,
 		Code:                simpleOpenLuckyBag.Code,
-		CreateTimeStr:       toString(simpleOpenLuckyBag.CreateTime),
+		CreateTimeStr:       formatInt64(simpleOpenLuckyBag.CreateTime),
 		Address:             pin.CreateAddress,
 		Index:               int64(index),
-		Amount:              toString(amount),
+		Amount:              formatInt64(amount),
 		Vins:                vins,
 		Type:                simpleOpenLuckyBag.Type,
 		RequireTickId:       "",
@@ -1619,7 +1620,7 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 		Protocol:            pin.Path,
 		SubId:               simpleResidueLuckyBag.SubId,
 		Code:                simpleResidueLuckyBag.Code,
-		CreateTimeStr:       toString(simpleResidueLuckyBag.CreateTime),
+		CreateTimeStr:       formatInt64(simpleResidueLuckyBag.CreateTime),
 		UsedList:            usedList,
 		Vins:                vins,
 		Type:                simpleResidueLuckyBag.Type,
@@ -1698,6 +1699,29 @@ func toString(v interface{}) string {
 		return val
 	case int, int32, int64, float32, float64:
 		return fmt.Sprintf("%v", val)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// Helper function: format create time to avoid scientific notation
+func formatInt64(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case int:
+		return strconv.FormatInt(int64(val), 10)
+	case int32:
+		return strconv.FormatInt(int64(val), 10)
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case float32:
+		return strconv.FormatInt(int64(val), 10)
+	case float64:
+		return strconv.FormatInt(int64(val), 10)
 	default:
 		return fmt.Sprintf("%v", val)
 	}

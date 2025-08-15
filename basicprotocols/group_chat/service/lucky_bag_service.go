@@ -42,14 +42,22 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		return nil, err
 	}
 
+	// Get reclaimed lucky bag list
+	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
+	if err != nil {
+		return nil, err
+	}
+
 	// Build LuckyBagInfoResponse
 	response := &respond.LuckyBagInfoResponse{
 		TxId:                luckyBag.TxId,
+		PinId:               luckyBag.PinId,
 		MetaId:              luckyBag.MetaId,
+		Address:             luckyBag.Address,
 		UserInfo:            nil, // Need to get from user info
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
-		CreateTime:          luckyBag.CreateTimeStr,
+		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Content:             luckyBag.Content,
 		Img:                 luckyBag.Img,
 		ImgType:             luckyBag.ImgType,
@@ -85,19 +93,58 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 			IsWithdraw:   false,
 		}
 
+		// Check claimed lucky bags
 		if openList != nil {
 			for _, openItem := range openList.Items {
 				if openItem.LuckyBagOutIndex == payItem.Index {
-					infoPayList.Used = true
-					infoPayList.GradTxId = openItem.OpenPinId[:len(openItem.OpenPinId)-2]
-					infoPayList.GradPinId = openItem.OpenPinId
-					infoPayList.GradMetaId = openItem.CreateMetaId
-					infoPayList.GradAddress = openItem.CreateAddress
-					infoPayList.IsWithdraw = true
-					usedCount++
+					// Get detailed open lucky bag info from TalkGroupOpenLuckyBagPinCollection
+					openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+					if err == nil && openLuckyBag != nil {
+						infoPayList.Used = true
+						infoPayList.GradTxId = openLuckyBag.GrabTxId
+						infoPayList.GradMsg = openLuckyBag.GrabMsg
+						infoPayList.GradState = openLuckyBag.GrabState
+						infoPayList.GradPinId = openItem.OpenPinId
+						infoPayList.GradMetaId = openItem.CreateMetaId
+						infoPayList.GradAddress = openItem.CreateAddress
+						infoPayList.Timestamp = openItem.Timestamp
+						// infoPayList.IsBest = true
+						if openLuckyBag.GrabState == models.GrabStateOpenAndSend || openLuckyBag.GrabState == models.GrabStateChain {
+							infoPayList.IsWithdraw = true
+						}
+						usedCount++
+					}
 				}
 			}
 		}
+
+		// Check reclaimed lucky bags
+		if residueList != nil {
+			for _, residueItem := range residueList.Items {
+				// Get detailed residue lucky bag info from TalkGroupResidueLuckyBagPinCollection
+				residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+				if err == nil && residueLuckyBag != nil && residueLuckyBag.UsedList != nil {
+					for _, used := range residueLuckyBag.UsedList {
+						if used.Index == payItem.Index {
+							infoPayList.Used = true
+							infoPayList.GradPinId = residueItem.ResiduePinId
+							infoPayList.GradMetaId = residueItem.CreateMetaId
+							infoPayList.GradAddress = residueItem.CreateAddress
+							infoPayList.GradState = residueLuckyBag.ReclaimState
+							infoPayList.GradMsg = residueLuckyBag.ReclaimMsg
+							infoPayList.GradTxId = residueLuckyBag.ReclaimTxId
+							infoPayList.Timestamp = residueItem.Timestamp
+							// infoPayList.IsBest = true
+							if residueLuckyBag.ReclaimState == models.GrabStateOpenAndSend || residueLuckyBag.ReclaimState == models.GrabStateChain {
+								infoPayList.IsWithdraw = true
+							}
+							usedCount++
+						}
+					}
+				}
+			}
+		}
+
 		response.PayList = append(response.PayList, infoPayList)
 	}
 	response.UsedCount = strconv.Itoa(usedCount)
@@ -161,11 +208,13 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 
 	// Build LuckyBagUnusedResponse
 	response := &respond.LuckyBagUnusedResponse{
+		PinId:               luckyBag.PinId,
 		MetaId:              luckyBag.MetaId,
+		Address:             luckyBag.Address,
 		UserInfo:            nil, // Need to get from user info
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
-		CreateTime:          luckyBag.CreateTimeStr,
+		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Amount:              luckyBag.Amount,
 		Count:               luckyBag.Count,
 		Content:             luckyBag.Content,
@@ -436,8 +485,8 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		}
 
 		// Generate unique TxId and PinId
-		txId := fmt.Sprintf("%s_%d_%s_%s", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
-		pinId := fmt.Sprintf("%s_%d_%s_%s_pin", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
+		txId := fmt.Sprintf("%s:%d:%s:%s", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
+		pinId := fmt.Sprintf("%s:%d:%s:%s:pin", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
 
 		// Check if this PinId has already been saved
 		existingOpen, err := chatDB.GetOpenLuckyBagByPinId(pinId)
@@ -453,7 +502,7 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			TxId:                txId,
 			PinId:               pinId,
 			MetaId:              metaId,
-			Protocol:            luckyBag.Protocol,
+			Protocol:            "/protocol/simplegroupopenLuckybag",
 			SubId:               luckyBag.SubId,
 			Code:                luckyBag.Code,
 			CreateTimeStr:       luckyBag.CreateTimeStr,
@@ -501,13 +550,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		// Create chat message model (for group chat display)
 		chat := &models.TalkGroupChatV3{
 			GroupId:     luckyBag.GroupId,
-			TxId:        openLuckyBag.PinId[:len(openLuckyBag.PinId)-2],
+			TxId:        openLuckyBag.TxId,
 			PinId:       openLuckyBag.PinId,
 			MetaId:      openLuckyBag.MetaId,
 			Address:     openLuckyBag.Address,
 			Protocol:    openLuckyBag.Protocol,
 			Content:     "[Grab LuckyBag]", // Can display based on actual amount
-			ContentType: "text/plain",
+			ContentType: "application/json",
 			Encryption:  "",
 			ChatType:    models.ChatTypeOpenLuckyBag, // Grab lucky bag type
 			InsideIndex: models.ChatInsideIndexIn,    // Default to enter state
@@ -585,8 +634,8 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 	}
 
 	_ = grabEntity.Vins[0] // utxo, temporarily unused
-	wifStr, hexStr := makeGiftKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
-	if wifStr == "" || hexStr == "" {
+	_, hexStr := makeGiftKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
+	if hexStr == "" {
 		return errors.New("failed to generate wif or hex")
 	}
 
@@ -604,6 +653,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		PkScript: grabEntity.PkScript,
 		Amount:   value,
 		PriHex:   hexStr,
+		SignMode: common.SignModeLegacy,
 	}
 	output := common.TxOutput{
 		Address: toAddress,
@@ -624,6 +674,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		} else {
 			return fmt.Errorf("failed to convert netParam to chaincfg2.Params for MVC chain")
 		}
+		break
 	case "btc":
 		// BTC chain uses chaincfg.Params
 		if btcNetParam, ok := netParam.(*chaincfg.Params); ok {
@@ -631,6 +682,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		} else {
 			return fmt.Errorf("failed to convert netParam to chaincfg.Params for BTC chain")
 		}
+		break
 	default:
 		return fmt.Errorf("unsupported chain type: %s", grabEntity.Chain)
 	}
@@ -654,9 +706,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		grabEntity.GrabState = models.GrabStateOpenAndSend
 		grabEntity.GrabTxId = resultTxId
 		grabEntity.GrabMsg = "success"
-		log.Printf("Success: %s", resultTxId)
+		log.Printf("Success broadcast tx: %s", resultTxId)
 	} else {
-		log.Printf("Failure: %s", err.Error())
+		log.Printf("Failure broadcast tx: %s", err.Error())
 		grabEntity.GrabState = models.GrabStateOpenAndSendErr
 		grabEntity.GrabMsg = err.Error()
 	}
@@ -687,12 +739,30 @@ func StartOpenLuckyBagQueueProcessor() {
 }
 
 func makeGiftKey(subId, code, createTimeStr string) (string, string) {
-	key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(createTimeStr))
+	// Check if createTimeStr is in scientific notation and convert it
+	normalizedCreateTimeStr := normalizeScientificNotation(createTimeStr)
+
+	key := fmt.Sprintf("%s%s%s", strings.ToLower(subId), strings.ToLower(code), strings.ToLower(normalizedCreateTimeStr))
 	masterKey, _ := bip32.NewMasterKey(common.SHA256([]byte(key)))
 	xpri, _ := masterKey.NewChildKey(0)
 	xpri, _ = xpri.NewChildKey(0)
 	priKey, _ := bec.PrivKeyFromBytes(bec.S256(), xpri.Key)
+
 	return "", hex.EncodeToString(priKey.Serialise())
+}
+
+// normalizeScientificNotation converts scientific notation to normal decimal format
+func normalizeScientificNotation(value string) string {
+	// Check if the string contains scientific notation (e.g., "1.75525051088e+12")
+	if strings.Contains(strings.ToLower(value), "e") {
+		// Try to parse as float64 first
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			// Convert to int64 to avoid decimal places
+			return strconv.FormatInt(int64(f), 10)
+		}
+	}
+	// If not scientific notation or parsing failed, return original value
+	return value
 }
 
 // ReclaimExpiredLuckyBag Lucky bag creator reclaims remaining UTXOs from expired lucky bags
@@ -824,8 +894,8 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 		}
 
 		// Generate unique TxId and PinId
-		txId := fmt.Sprintf("%s_%d_%s_reclaim", luckyBag.TxId, v.unusedIndex, metaId)
-		pinId := fmt.Sprintf("%s_%d_%s_reclaim_pin", luckyBag.TxId, v.unusedIndex, metaId)
+		txId := fmt.Sprintf("%s:%d:%s:reclaim", luckyBag.TxId, v.unusedIndex, metaId)
+		pinId := fmt.Sprintf("%s:%d:%s:reclaim:pin", luckyBag.TxId, v.unusedIndex, metaId)
 
 		// Check if this PinId has already been saved
 		existingResidue, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(pinId)
@@ -841,7 +911,7 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			TxId:                txId,
 			PinId:               pinId,
 			MetaId:              metaId,
-			Protocol:            luckyBag.Protocol,
+			Protocol:            "/protocol/simplegroupresidueLuckybag",
 			SubId:               luckyBag.SubId,
 			Code:                luckyBag.Code,
 			CreateTimeStr:       luckyBag.CreateTimeStr,
@@ -935,8 +1005,8 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 	}
 
 	_ = reclaimEntity.Vins[0] // utxo, temporarily unused
-	wifStr, hexStr := makeGiftKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr)
-	if wifStr == "" || hexStr == "" {
+	_, hexStr := makeGiftKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr)
+	if hexStr == "" {
 		return errors.New("failed to generate wif or hex")
 	}
 
@@ -970,6 +1040,7 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 			PkScript: reclaimEntity.PkScript,
 			Amount:   amount,
 			PriHex:   hexStr,
+			SignMode: common.SignModeLegacy,
 		}
 		inputs = append(inputs, &input)
 	}
@@ -1023,9 +1094,9 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		reclaimEntity.ReclaimState = models.GrabStateOpenAndSend
 		reclaimEntity.ReclaimTxId = resultTxId
 		reclaimEntity.ReclaimMsg = "success"
-		log.Printf("Success: %s", resultTxId)
+		log.Printf("Success broadcast tx: %s", resultTxId)
 	} else {
-		log.Printf("Failure: %s", err.Error())
+		log.Printf("Failure broadcast tx: %s", err.Error())
 		reclaimEntity.ReclaimState = models.GrabStateOpenAndSendErr
 		reclaimEntity.ReclaimMsg = err.Error()
 	}
