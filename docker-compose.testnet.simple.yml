@@ -7,12 +7,12 @@ services:
       dockerfile: Dockerfile.testnet
     container_name: manindexer-testnet
     ports:
-      - "7777:7777"  # Web API 端口
-      - "7568:7568"  # Group Chat 端口
+      - "7777:7777"  # Web API port
+      - "7568:7568"  # Group Chat port
     volumes:
-      # 数据持久化 - 映射到主机外部目录
+      # Data persistence - map to external host directory
       - ../data/pebble_data:/man/pebble_data
-      # 配置文件挂载（可选）
+      # Configuration file mount (optional)
       - ./config_testnet.toml:/man/config_testnet.toml:ro
     environment:
       - CONFIG_FILE=/man/config_testnet.toml
@@ -25,5 +25,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-# 数据目录会在项目根目录下自动创建 

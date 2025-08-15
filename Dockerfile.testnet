@@ -1,66 +1,66 @@
 FROM golang:1.24-alpine
 
-# 安装构建依赖
+# Install build dependencies
 RUN apk add --no-cache gcc g++ musl-dev zeromq-dev
 
-# 设置工作目录
+# Set working directory
 WORKDIR /man
 
-# 复制源代码
+# Copy source code
 COPY . .
 
-# 设置Go环境变量
+# Set Go environment variables
 ENV CGO_ENABLED=1
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GOSUMDB=off
 
-# 编译应用
+# Compile application
 RUN go build -o manindexer app.go
 
-# 运行阶段
+# Runtime stage
 FROM alpine:latest
 
-# 安装运行时依赖
+# Install runtime dependencies
 RUN apk add --no-cache zeromq curl
 
-# 设置工作目录
+# Set working directory
 WORKDIR /man
 
-# 从构建阶段复制可执行文件
+# Copy executable from build stage
 COPY --from=0 /man/manindexer /man/manindexer
 
-# 复制 testnet 配置文件
+# Copy testnet configuration file
 COPY ./config_testnet.toml /man/config_testnet.toml
 
-# 复制必要的证书和密钥文件（如果存在）
+# Copy necessary certificate and key files (if exist)
 # COPY ./man.metaid.io.pem /man/man.metaid.io.pem
 # COPY ./man.metaid.io.key /man/man.metaid.io.key
 
-# 复制数据文件
+# Copy data files
 # COPY ./btc_del_mempool_height.txt /man/btc_del_mempool_height.txt
 # COPY ./del_mempool_height.txt /man/del_mempool_height.txt
 # COPY ./mvc_del_mempool_height.txt /man/mvc_del_mempool_height.txt
 
-# 复制 jieba 词典
+# Copy jieba dictionary
 RUN mkdir -p /man/jieba_dict
 COPY jieba_dict /man/jieba_dict
 
-# 设置执行权限
+# Set execution permissions
 RUN chmod +x /man/manindexer
 
-# 创建数据目录
+# Create data directory
 RUN mkdir -p /man/pebble_data
 
-# 设置环境变量
+# Set environment variables
 ENV CONFIG_FILE=/man/config_testnet.toml
 ENV NETWORK=testnet
 
-# 暴露端口（根据配置文件中的端口）
+# Expose ports (according to ports in configuration file)
 EXPOSE 7777 7568
 
-# 健康检查
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:7777/health || exit 1
 
-# 启动命令
+# Start command
 CMD ["./manindexer", "-test=0", "-chain=mvc", "-config=/man/config_testnet.toml"] 
