@@ -9,7 +9,7 @@ import (
 
 // @title Group Chat API
 // @version 1.0
-// @description 群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能
+// @description Group Chat Service API documentation, including database queries, group management, community management and other functions
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
@@ -22,40 +22,40 @@ import (
 // @host 0.0.0.0:7568
 // @BasePath /
 
-// @tag.name 数据库查询
-// @tag.description 数据库查询相关API，用于查看Pebble数据库中的数据
+// @tag.name Database Query
+// @tag.description Database query related APIs for viewing data in Pebble database
 
-// @tag.name 群组管理
-// @tag.description 群组管理相关API，包括群组信息、成员管理等
+// @tag.name Group Management
+// @tag.description Group management related APIs, including group information, member management, etc.
 
-// @tag.name 社区管理
-// @tag.description 社区管理相关API，包括社区信息、成员管理等
+// @tag.name Community Management
+// @tag.description Community management related APIs, including community information, member management, etc.
 
-// @tag.name 聊天功能
-// @tag.description 聊天功能相关API，包括消息、队列等
+// @tag.name Chat Function
+// @tag.description Chat function related APIs, including messages, queues, etc.
 
-// @tag.name 用户管理
-// @tag.description 用户管理相关API，包括用户信息、群列表等
+// @tag.name User Management
+// @tag.description User management related APIs, including user information, group lists, etc.
 
 func main() {
-	// 解析命令行参数
+	// Parse command line arguments
 	var (
-		host = flag.String("host", "0.0.0.0", "服务器监听地址")
-		port = flag.String("port", "8080", "服务器监听端口")
+		host = flag.String("host", "0.0.0.0", "Server listening address")
+		port = flag.String("port", "8080", "Server listening port")
 	)
 	flag.Parse()
 
-	// 设置日志格式
+	// Set log format
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("Starting Group Chat Service...")
 
-	// 创建服务器配置
+	// Create server configuration
 	config := &group_chat.ServerConfig{
 		Host: *host,
 		Port: *port,
 	}
 
-	// 运行服务器
+	// Run server
 	err := group_chat.RunWithConfig(config, nil)
 	if err != nil {
 		log.Printf("Failed to start server: %v", err)

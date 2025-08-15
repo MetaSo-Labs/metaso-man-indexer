@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-// CLI 命令行接口
+// CLI Command line interface
 func CLI() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -17,46 +17,46 @@ func CLI() {
 	switch command {
 	case "generate", "gen":
 		if err := GenerateDocs(); err != nil {
-			fmt.Printf("❌ 生成失败: %v\n", err)
+			fmt.Printf("❌ Generation failed: %v\n", err)
 			os.Exit(1)
 		}
 	case "clean":
 		if err := CleanDocs(); err != nil {
-			fmt.Printf("❌ 清理失败: %v\n", err)
+			fmt.Printf("❌ Cleanup failed: %v\n", err)
 			os.Exit(1)
 		}
 	case "regenerate", "regen":
 		if err := RegenerateDocs(); err != nil {
-			fmt.Printf("❌ 重新生成失败: %v\n", err)
+			fmt.Printf("❌ Regeneration failed: %v\n", err)
 			os.Exit(1)
 		}
 	case "install":
 		if err := installSwag(); err != nil {
-			fmt.Printf("❌ 安装失败: %v\n", err)
+			fmt.Printf("❌ Installation failed: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✅ swag工具安装成功")
+		fmt.Println("✅ swag tool installed successfully")
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Printf("❌ 未知命令: %s\n", command)
+		fmt.Printf("❌ Unknown command: %s\n", command)
 		printUsage()
 		os.Exit(1)
 	}
 }
 
-// printUsage 打印使用说明
+// printUsage Print usage instructions
 func printUsage() {
-	fmt.Println("群聊模块 Swagger 文档管理工具")
+	fmt.Println("Group Chat Module Swagger Documentation Management Tool")
 	fmt.Println()
-	fmt.Println("用法:")
-	fmt.Println("  generate, gen     - 生成swagger文档")
-	fmt.Println("  clean             - 清理生成的文档")
-	fmt.Println("  regenerate, regen - 重新生成文档")
-	fmt.Println("  install           - 安装swag工具")
-	fmt.Println("  help              - 显示此帮助信息")
+	fmt.Println("Usage:")
+	fmt.Println("  generate, gen     - Generate swagger documentation")
+	fmt.Println("  clean             - Clean generated documentation")
+	fmt.Println("  regenerate, regen - Regenerate documentation")
+	fmt.Println("  install           - Install swag tool")
+	fmt.Println("  help              - Show this help information")
 	fmt.Println()
-	fmt.Println("示例:")
+	fmt.Println("Examples:")
 	fmt.Println("  go run api/swagger/cmd/main.go generate")
 	fmt.Println("  go run api/swagger/cmd/main.go clean")
 	fmt.Println("  go run api/swagger/cmd/main.go regenerate")

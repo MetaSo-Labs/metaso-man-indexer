@@ -1,22 +1,22 @@
 package models
 
 type TalkCommunityModel struct {
-	CommunityId string   `json:"communityId"` //社区Id: hash(metaname) 唯一
+	CommunityId string   `json:"communityId"` // Community ID: hash(metaname) unique
 	TxId        string   `json:"txId"`        //
 	PinId       string   `json:"pinId"`       //
 	MetaId      string   `json:"metaId"`
 	Address     string   `json:"address"`
 	PublicKey   string   `json:"publicKey"`
-	Name        string   `json:"name"`        //社区名称
-	Description string   `json:"description"` //社区描述
-	Cover       string   `json:"cover"`       //封面
-	Icon        string   `json:"icon"`        //图标
-	MetaName    string   `json:"metaName"`    //meta域名
-	MetaNameNft string   `json:"metaNameNft"` //codehash/genesis/tokenIndex
-	Admins      []string `json:"admins"`      //社区管理者
-	Reserved    string   `json:"reserved"`    //用生成节点的metaId用户的00私钥对metaName进行签名
-	// ValidState   ValidState `json:"validState"`   //验证是否有效
-	Chain        string `json:"chain"` //链类型
+	Name        string   `json:"name"`        // Community name
+	Description string   `json:"description"` // Community description
+	Cover       string   `json:"cover"`       // Cover image
+	Icon        string   `json:"icon"`        // Icon
+	MetaName    string   `json:"metaName"`    // Meta domain name
+	MetaNameNft string   `json:"metaNameNft"` // Codehash/genesis/tokenIndex
+	Admins      []string `json:"admins"`      // Community administrators
+	Reserved    string   `json:"reserved"`    // Use 00 private key of metaId user who generates node to sign metaName
+	// ValidState   ValidState `json:"validState"`   // Verify if valid
+	Chain        string `json:"chain"` // Chain type
 	BlockHeight  int64  `json:"blockHeight"`
 	ConfirmState int64  `json:"confirmState"`
 	Timestamp    int64  `json:"timestamp"` //
@@ -29,33 +29,33 @@ type TalkCommunityJoinModel struct {
 	ZeroAddress    string    `json:"zeroAddress"`
 	Address        string    `json:"address"`
 	PublicKey      string    `json:"publicKey"`
-	CommunityId    string    `json:"communityId"` //社区Id: hash(metaname)
+	CommunityId    string    `json:"communityId"` // Community ID: hash(metaname)
 	CommunityState RoomState `json:"communityState"`
 	// IsValid        bool      `json:"isValid"`
 	// IsNew          bool      `json:"isNew"`
-	Chain        string `json:"chain"` //链类型
+	Chain        string `json:"chain"` // Chain type
 	BlockHeight  int64  `json:"blockHeight"`
 	ConfirmState int64  `json:"confirmState"`
 	Timestamp    int64  `json:"timestamp"` //
 }
 
 type TalkCommunityInfo struct {
-	CommunityId         string `json:"communityId"` //房间ID 唯一
+	CommunityId         string `json:"communityId"` // Room ID unique
 	PersonTotal         uint64 `json:"personTotal"`
 	ChatTotal           uint64 `json:"chatTotal"`
 	ChatTotalUpdateTime int64  `json:"chatTotalUpdateTime"`
-	Timestamp           int64  `json:"timestamp"` //时间戳
+	Timestamp           int64  `json:"timestamp"` // Timestamp
 }
 
 type TalkCommunityPerson struct {
-	CommunityIdMetaIdHash string    `json:"communityIdMetaIdHash"` //房间ID与成员 唯一
-	CommunityId           string    `json:"communityId"`           //房间ID 唯一
+	CommunityIdMetaIdHash string    `json:"communityIdMetaIdHash"` // Room ID and member unique
+	CommunityId           string    `json:"communityId"`           // Room ID unique
 	MetaId                string    `json:"metaId"`
 	AvatarTxId            string    `json:"avatarTxId"`
 	UserName              string    `json:"userName"`
 	UserNickName          string    `json:"userNickName"`
 	CommunityState        RoomState `json:"communityState"`
-	Timestamp             int64     `json:"timestamp"` //加入或离开房间的时间戳
+	Timestamp             int64     `json:"timestamp"` // Timestamp when joining or leaving room
 }
 
 type TalkGroupJoinModel struct {
@@ -65,10 +65,10 @@ type TalkGroupJoinModel struct {
 	ZeroAddress string `json:"zeroAddress"`
 	Address     string `json:"address"`
 	// PublicKey    string    `json:"publicKey"`
-	GroupId    string    `json:"groupId"` //群组Id: hash(metaname)
+	GroupId    string    `json:"groupId"` // Group ID: hash(metaname)
 	GroupState RoomState `json:"groupState"`
-	Referrer   string    `json:"referrer"` //推荐人
-	Chain      string    `json:"chain"`    //链类型
+	Referrer   string    `json:"referrer"` // Referrer
+	Chain      string    `json:"chain"`    // Chain type
 	// IsValid      bool      `json:"isValid"`
 	// IsNew        bool      `json:"isNew"`
 	BlockHeight  int64 `json:"blockHeight"`
@@ -77,75 +77,75 @@ type TalkGroupJoinModel struct {
 }
 
 type TalkGroupPerson struct {
-	GroupIdMetaIdHash string    `json:"groupIdMetaIdHash"` //群组ID与成员 唯一
-	GroupId           string    `json:"groupId"`           //群组ID 唯一
+	GroupIdMetaIdHash string    `json:"groupIdMetaIdHash"` // Group ID and member unique
+	GroupId           string    `json:"groupId"`           // Group ID unique
 	MetaId            string    `json:"metaId"`
 	Address           string    `json:"address"`
 	AvatarTxId        string    `json:"avatarTxId"`
 	UserName          string    `json:"userName"`
 	UserNickName      string    `json:"userNickName"`
 	GroupState        RoomState `json:"groupState"`
-	Timestamp         int64     `json:"timestamp"`   //加入或离开群组的时间戳
-	BlockHeight       int64     `json:"blockHeight"` //区块高度
-	PinId             string    `json:"pinId"`       //加入或离开群组的PinId
+	Timestamp         int64     `json:"timestamp"`   // Timestamp when joining or leaving group
+	BlockHeight       int64     `json:"blockHeight"` // Block height
+	PinId             string    `json:"pinId"`       // PinId when joining or leaving group
 }
 
 type TalkGroupModel struct {
-	GroupId       string `json:"groupId"`       //房间ID 唯一
-	CommunityId   string `json:"communityId"`   //社区Id 唯一
-	TxId          string `json:"txId"`          //房间的TxId
-	PinId         string `json:"pinId"`         //房间的PinId
-	RoomPublicKey string `json:"roomPublicKey"` //房间公钥
-	RoomName      string `json:"roomName"`      //创建房间的名称
-	RoomNote      string `json:"roomNote"`      //创建房间的公告
-	RoomType      string `json:"roomType"`      //创建房间的类型 "1"不加密 "2"加密 加密采用AES加密算法
-	RoomStatus    string `json:"roomStatus"`    //"1" 未加密时为"1" 加密时为加密后的信息, 保留字段
-	RoomJoinType  string `json:"roomJoinType"`  //加入方式，1为密码，2为nft
-	// RoomCodeHash          string `json:"roomCodeHash"`          //roomJoinType为2时有值，codeHash
-	// RoomGenesis           string `json:"roomGenesis"`           //roomJoinType为2时有值，genesis
-	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       //roomJoinType为2时有值，token的限制
-	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` //roomJoinType为2时有值，genesis
-	RoomAvatarUrl string `json:"roomAvatarUrl"` //房间头像url
-	// RoomNinePersonHash string `json:"roomNinePersonHash"` //房间前9位人员的metaId总hash值
-	// RoomNewestTxId        string `json:"roomNewestTxId"`        //房间最新聊天内容的txId
-	// RoomNewestMetaId      string `json:"roomNewestMetaId"`      //房间最新聊天内容的MetaId
-	// RoomNewestProtocol    string `json:"roomNewestProtocol"`    //房间最新聊天内容的协议类型
-	// RoomNewestContent     string `json:"roomNewestContent"`     //房间最新聊天内容
-	// RoomNewestTimestamp   int64  `json:"roomNewestTimestamp"`   //房间最新聊天的时间戳
-	CreateUserMetaId  string `json:"createUserMetaId"`  //创建人的metaId
-	CreateUserAddress string `json:"createUserAddress"` //创建人的address
-	ChatSettingType   int64  `json:"chatSettingType"`   //用于设置发言限制， 0-所有人，1-管理员
-	// ValidState            ValidState `json:"validState"`                       //验证是否有效
-	Chain        string `json:"chain"`        //链类型
-	DeleteStatus int64  `json:"deleteStatus"` //删除状态，0-正常，1-删除
-	Timestamp    int64  `json:"timestamp"`    //创建你房间的时间戳
-	BlockHeight  int64  `json:"blockHeight"`  //区块高度
+	GroupId       string `json:"groupId"`       // Room ID unique
+	CommunityId   string `json:"communityId"`   // Community ID unique
+	TxId          string `json:"txId"`          // Room's TxId
+	PinId         string `json:"pinId"`         // Room's PinId
+	RoomPublicKey string `json:"roomPublicKey"` // Room public key
+	RoomName      string `json:"roomName"`      // Room creation name
+	RoomNote      string `json:"roomNote"`      // Room creation announcement
+	RoomType      string `json:"roomType"`      // Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
+	RoomStatus    string `json:"roomStatus"`    // "1" when not encrypted is "1", when encrypted is encrypted information, reserved field
+	RoomJoinType  string `json:"roomJoinType"`  // Join method, 1 is password, 2 is nft
+	// RoomCodeHash          string `json:"roomCodeHash"`          // Has value when roomJoinType is 2, codeHash
+	// RoomGenesis           string `json:"roomGenesis"`           // Has value when roomJoinType is 2, genesis
+	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       // Has value when roomJoinType is 2, token limit
+	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` // Has value when roomJoinType is 2, genesis
+	RoomAvatarUrl string `json:"roomAvatarUrl"` // Room avatar URL
+	// RoomNinePersonHash string `json:"roomNinePersonHash"` // Total hash value of metaId of first 9 people in the room
+	// RoomNewestTxId        string `json:"roomNewestTxId"`        // TxId of the latest chat content in the room
+	// RoomNewestMetaId      string `json:"roomNewestMetaId"`      // MetaId of the latest chat content in the room
+	// RoomNewestProtocol    string `json:"roomNewestProtocol"`    // Protocol type of the latest chat content in the room
+	// RoomNewestContent     string `json:"roomNewestContent"`     // Latest chat content in the room
+	// RoomNewestTimestamp   int64  `json:"roomNewestTimestamp"`   // Timestamp of the latest chat in the room
+	CreateUserMetaId  string `json:"createUserMetaId"`  // MetaId of the creator
+	CreateUserAddress string `json:"createUserAddress"` // Address of the creator
+	ChatSettingType   int64  `json:"chatSettingType"`   // Used to set speech restrictions, 0-everyone, 1-administrators
+	// ValidState            ValidState `json:"validState"`                       // Verify if valid
+	Chain        string `json:"chain"`        // Chain type
+	DeleteStatus int64  `json:"deleteStatus"` // Delete status, 0-normal, 1-deleted
+	Timestamp    int64  `json:"timestamp"`    // Timestamp when creating the room
+	BlockHeight  int64  `json:"blockHeight"`  // Block height
 }
 
 type TalkGroupTxV3 struct {
-	TxId          string `json:"txId"`          //房间的TxId
-	MetaId        string `json:"metaId"`        //metaId
-	GroupId       string `json:"groupId"`       //房间ID 唯一
-	CommunityId   string `json:"communityId"`   //社区Id 唯一
-	RoomPublicKey string `json:"roomPublicKey"` //房间公钥
-	RoomName      string `json:"roomName"`      //创建房间的名称
-	RoomNote      string `json:"roomNote"`      //创建房间的公告
-	RoomType      string `json:"roomType"`      //创建房间的类型 "1"不加密 "2"加密 加密采用AES加密算法
-	RoomStatus    string `json:"roomStatus"`    //"1" 未加密时为"1" 加密时为加密后的信息, 保留字段
-	RoomJoinType  string `json:"roomJoinType"`  //加入方式，1为密码，2为nft
-	// RoomCodeHash          string `json:"roomCodeHash"`          //roomJoinType为2时有值，codeHash
-	// RoomGenesis           string `json:"roomGenesis"`           //roomJoinType为2时有值，genesis
-	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       //roomJoinType为2时有值，token的限制
-	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` //roomJoinType为2时有值，genesis
-	ChatSettingType int64 `json:"chatSettingType"` //用于设置发言限制， 0-所有人，1-管理员
-	// ValidState            ValidState `json:"validState"`                       //验证是否有效
-	DeleteStatus int64 `json:"deleteStatus"` //删除状态，0-正常，1-删除
+	TxId          string `json:"txId"`          // Room's TxId
+	MetaId        string `json:"metaId"`        // metaId
+	GroupId       string `json:"groupId"`       // Room ID unique
+	CommunityId   string `json:"communityId"`   // Community ID unique
+	RoomPublicKey string `json:"roomPublicKey"` // Room public key
+	RoomName      string `json:"roomName"`      // Room creation name
+	RoomNote      string `json:"roomNote"`      // Room creation announcement
+	RoomType      string `json:"roomType"`      // Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
+	RoomStatus    string `json:"roomStatus"`    // "1" when not encrypted is "1", when encrypted is encrypted information, reserved field
+	RoomJoinType  string `json:"roomJoinType"`  // Join method, 1 is password, 2 is nft
+	// RoomCodeHash          string `json:"roomCodeHash"`          // Has value when roomJoinType is 2, codeHash
+	// RoomGenesis           string `json:"roomGenesis"`           // Has value when roomJoinType is 2, genesis
+	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       // Has value when roomJoinType is 2, token limit
+	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` // Has value when roomJoinType is 2, genesis
+	ChatSettingType int64 `json:"chatSettingType"` // Used to set speech restrictions, 0-everyone, 1-administrators
+	// ValidState            ValidState `json:"validState"`                       // Verify if valid
+	DeleteStatus int64 `json:"deleteStatus"` // Delete status, 0-normal, 1-deleted
 	// IsValid      bool  `json:"isValid"`
 	// IsNew        bool  `json:"isNew"`
 	BlockHeight  int64  `json:"blockHeight"`
 	ConfirmState int64  `json:"confirmState"`
-	Timestamp    int64  `json:"timestamp"` //创建你房间的时间戳
-	Chain        string `json:"chain"`     //链类型
+	Timestamp    int64  `json:"timestamp"` // Timestamp when creating the room
+	Chain        string `json:"chain"`     // Chain type
 }
 
 type ChatInsideIndex int64
@@ -156,8 +156,8 @@ const (
 )
 
 type TalkGroupChatV3 struct {
-	CommunityId string          `json:"communityId"` //社区Id 唯一
-	GroupId     string          `json:"groupId"`     //房间ID 唯一
+	CommunityId string          `json:"communityId"` // Community ID unique
+	GroupId     string          `json:"groupId"`     // Room ID unique
 	TxId        string          `json:"txId"`
 	PinId       string          `json:"pinId"` //
 	MetaId      string          `json:"metaId"`
@@ -172,9 +172,9 @@ type TalkGroupChatV3 struct {
 	InsideIndex ChatInsideIndex `json:"insideIndex"` //0-in, 1-out
 	ReplyPin    string          `json:"replyPin"`
 	ReplyInfo   *ReplyInfo      `json:"replyInfo"`
-	Timestamp   int64           `json:"timestamp"`   //聊天记录时间戳
-	Chain       string          `json:"chain"`       //链类型
-	BlockHeight int64           `json:"blockHeight"` //区块高度
+	Timestamp   int64           `json:"timestamp"`   // Chat record timestamp
+	Chain       string          `json:"chain"`       // Chain type
+	BlockHeight int64           `json:"blockHeight"` // Block height
 }
 
 type ReplyInfo struct {
@@ -188,12 +188,12 @@ type ReplyInfo struct {
 	Encryption  string          `json:"encryption"`
 	ChatType    ChatType        `json:"chatType"`    //0-msg, 1-red, 2-img
 	InsideIndex ChatInsideIndex `json:"insideIndex"` //0-in, 1-out
-	Timestamp   int64           `json:"timestamp"`   //聊天记录时间戳
+	Timestamp   int64           `json:"timestamp"`   // Chat record timestamp
 }
 
 type TalkGroupLuckyBagV3 struct {
-	CommunityId         string            `json:"communityId"` //房间ID 唯一
-	GroupId             string            `json:"groupId"`     //频道ID 唯一
+	CommunityId         string            `json:"communityId"` // Room ID unique
+	GroupId             string            `json:"groupId"`     // Channel ID unique
 	TxId                string            `json:"txId"`
 	PinId               string            `json:"pinId"` //
 	MetaId              string            `json:"metaId"`
@@ -209,13 +209,13 @@ type TalkGroupLuckyBagV3 struct {
 	PayList             []*ProInfoPayList `json:"payList"`
 	LuckyBagVouts       []*LuckyBagOutput `json:"luckyBagVouts"`
 	Type                string            `json:"type"`
-	RequireType         string            `json:"requireType"`         //0-无限制，1-FT，2-NFT
-	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
-	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	RequireType         string            `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
+	RequireTickId       string            `json:"requireTickId"`       // FT-limit requires temporarily mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
 	LimitAmount         uint64            `json:"limitAmount"`
-	Timestamp           int64             `json:"timestamp"`   //聊天记录时间戳
-	BlockHeight         int64             `json:"blockHeight"` //区块高度
-	Chain               string            `json:"chain"`       //链类型
+	Timestamp           int64             `json:"timestamp"`   // Chat record timestamp
+	BlockHeight         int64             `json:"blockHeight"` // Block height
+	Chain               string            `json:"chain"`       // Chain type
 }
 type ProInfoPayList struct {
 	Amount   string `json:"amount"`
@@ -239,8 +239,8 @@ const (
 )
 
 type TalkGroupOpenLuckyBagV3 struct {
-	CommunityId         string    `json:"communityId"` //房间ID 唯一
-	GroupId             string    `json:"groupId"`     //频道ID 唯一
+	CommunityId         string    `json:"communityId"` // Room ID unique
+	GroupId             string    `json:"groupId"`     // Channel ID unique
 	TxId                string    `json:"txId"`
 	PinId               string    `json:"pinId"` //
 	MetaId              string    `json:"metaId"`
@@ -254,21 +254,21 @@ type TalkGroupOpenLuckyBagV3 struct {
 	PkScript            string    `json:"pkScript"`
 	Vins                []*TxIn   `json:"vins"`
 	Type                string    `json:"type"`
-	RequireTickId       string    `json:"requireTickId"`       //FT-限制需要 暂mrc20
-	RequireCollectionId string    `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	RequireTickId       string    `json:"requireTickId"`       // FT-limit requires temporarily mrc20
+	RequireCollectionId string    `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
 	LuckyBagTxId        string    `json:"luckyBagTxId"`
 	LuckyBagPinId       string    `json:"luckyBagPinId"`
 	LuckyBagMetaId      string    `json:"luckyBagMetaId"`
 	IsWithdraw          bool      `json:"isWithdraw"`
-	Timestamp           int64     `json:"timestamp"`   //聊天记录时间戳
-	BlockHeight         int64     `json:"blockHeight"` //区块高度
-	Chain               string    `json:"chain"`       //链类型
-	GrabState           GrabState `json:"grabState"`   //抢红包状态, 0-链上开，1-中心化开，2-中心化开且发送, 3-中心化开且发送异常
+	Timestamp           int64     `json:"timestamp"`   // Chat record timestamp
+	BlockHeight         int64     `json:"blockHeight"` // Block height
+	Chain               string    `json:"chain"`       // Chain type
+	GrabState           GrabState `json:"grabState"`   // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal
 	GrabTxId            string    `json:"grabTxId"`    //
 	GrabMsg             string    `json:"grabMsg"`     //
 }
 type TxIn struct {
-	OutTxID string `json:"outTxId"` //所在out-txId
+	OutTxID string `json:"outTxId"` // out-txId where it is located
 	Index   uint64 `json:"index"`
 	//Value       uint64 `json:"value" bson:"value"`
 	//Address     string `json:"address" bson:"address"`
@@ -277,8 +277,8 @@ type TxIn struct {
 }
 
 type TalkGroupResidueLuckyBagV3 struct {
-	CommunityId         string            `json:"communityId"` //房间ID 唯一
-	GroupId             string            `json:"groupId"`     //频道ID 唯一
+	CommunityId         string            `json:"communityId"` // Room ID unique
+	GroupId             string            `json:"groupId"`     // Channel ID unique
 	TxId                string            `json:"txId"`
 	PinId               string            `json:"pinId"` //
 	MetaId              string            `json:"metaId"`
@@ -293,65 +293,65 @@ type TalkGroupResidueLuckyBagV3 struct {
 	UsedList            []*ProInfoPayList `json:"usedList"`
 	Vins                []*TxIn           `json:"vins"`
 	Type                string            `json:"type"`
-	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
-	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	RequireTickId       string            `json:"requireTickId"`       // FT-limit requires temporarily mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
 	LuckyBagTxId        string            `json:"luckyBagTxId"`
 	LuckyBagPinId       string            `json:"luckyBagPinId"`
 	LuckyBagMetaId      string            `json:"luckyBagMetaId"`
-	Timestamp           int64             `json:"timestamp"`    //聊天记录时间戳
-	BlockHeight         int64             `json:"blockHeight"`  //区块高度
-	Chain               string            `json:"chain"`        //链类型
-	ReclaimState        GrabState         `json:"reclaimState"` //抢红包状态, 0-链上开，1-中心化开，2-中心化开且发送, 3-中心化开且发送异常
+	Timestamp           int64             `json:"timestamp"`    // Chat record timestamp
+	BlockHeight         int64             `json:"blockHeight"`  // Block height
+	Chain               string            `json:"chain"`        // Chain type
+	ReclaimState        GrabState         `json:"reclaimState"` // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal
 	ReclaimTxId         string            `json:"reclaimTxId"`  //
 	ReclaimMsg          string            `json:"reclaimMsg"`   //
 }
 
-// 用户群列表项 + 用户私聊列表项
+// User group list item + user private chat list item
 type MetaIdContextItem struct {
-	GroupId          string   `json:"groupId"`          // 群组ID
-	MetaId           string   `json:"metaId"`           // 对方的MetaId
-	Address          string   `json:"address"`          // 对方的地址
-	Type             string   `json:"type"`             // 类型，1-群聊，2-私聊
-	Timestamp        int64    `json:"timestamp"`        // 最新消息时间戳
-	ChatType         ChatType `json:"chatType"`         // 消息类型
-	Content          string   `json:"content"`          // 消息内容摘要
-	CreateMetaId     string   `json:"createMetaId"`     // 消息创建者的MetaId
-	CreateAddress    string   `json:"createAddress"`    // 消息创建者地址
-	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
-	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
+	GroupId          string   `json:"groupId"`          // Group ID
+	MetaId           string   `json:"metaId"`           // Other party's MetaId
+	Address          string   `json:"address"`          // Other party's address
+	Type             string   `json:"type"`             // Type, 1-group chat, 2-private chat
+	Timestamp        int64    `json:"timestamp"`        // Latest message timestamp
+	ChatType         ChatType `json:"chatType"`         // Message type
+	Content          string   `json:"content"`          // Message content summary
+	CreateMetaId     string   `json:"createMetaId"`     // MetaId of message creator
+	CreateAddress    string   `json:"createAddress"`    // Address of message creator
+	LastMessagePinId string   `json:"lastMessagePinId"` // PinId of latest message
+	BlockHeight      int64    `json:"blockHeight"`      // Block height
 }
 
-// 用户群列表
+// User group list
 type MetaIdContextList struct {
-	MetaId string               `json:"metaId"` // 用户MetaId
-	Items  []*MetaIdContextItem `json:"items"`  // 群列表项
+	MetaId string               `json:"metaId"` // User MetaId
+	Items  []*MetaIdContextItem `json:"items"`  // Group list items
 }
 
-// 群组最新聊天记录
+// Group latest chat record
 type TalkGroupLatestChat struct {
-	GroupId          string   `json:"groupId"`          // 群组ID
-	Timestamp        int64    `json:"timestamp"`        // 最新消息时间戳
-	ChatType         ChatType `json:"chatType"`         // 消息类型
-	Content          string   `json:"content"`          // 消息内容摘要
-	CreateAddress    string   `json:"createAddress"`    // 消息创建者地址
-	LastMessagePinId string   `json:"lastMessagePinId"` // 最新消息的PinId
-	MetaId           string   `json:"metaId"`           // 消息创建者的MetaId
-	TxId             string   `json:"txId"`             // 消息的TxId
-	PinId            string   `json:"pinId"`            // 消息的PinId
-	Protocol         string   `json:"protocol"`         // 协议类型
-	ContentType      string   `json:"contentType"`      // 内容类型
-	Encryption       string   `json:"encryption"`       // 加密信息
-	ReplyPin         string   `json:"replyPin"`         // 回复消息的PinId
-	Chain            string   `json:"chain"`            // 链类型
-	BlockHeight      int64    `json:"blockHeight"`      // 区块高度
+	GroupId          string   `json:"groupId"`          // Group ID
+	Timestamp        int64    `json:"timestamp"`        // Latest message timestamp
+	ChatType         ChatType `json:"chatType"`         // Message type
+	Content          string   `json:"content"`          // Message content summary
+	CreateAddress    string   `json:"createAddress"`    // Address of message creator
+	LastMessagePinId string   `json:"lastMessagePinId"` // PinId of latest message
+	MetaId           string   `json:"metaId"`           // MetaId of message creator
+	TxId             string   `json:"txId"`             // Message's TxId
+	PinId            string   `json:"pinId"`            // Message's PinId
+	Protocol         string   `json:"protocol"`         // Protocol type
+	ContentType      string   `json:"contentType"`      // Content type
+	Encryption       string   `json:"encryption"`       // Encryption information
+	ReplyPin         string   `json:"replyPin"`         // PinId of reply message
+	Chain            string   `json:"chain"`            // Chain type
+	BlockHeight      int64    `json:"blockHeight"`      // Block height
 }
 
-// 私聊消息模型
+// Private chat message model
 type TalkPrivateChatV3 struct {
-	From        string     `json:"from"`        // 发送者MetaId
-	FromAddress string     `json:"fromAddress"` // 发送者地址
-	To          string     `json:"to"`          // 接收者MetaId
-	ToAddress   string     `json:"toAddress"`   // 接收者地址
+	From        string     `json:"from"`        // Sender MetaId
+	FromAddress string     `json:"fromAddress"` // Sender address
+	To          string     `json:"to"`          // Receiver MetaId
+	ToAddress   string     `json:"toAddress"`   // Receiver address
 	TxId        string     `json:"txId"`
 	PinId       string     `json:"pinId"` //
 	Protocol    string     `json:"protocol"`
@@ -361,39 +361,39 @@ type TalkPrivateChatV3 struct {
 	ChatType    ChatType   `json:"chatType"` //0-msg, 1-red, 3-img
 	ReplyPin    string     `json:"replyPin"`
 	ReplyInfo   *ReplyInfo `json:"replyInfo"`
-	Timestamp   int64      `json:"timestamp"`   //聊天记录时间戳
-	Chain       string     `json:"chain"`       //链类型
-	BlockHeight int64      `json:"blockHeight"` //区块高度
+	Timestamp   int64      `json:"timestamp"`   // Chat record timestamp
+	Chain       string     `json:"chain"`       // Chain type
+	BlockHeight int64      `json:"blockHeight"` // Block height
 }
 
-// 抢红包列表项
+// Grab lucky bag list item
 type OpenLuckyBagListItem struct {
-	OpenPinId        string `json:"openPinId"`        // 抢红包的PinId
-	GroupId          string `json:"groupId"`          // 群组ID
-	Timestamp        int64  `json:"timestamp"`        // 时间戳
-	CreateMetaId     string `json:"createMetaId"`     // 创建者的MetaId
-	CreateAddress    string `json:"createAddress"`    // 创建地址
-	LuckyBagOutIndex int64  `json:"luckyBagOutIndex"` // 红包输出索引
+	OpenPinId        string `json:"openPinId"`        // PinId of grabbed lucky bag
+	GroupId          string `json:"groupId"`          // Group ID
+	Timestamp        int64  `json:"timestamp"`        // Timestamp
+	CreateMetaId     string `json:"createMetaId"`     // Creator's MetaId
+	CreateAddress    string `json:"createAddress"`    // Creation address
+	LuckyBagOutIndex int64  `json:"luckyBagOutIndex"` // Lucky bag output index
 }
 
-// 抢红包列表
+// Grab lucky bag list
 type OpenLuckyBagList struct {
-	LuckyBagPinId string                  `json:"luckyBagPinId"` // 红包PinId
-	Items         []*OpenLuckyBagListItem `json:"items"`         // 抢红包列表项
+	LuckyBagPinId string                  `json:"luckyBagPinId"` // Lucky bag PinId
+	Items         []*OpenLuckyBagListItem `json:"items"`         // Grab lucky bag list items
 }
 
-// 回收红包列表项
+// Reclaim lucky bag list item
 type ResidueLuckyBagListItem struct {
-	ResiduePinId         string  `json:"residuePinId"`         // 回收红包的PinId
-	GroupId              string  `json:"groupId"`              // 群组ID
-	Timestamp            int64   `json:"timestamp"`            // 时间戳
-	CreateMetaId         string  `json:"createMetaId"`         // 创建者的MetaId
-	CreateAddress        string  `json:"createAddress"`        // 创建地址
-	LuckyBagOutIndexList []int64 `json:"luckyBagOutIndexList"` // 红包输出索引列表
+	ResiduePinId         string  `json:"residuePinId"`         // PinId of reclaimed lucky bag
+	GroupId              string  `json:"groupId"`              // Group ID
+	Timestamp            int64   `json:"timestamp"`            // Timestamp
+	CreateMetaId         string  `json:"createMetaId"`         // Creator's MetaId
+	CreateAddress        string  `json:"createAddress"`        // Creation address
+	LuckyBagOutIndexList []int64 `json:"luckyBagOutIndexList"` // Lucky bag output index list
 }
 
-// 回收红包列表
+// Reclaim lucky bag list
 type ResidueLuckyBagList struct {
-	LuckyBagPinId string                     `json:"luckyBagPinId"` // 红包PinId
-	Items         []*ResidueLuckyBagListItem `json:"items"`         // 回收红包列表项
+	LuckyBagPinId string                     `json:"luckyBagPinId"` // Lucky bag PinId
+	Items         []*ResidueLuckyBagListItem `json:"items"`         // Reclaim lucky bag list items
 }

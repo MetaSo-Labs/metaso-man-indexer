@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能",
+        "description": "Group Chat Service API documentation, including database queries, group management, community management and other functions",
         "title": "Group Chat API",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
@@ -20,393 +20,1083 @@
     "paths": {
         "/group-chat/group-list": {
             "get": {
-                "description": "获取群组列表，支持分页",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取群组列表",
+                "description": "Get group list with pagination support",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get group list",
                 "parameters": [
-                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": false},
-                    {"type": "integer", "description": "游标，默认为1", "name": "cursor", "in": "query", "required": false},
-                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
-                    {"type": "integer", "description": "时间戳", "name": "timestamp", "in": "query", "required": false}
+                    {
+                        "type": "string",
+                        "description": "User MetaId",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cursor, default is 1",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default is 20",
+                        "name": "size",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Timestamp",
+                        "name": "timestamp",
+                        "in": "query",
+                        "required": false
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回群组列表", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return group list",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/group-chat/user/latest-group-list": {
             "get": {
-                "description": "获取用户的最新聊天群组列表，基于最新聊天时间排序",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取最新聊天群组列表",
+                "description": "Get user's latest chat group list, sorted by latest chat time",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get latest chat group list",
                 "parameters": [
-                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": true},
-                    {"type": "integer", "description": "游标，默认为1", "name": "cursor", "in": "query", "required": false},
-                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
-                    {"type": "integer", "description": "时间戳", "name": "timestamp", "in": "query", "required": false}
+                    {
+                        "type": "string",
+                        "description": "User MetaId",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cursor, default is 1",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default is 20",
+                        "name": "size",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Timestamp",
+                        "name": "timestamp",
+                        "in": "query",
+                        "required": false
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回最新聊天群组列表", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return latest chat group list",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/group-chat/group-info": {
             "get": {
-                "description": "获取指定群组的详细信息",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取群组信息",
+                "description": "Get detailed information of specified group",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get group information",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回群组信息", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "404": {"description": "群组不存在", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return group information",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "404": {
+                        "description": "Group does not exist",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/group-chat/group-chat-list": {
             "get": {
-                "description": "获取群组的聊天记录，支持时间戳分页",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取群组聊天记录",
+                "description": "Get group chat records with timestamp pagination support",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get group chat records",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
-                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": false},
-                    {"type": "integer", "description": "游标，默认为0", "name": "cursor", "in": "query", "required": false},
-                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
-                    {"type": "integer", "description": "时间戳，用于分页", "name": "timestamp", "in": "query", "required": false}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "User MetaId",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cursor, default is 0",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default is 20",
+                        "name": "size",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Timestamp for pagination",
+                        "name": "timestamp",
+                        "in": "query",
+                        "required": false
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回群组聊天记录", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return group chat records",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/group-chat/group-member-list": {
             "get": {
-                "description": "获取群组的成员列表，支持分页",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取群组成员列表",
+                "description": "Get group member list with pagination support",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get group member list",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
-                    {"type": "integer", "description": "游标，默认为1", "name": "cursor", "in": "query", "required": false},
-                    {"type": "integer", "description": "每页大小，默认为20", "name": "size", "in": "query", "required": false},
-                    {"type": "integer", "description": "时间戳", "name": "timestamp", "in": "query", "required": false}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cursor, default is 1",
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, default is 20",
+                        "name": "size",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Timestamp",
+                        "name": "timestamp",
+                        "in": "query",
+                        "required": false
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回群组成员列表", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return group member list",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/group-chat/group-person": {
             "get": {
-                "description": "根据metaId和groupId获取TalkGroupPersonCollection信息，判断用户是否在指定群组中",
-                "produces": ["application/json"],
-                "tags": ["群组管理"],
-                "summary": "获取群组成员信息",
+                "description": "Get TalkGroupPersonCollection information based on metaId and groupId to determine if user is in specified group",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Group Management"
+                ],
+                "summary": "Get group member information",
                 "parameters": [
-                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": true},
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "User MetaId",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "成功返回群组成员信息", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Successfully return group member information",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/community/version": {
             "get": {
-                "description": "根据communityId或pinId查询TalkCommunityVersionInfoCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据communityId或pinId获取社区版本信息",
+                "description": "Query TalkCommunityVersionInfoCollection data based on communityId or pinId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get community version information based on communityId or pinId",
                 "parameters": [
-                    {"type": "string", "description": "社区ID", "name": "communityId", "in": "query", "required": false},
-                    {"type": "string", "description": "PinID", "name": "pinId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Community ID",
+                        "name": "communityId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "PinID",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/community/info": {
             "get": {
-                "description": "根据communityId查询TalkCommunityInfoCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据communityId获取社区信息",
+                "description": "Query TalkCommunityInfoCollection data based on communityId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get community information based on communityId",
                 "parameters": [
-                    {"type": "string", "description": "社区ID", "name": "communityId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "Community ID",
+                        "name": "communityId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/community/join": {
             "get": {
-                "description": "根据communityId或pinId查询TalkCommunityJoinCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据communityId或pinId获取社区加入记录",
+                "description": "Query TalkCommunityJoinCollection data based on communityId or pinId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get community join records based on communityId or pinId",
                 "parameters": [
-                    {"type": "string", "description": "社区ID", "name": "communityId", "in": "query", "required": false},
-                    {"type": "string", "description": "PinID", "name": "pinId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Community ID",
+                        "name": "communityId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "PinID",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/community/person": {
             "get": {
-                "description": "根据communityId或metaId查询TalkCommunityPersonCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据communityId或metaId获取社区成员列表",
+                "description": "Query TalkCommunityPersonCollection data based on communityId or metaId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get community member list based on communityId or metaId",
                 "parameters": [
-                    {"type": "string", "description": "社区ID", "name": "communityId", "in": "query", "required": false},
-                    {"type": "string", "description": "MetaID", "name": "metaId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Community ID",
+                        "name": "communityId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "MetaID",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/group/info": {
             "get": {
-                "description": "根据groupId查询TalkGroupInfoCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据groupId获取群组信息",
+                "description": "Query TalkGroupInfoCollection data based on groupId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get group information based on groupId",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/group/version": {
             "get": {
-                "description": "根据groupId或pinId查询TalkGroupVersionInfoCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据groupId或pinId获取群组版本信息",
+                "description": "Query TalkGroupVersionInfoCollection data based on groupId or pinId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get group version information based on groupId or pinId",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": false},
-                    {"type": "string", "description": "PinID", "name": "pinId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "PinID",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/group/join": {
             "get": {
-                "description": "根据groupId或pinId查询TalkGroupJoinCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据groupId或pinId获取群组加入记录",
+                "description": "Query TalkGroupJoinCollection data based on groupId or pinId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get group join records based on groupId or pinId",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": false},
-                    {"type": "string", "description": "PinID", "name": "pinId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "PinID",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/group/person": {
             "get": {
-                "description": "根据groupId或metaId查询TalkGroupPersonCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据groupId或metaId获取群组成员列表",
+                "description": "Query TalkGroupPersonCollection data based on groupId or metaId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get group member list based on groupId or metaId",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": false},
-                    {"type": "string", "description": "MetaID", "name": "metaId", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "string",
+                        "description": "MetaID",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/chat/queue": {
             "get": {
-                "description": "根据timestamp查询TalkGroupChatQueueCollection数据，或不传timestamp获取所有数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据timestamp获取聊天队列列表",
+                "description": "Query TalkGroupChatQueueCollection data based on timestamp, or get all data without timestamp",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get chat queue list based on timestamp",
                 "parameters": [
-                    {"type": "string", "description": "时间戳", "name": "timestamp", "in": "query", "required": false},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Timestamp",
+                        "name": "timestamp",
+                        "in": "query",
+                        "required": false
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/chat/pin": {
             "get": {
-                "description": "根据pinId查询TalkGroupChatPinCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据pinId获取聊天消息",
+                "description": "Query TalkGroupChatPinCollection data based on pinId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get chat message based on pinId",
                 "parameters": [
-                    {"type": "string", "description": "PinID", "name": "pinId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "PinID",
+                        "name": "pinId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/chat/timestamp": {
             "get": {
-                "description": "根据groupId查询TalkGroupChatTimestampCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据groupId获取聊天时间戳列表",
+                "description": "Query TalkGroupChatTimestampCollection data based on groupId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get chat timestamp list based on groupId",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
-                    {"type": "integer", "description": "限制数量", "name": "limit", "in": "query", "required": false, "default": 10}
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "groupId",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit count",
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "default": 10
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/user/context": {
             "get": {
-                "description": "根据metaId查询TalkMetaIdContextListCollection数据",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "根据metaId获取用户群列表",
+                "description": "Query TalkMetaIdContextListCollection data based on metaId",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get user group list based on metaId",
                 "parameters": [
-                    {"type": "string", "description": "MetaID", "name": "metaId", "in": "query", "required": true}
+                    {
+                        "type": "string",
+                        "description": "MetaID",
+                        "name": "metaId",
+                        "in": "query",
+                        "required": true
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/stats": {
             "get": {
-                "description": "获取所有数据库集合的统计信息",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "获取数据库统计信息",
+                "description": "Get statistics information for all database collections",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get database statistics information",
                 "responses": {
-                    "200": {"description": "统计信息", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Statistics information",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/collections": {
             "get": {
-                "description": "获取所有可用的数据库集合名称",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "获取所有可用的数据库集合",
+                "description": "Get all available database collection names",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get all available database collections",
                 "responses": {
-                    "200": {"description": "集合列表", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Collection list",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/group/version/all": {
             "get": {
-                "description": "获取TalkGroupVersionInfoCollection的所有数据，支持分页",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "获取所有群组版本信息列表（分页）",
+                "description": "Get all data from TalkGroupVersionInfoCollection with pagination support",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get all group version information list (pagination)",
                 "parameters": [
-                    {"type": "integer", "description": "页码，从1开始", "name": "page", "in": "query", "required": false, "default": 1},
-                    {"type": "integer", "description": "每页数量", "name": "size", "in": "query", "required": false, "default": 20}
+                    {
+                        "type": "integer",
+                        "description": "Page number, starting from 1",
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "default": 1
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "size",
+                        "in": "query",
+                        "required": false,
+                        "default": 20
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         },
         "/api/db/chat/pin/all": {
             "get": {
-                "description": "获取TalkGroupChatPinCollection的所有数据，支持分页",
-                "produces": ["application/json"],
-                "tags": ["数据库查询"],
-                "summary": "获取所有聊天消息列表（分页）",
+                "description": "Get all data from TalkGroupChatPinCollection with pagination support",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Database Query"
+                ],
+                "summary": "Get all chat message list (pagination)",
                 "parameters": [
-                    {"type": "integer", "description": "页码，从1开始", "name": "page", "in": "query", "required": false, "default": 1},
-                    {"type": "integer", "description": "每页数量", "name": "size", "in": "query", "required": false, "default": 20}
+                    {
+                        "type": "integer",
+                        "description": "Page number, starting from 1",
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "default": 1
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "size",
+                        "in": "query",
+                        "required": false,
+                        "default": 20
+                    }
                 ],
                 "responses": {
-                    "200": {"description": "查询结果", "schema": {"type": "object"}},
-                    "400": {"description": "参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器错误", "schema": {"type": "object"}}
+                    "200": {
+                        "description": "Query result",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Parameter error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
                 }
             }
         }
     },
     "tags": [
         {
-            "description": "数据库查询相关API，用于查看Pebble数据库中的数据",
-            "name": "数据库查询"
+            "description": "Database query related APIs for viewing data in Pebble database",
+            "name": "Database Query"
         },
         {
-            "description": "群组管理相关API，包括群组信息、成员管理等",
-            "name": "群组管理"
+            "description": "Group management related APIs, including group information, member management, etc.",
+            "name": "Group Management"
         },
         {
-            "description": "社区管理相关API，包括社区信息、成员管理等",
-            "name": "社区管理"
+            "description": "Community management related APIs, including community information, member management, etc.",
+            "name": "Community Management"
         },
         {
-            "description": "聊天功能相关API，包括消息、队列等",
-            "name": "聊天功能"
+            "description": "Chat function related APIs, including messages, queues, etc.",
+            "name": "Chat Function"
         },
         {
-            "description": "用户管理相关API，包括用户信息、群列表等",
-            "name": "用户管理"
+            "description": "User management related APIs, including user information, group lists, etc.",
+            "name": "User Management"
         }
     ]
 }

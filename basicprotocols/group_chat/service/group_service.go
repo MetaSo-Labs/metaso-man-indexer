@@ -20,11 +20,11 @@ var (
 	chainAdapter map[string]adapter.Chain
 )
 
-// InitService 初始化服务
+// InitService Initialize service
 func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.Chain) error {
-	// 使用 indexer 的数据库实例
+	// Use indexer's database instance
 
-	// 获取数据库实例
+	// Get database instances
 	pebbleDB = indexer.GetPebble()
 	communityDB = indexer.GetCommunityDB()
 	groupDB = indexer.GetGroupDB()
@@ -32,10 +32,10 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	privateDB = indexer.GetPrivateDB()
 	chainAdapter = adapter
 
-	// 启动聊天队列处理器
+	// Start chat queue processor
 	// chatDB.StartQueueProcessor(groupDB)
 
-	// 启动私聊队列处理器
+	// Start private chat queue processor
 	// privateDB.StartPrivateQueueProcessor()
 
 	StartOpenLuckyBagQueueProcessor()
@@ -46,24 +46,24 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	return nil
 }
 
-// FetchGroupList 获取群组列表
+// FetchGroupList Get group list
 func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
 	if req.Cursor <= 0 {
-		req.Cursor = 1
+		req.Cursor = 0
 	}
 
 	var groups []*models.TalkGroupModel
 	var err error
 
-	// 如果metaId不为空，获取用户加入的群组列表
+	// If metaId is not empty, get user's joined group list
 	if req.MetaId != "" {
 		groups, err = groupDB.GetGroupListByMetaId(req.MetaId, req.Cursor, req.Size)
 	} else {
-		// 获取所有群组列表
+		// Get all group list
 		groups, err = groupDB.GetGroupList(req.Cursor, req.Size)
 	}
 
@@ -71,32 +71,35 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 		return nil, err
 	}
 
-	// 转换为响应格式
+	// Convert to response format
 	var groupItems []*respond.GroupItem
 	for _, group := range groups {
-		// 获取群组最新聊天信息
+		// Get group's latest chat info
 		latestChat, err := chatDB.GetGroupLatestChat(group.GroupId)
 		if err != nil {
-			// 如果获取失败，使用默认值
+			// If failed to get, use default value
 			latestChat = nil
 		}
 
+		// Get group member count
+		userCount, err := groupDB.GetGroupMemberCount(group.GroupId)
+		if err != nil {
+			// If failed to get, use default value
+			userCount = 0
+		}
+
 		groupItem := &respond.GroupItem{
-			CommunityId:  group.CommunityId,
-			GroupId:      group.GroupId,
-			TxId:         group.TxId,
-			PinId:        group.PinId,
-			RoomName:     group.RoomName,
-			RoomNote:     group.RoomNote,
-			RoomType:     group.RoomType,
-			RoomStatus:   group.RoomStatus,
-			RoomJoinType: group.RoomJoinType,
-			// RoomCodeHash:          "", // 暂未实现
-			// RoomGenesis:           "", // 暂未实现
-			// RoomLimitAmount:       0,  // 暂未实现
-			// RoomGenesisSeriesName: "", // 暂未实现
+			CommunityId:        group.CommunityId,
+			GroupId:            group.GroupId,
+			TxId:               group.TxId,
+			PinId:              group.PinId,
+			RoomName:           group.RoomName,
+			RoomNote:           group.RoomNote,
+			RoomType:           group.RoomType,
+			RoomStatus:         group.RoomStatus,
+			RoomJoinType:       group.RoomJoinType,
 			RoomAvatarUrl:      group.RoomAvatarUrl,
-			RoomNinePersonHash: "", // 暂未实现
+			RoomNinePersonHash: "", // Not implemented yet
 			RoomNewestTxId: func() string {
 				if latestChat != nil {
 					return latestChat.TxId
@@ -115,7 +118,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 				}
 				return ""
 			}(),
-			RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+			RoomNewestUserName: "", // Not implemented yet, need to get from user info
 			RoomNewestProtocol: func() string {
 				if latestChat != nil {
 					return latestChat.Protocol
@@ -135,7 +138,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 				return 0
 			}(),
 			CreateUserMetaId: group.CreateUserMetaId,
-			UserCount:        0, // 需要计算
+			UserCount:        userCount,
 			ChatSettingType:  group.ChatSettingType,
 			DeleteStatus:     group.DeleteStatus,
 			Timestamp:        group.Timestamp,
@@ -151,36 +154,43 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 	}, nil
 }
 
-// FetchLatestChatGroupList 获取最新聊天群组列表
+// FetchLatestChatGroupList Get latest chat group list
 func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*respond.GroupResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
 	if req.Cursor <= 0 {
-		req.Cursor = 1
+		req.Cursor = 0
 	}
 
-	// 获取用户的群列表（基于最新聊天时间）
+	// Get user's group list (based on latest chat time)
 	contextList, err := chatDB.GetMetaIdContextList(req.MetaId)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为响应格式
+	// Convert to response format
 	var groupItems []*respond.GroupItem
 	for _, item := range contextList.Items {
-		// 获取群组详细信息
+		// Get group detailed info
 		group, err := groupDB.GetGroupInfoByGroupId(item.GroupId)
 		if err != nil || group == nil {
 			continue
 		}
 
-		// 获取群组最新聊天信息
+		// Get group's latest chat info
 		latestChat, err := chatDB.GetGroupLatestChat(item.GroupId)
 		if err != nil {
-			// 如果获取失败，使用默认值
+			// If failed to get, use default value
 			latestChat = nil
+		}
+
+		// Get group member count
+		userCount, err := groupDB.GetGroupMemberCount(item.GroupId)
+		if err != nil {
+			// If failed to get, use default value
+			userCount = 0
 		}
 
 		groupItem := &respond.GroupItem{
@@ -193,12 +203,12 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			RoomType:     group.RoomType,
 			RoomStatus:   group.RoomStatus,
 			RoomJoinType: group.RoomJoinType,
-			// RoomCodeHash:          "", // 暂未实现
-			// RoomGenesis:           "", // 暂未实现
-			// RoomLimitAmount:       0,  // 暂未实现
-			// RoomGenesisSeriesName: "", // 暂未实现
+			// RoomCodeHash:          "", // Not implemented yet
+			// RoomGenesis:           "", // Not implemented yet
+			// RoomLimitAmount:       0,  // Not implemented yet
+			// RoomGenesisSeriesName: "", // Not implemented yet
 			RoomAvatarUrl:      group.RoomAvatarUrl,
-			RoomNinePersonHash: "", // 暂未实现
+			RoomNinePersonHash: "", // Not implemented yet
 			RoomNewestTxId: func() string {
 				if latestChat != nil {
 					return latestChat.TxId
@@ -217,7 +227,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 				}
 				return ""
 			}(),
-			RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+			RoomNewestUserName: "", // Not implemented yet, need to get from user info
 			RoomNewestProtocol: func() string {
 				if latestChat != nil {
 					return latestChat.Protocol
@@ -237,7 +247,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 				return 0
 			}(),
 			CreateUserMetaId: group.CreateUserMetaId,
-			UserCount:        0, // 需要计算
+			UserCount:        userCount,
 			ChatSettingType:  group.ChatSettingType,
 			DeleteStatus:     group.DeleteStatus,
 			Timestamp:        group.Timestamp,
@@ -253,9 +263,9 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 	}, nil
 }
 
-// FetchGroupInfo 获取群组信息
+// FetchGroupInfo Get group info
 func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, error) {
-	// 获取群组信息
+	// Get group info
 	group, err := groupDB.GetGroupInfoByGroupId(req.GroupId)
 	if err != nil {
 		return nil, err
@@ -264,14 +274,21 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		return nil, nil
 	}
 
-	// 获取群组最新聊天信息
+	// Get group's latest chat info
 	latestChat, err := chatDB.GetGroupLatestChat(req.GroupId)
 	if err != nil {
-		// 如果获取失败，使用默认值
+		// If failed to get, use default value
 		latestChat = nil
 	}
 
-	// 转换为响应格式
+	// Get group member count
+	userCount, err := groupDB.GetGroupMemberCount(req.GroupId)
+	if err != nil {
+		// If failed to get, use default value
+		userCount = 0
+	}
+
+	// Convert to response format
 	groupItem := &respond.GroupItem{
 		CommunityId:  group.CommunityId,
 		GroupId:      group.GroupId,
@@ -282,12 +299,12 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		RoomType:     group.RoomType,
 		RoomStatus:   group.RoomStatus,
 		RoomJoinType: group.RoomJoinType,
-		// RoomCodeHash:          "", // 暂未实现
-		// RoomGenesis:           "", // 暂未实现
-		// RoomLimitAmount:       0,  // 暂未实现
-		// RoomGenesisSeriesName: "", // 暂未实现
+		// RoomCodeHash:          "", // Not implemented yet
+		// RoomGenesis:           "", // Not implemented yet
+		// RoomLimitAmount:       0,  // Not implemented yet
+		// RoomGenesisSeriesName: "", // Not implemented yet
 		RoomAvatarUrl:      group.RoomAvatarUrl,
-		RoomNinePersonHash: "", // 暂未实现
+		RoomNinePersonHash: "", // Not implemented yet
 		RoomNewestTxId: func() string {
 			if latestChat != nil {
 				return latestChat.TxId
@@ -306,7 +323,7 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 			}
 			return ""
 		}(),
-		RoomNewestUserName: "", // 暂未实现，需要从用户信息中获取
+		RoomNewestUserName: "", // Not implemented yet, need to get from user info
 		RoomNewestProtocol: func() string {
 			if latestChat != nil {
 				return latestChat.Protocol
@@ -326,7 +343,7 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 			return 0
 		}(),
 		CreateUserMetaId: group.CreateUserMetaId,
-		UserCount:        0, // 需要计算
+		UserCount:        userCount,
 		ChatSettingType:  group.ChatSettingType,
 		DeleteStatus:     group.DeleteStatus,
 		Timestamp:        group.Timestamp,
@@ -337,9 +354,9 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 	return groupItem, nil
 }
 
-// FetchGroupChatList 获取群组聊天列表
+// FetchGroupChatList Get group chat list
 func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupChatResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
@@ -348,10 +365,10 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	var err error
 
 	if req.Timestamp > 0 {
-		// 根据时间戳范围获取聊天记录
+		// Get chat records by timestamp range
 		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange(req.GroupId, req.Timestamp, req.Size)
 	} else {
-		// 获取最新的聊天记录
+		// Get latest chat records
 		chats, err = chatDB.GetLatestChatsByGroupId(req.GroupId, req.Size)
 	}
 
@@ -360,19 +377,19 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	}
 	// fmt.Printf("chats: %+v\n", chats)
 
-	// 转换为响应格式
+	// Convert to response format
 	var chatItems []*respond.GroupChatItem
 	var nextTimestamp int64 = 0
 
 	for i, chat := range chats {
 		chatItem := &respond.GroupChatItem{
 			GroupId:     chat.GroupId,
-			MetanetId:   chat.GroupId, // 使用 GroupId 作为 MetanetId
+			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
 			Address:     chat.Address,
 			MetaId:      chat.MetaId,
-			NickName:    "", // 需要从用户信息中获取
+			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
 			Content:     chat.Content,
 			ContentType: chat.ContentType,
@@ -409,7 +426,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 
 		chatItems = append(chatItems, chatItem)
 
-		// 记录下一条消息的时间戳（用于分页）
+		// Record next message timestamp (for pagination)
 		if i == len(chats)-1 && len(chats) > 0 {
 			nextTimestamp = chat.Timestamp
 		}
@@ -422,28 +439,28 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	}, nil
 }
 
-// FetchGroupMemberList 获取群组成员列表
+// FetchGroupMemberList Get group member list
 func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.GroupMemberResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
 	if req.Cursor <= 0 {
-		req.Cursor = 1
+		req.Cursor = 0
 	}
 
-	// 获取群组成员 - 从TalkGroupPersonCollection获取
-	members, err := groupDB.GetGroupMembers(req.GroupId)
+	// Get group members with pagination - from TalkGroupPersonCollection
+	members, total, err := groupDB.GetGroupMembersWithPagination(req.GroupId, req.Cursor, req.Size)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为响应格式
+	// Convert to response format
 	var memberItems []*respond.GroupMemberItem
 	for _, member := range members {
 		memberItem := &respond.GroupMemberItem{
 			MetaId: member.MetaId,
-			// Name:      member.UserName, // 使用UserName字段
+			// Name:      member.UserName, // Use UserName field
 			Address:   member.Address,
 			TimeStr:   time.Unix(member.Timestamp, 0).Format("2006-01-02 15:04:05"),
 			Timestamp: member.Timestamp,
@@ -452,14 +469,14 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 	}
 
 	return &respond.GroupMemberResponse{
-		Total: int64(len(memberItems)),
+		Total: total,
 		List:  memberItems,
 	}, nil
 }
 
-// FetchGroupPerson 获取群组成员信息
+// FetchGroupPerson Get group member info
 func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPersonResponse, error) {
-	// 参数验证
+	// Parameter validation
 	if req.MetaId == "" {
 		return nil, fmt.Errorf("metaId is empty")
 	}
@@ -467,13 +484,13 @@ func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPerso
 		return nil, fmt.Errorf("groupId is empty")
 	}
 
-	// 获取群组成员信息
+	// Get group member info
 	person, err := groupDB.GetGroupPersonByGroupIdAndMetaId(req.GroupId, req.MetaId)
 	if err != nil {
 		return nil, err
 	}
 
-	// 构建响应
+	// Build response
 	response := &respond.GroupPersonResponse{
 		IsInGroup: false,
 		Person:    nil,
@@ -499,23 +516,23 @@ func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPerso
 	return response, nil
 }
 
-// FetchLatestChatInfoList 获取最新聊天信息列表（群聊+私聊）
+// FetchLatestChatInfoList Get latest chat info list (group chat + private chat)
 func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*respond.ChatInfoResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
 	if req.Cursor <= 0 {
-		req.Cursor = 1
+		req.Cursor = 0
 	}
 
-	// 获取用户的上下文列表（群聊+私聊）
+	// Get user's context list (group chat + private chat)
 	contextList, err := chatDB.GetMetaIdContextList(req.MetaId)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为响应格式
+	// Convert to response format
 	var chatInfoItems []*respond.ChatInfoItem
 	for _, item := range contextList.Items {
 		chatInfoItem := &respond.ChatInfoItem{
@@ -532,23 +549,23 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			BlockHeight:      item.BlockHeight,
 		}
 
-		// 根据类型处理不同字段
+		// Handle different fields based on type
 		if item.Type == "1" || item.Type == "" {
 			item.Type = "1"
-			// 群聊类型，获取群组详细信息
+			// Group chat type, get group detailed info
 			group, err := groupDB.GetGroupInfoByGroupId(item.GroupId)
 			if err != nil || group == nil {
 				continue
 			}
 
-			// 获取群组最新聊天信息
+			// Get group's latest chat info
 			latestChat, err := chatDB.GetGroupLatestChat(item.GroupId)
 			if err != nil {
-				// 如果获取失败，使用默认值
+				// If failed to get, use default value
 				latestChat = nil
 			}
 
-			// 填充群聊特有字段
+			// Fill group chat specific fields
 			chatInfoItem.CommunityId = group.CommunityId
 			chatInfoItem.RoomName = group.RoomName
 			chatInfoItem.RoomNote = group.RoomNote
@@ -557,12 +574,12 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.RoomJoinType = group.RoomJoinType
 			chatInfoItem.RoomAvatarUrl = group.RoomAvatarUrl
 			chatInfoItem.CreateUserMetaId = group.CreateUserMetaId
-			chatInfoItem.UserCount = 0 // 需要计算
+			chatInfoItem.UserCount = 0 // Need to calculate
 			chatInfoItem.ChatSettingType = group.ChatSettingType
 			chatInfoItem.DeleteStatus = group.DeleteStatus
 			chatInfoItem.Chain = group.Chain
 
-			// 如果获取到了最新聊天信息，更新相关字段
+			// If latest chat info is obtained, update related fields
 			if latestChat != nil {
 				chatInfoItem.Content = latestChat.Content
 				chatInfoItem.LastMessagePinId = latestChat.LastMessagePinId
@@ -573,14 +590,14 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.BlockHeight = latestChat.BlockHeight
 			}
 		} else if item.Type == "2" {
-			// 私聊类型，获取私聊最新消息
+			// Private chat type, get latest private chat message
 			latestPrivateChat, err := privateDB.GetPrivateChatByPinId(item.LastMessagePinId)
 			if err != nil {
-				// 如果获取失败，使用默认值
+				// If failed to get, use default value
 				latestPrivateChat = nil
 			}
 
-			// 如果获取到了最新私聊信息，更新相关字段
+			// If latest private chat info is obtained, update related fields
 			if latestPrivateChat != nil {
 				chatInfoItem.Content = latestPrivateChat.Content
 				chatInfoItem.LastMessagePinId = latestPrivateChat.PinId
@@ -602,9 +619,9 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 	}, nil
 }
 
-// FetchPrivateChatList 获取私聊记录列表
+// FetchPrivateChatList Get private chat record list
 func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.PrivateChatResponse, error) {
-	// 设置默认分页参数
+	// Set default pagination parameters
 	if req.Size <= 0 {
 		req.Size = 20
 	}
@@ -613,10 +630,10 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	var err error
 
 	if req.Timestamp > 0 {
-		// 根据时间戳范围获取私聊记录
+		// Get private chat records by timestamp range
 		chats, err = privateDB.GetPrivateChatsByMetaIdsAndTimestampRange(req.MetaId, req.OtherMetaId, req.Timestamp, req.Size)
 	} else {
-		// 获取最新的私聊记录
+		// Get latest private chat records
 		chats, err = privateDB.GetLatestPrivateChatsByMetaIds(req.MetaId, req.OtherMetaId, req.Size)
 	}
 
@@ -625,7 +642,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	}
 	// fmt.Printf("private chats: %+v\n", chats)
 
-	// 转换为响应格式
+	// Convert to response format
 	var chatItems []*respond.PrivateChatItem
 	var nextTimestamp int64 = 0
 
@@ -635,8 +652,8 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			To:          chat.To,
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
-			MetaId:      chat.From, // 消息创建者MetaId
-			NickName:    "",        // 需要从用户信息中获取
+			MetaId:      chat.From, // Message creator MetaId
+			NickName:    "",        // Need to get from user info
 			Protocol:    chat.Protocol,
 			Content:     chat.Content,
 			ContentType: chat.ContentType,
@@ -650,7 +667,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			BlockHeight: chat.BlockHeight,
 		}
 
-		// 处理回复消息
+		// Handle reply message
 		if chat.ReplyPin != "" {
 			replyChat, err := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
 			if err != nil {
@@ -660,7 +677,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 				chatItem.ReplyInfo = &respond.ReplyInfo{
 					PinId:       replyChat.PinId,
 					MetaId:      replyChat.From,
-					NickName:    "", // 私聊消息没有NickName字段
+					NickName:    "", // Private chat message doesn't have NickName field
 					Protocol:    replyChat.Protocol,
 					Content:     replyChat.Content,
 					ContentType: replyChat.ContentType,
@@ -675,7 +692,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 
 		chatItems = append(chatItems, chatItem)
 
-		// 记录下一条消息的时间戳（用于分页）
+		// Record next message timestamp (for pagination)
 		if i == len(chats)-1 && len(chats) > 0 {
 			nextTimestamp = chat.Timestamp
 		}

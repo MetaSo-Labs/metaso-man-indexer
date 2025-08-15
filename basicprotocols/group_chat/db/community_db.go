@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-// 社区数据库操作
+// Community database operations
 type CommunityDB struct {
 	pb *Pebble
 }
@@ -20,19 +20,19 @@ func NewCommunityDB(pb *Pebble) *CommunityDB {
 	return &CommunityDB{pb: pb}
 }
 
-// 保存社区版本信息
+// Save community version info
 func (cdb *CommunityDB) SaveCommunityVersionInfo(community *models.TalkCommunityModel) error {
 	data, err := json.Marshal(community)
 	if err != nil {
 		return err
 	}
 
-	// 使用 CommunityId_PinId 作为主键
+	// Use CommunityId_PinId as primary key
 	key := []byte(community.CommunityId + "_" + community.PinId)
 	return Pb[TalkCommunityVersionInfoCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据CommunityId和PinId获取社区版本信息
+// Get community version info by CommunityId and PinId
 func (cdb *CommunityDB) GetCommunityVersionInfoByCommunityIdAndPinId(communityId, pinId string) (*models.TalkCommunityModel, error) {
 	key := []byte(communityId + "_" + pinId)
 	value, closer, err := Pb[TalkCommunityVersionInfoCollection].Get(key)
@@ -53,19 +53,19 @@ func (cdb *CommunityDB) GetCommunityVersionInfoByCommunityIdAndPinId(communityId
 	return &community, nil
 }
 
-// 保存社区信息
+// Save community info
 func (cdb *CommunityDB) SaveCommunityInfo(community *models.TalkCommunityModel) error {
 	data, err := json.Marshal(community)
 	if err != nil {
 		return err
 	}
 
-	// 使用 CommunityId 作为主键
+	// Use CommunityId as primary key
 	key := []byte(community.CommunityId)
 	return Pb[TalkCommunityInfoCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据CommunityId获取社区信息
+// Get community info by CommunityId
 func (cdb *CommunityDB) GetCommunityInfoByCommunityId(communityId string) (*models.TalkCommunityModel, error) {
 	key := []byte(communityId)
 	value, closer, err := Pb[TalkCommunityInfoCollection].Get(key)
@@ -86,7 +86,7 @@ func (cdb *CommunityDB) GetCommunityInfoByCommunityId(communityId string) (*mode
 	return &community, nil
 }
 
-// 获取社区列表
+// Get community list
 func (cdb *CommunityDB) GetCommunityList(page, size int64) ([]*models.TalkCommunityModel, error) {
 	var communities []*models.TalkCommunityModel
 	iter, err := Pb[TalkCommunityInfoCollection].NewIter(nil)
@@ -119,25 +119,25 @@ func (cdb *CommunityDB) GetCommunityList(page, size int64) ([]*models.TalkCommun
 	return communities, nil
 }
 
-// 删除社区
+// Delete community
 func (cdb *CommunityDB) DeleteCommunity(communityId string) error {
 	key := []byte(communityId)
 	return Pb[TalkCommunityInfoCollection].Delete(key, pebble.Sync)
 }
 
-// 保存社区加入信息
+// Save community join info
 func (cdb *CommunityDB) SaveCommunityJoin(join *models.TalkCommunityJoinModel) error {
 	data, err := json.Marshal(join)
 	if err != nil {
 		return err
 	}
 
-	// 使用 CommunityId_PinId 作为主键
+	// Use CommunityId_PinId as primary key
 	key := []byte(join.CommunityId + "_" + join.PinId)
 	return Pb[TalkCommunityJoinCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据社区ID和PinId获取加入信息
+// Get join info by community ID and PinId
 func (cdb *CommunityDB) GetCommunityJoinByCommunityIdAndPinId(communityId, pinId string) (*models.TalkCommunityJoinModel, error) {
 	key := []byte(communityId + "_" + pinId)
 	value, closer, err := Pb[TalkCommunityJoinCollection].Get(key)
@@ -158,16 +158,16 @@ func (cdb *CommunityDB) GetCommunityJoinByCommunityIdAndPinId(communityId, pinId
 	return &join, nil
 }
 
-// 获取社区成员列表
+// Get community member list
 func (cdb *CommunityDB) GetCommunityMembers(communityId string) ([]*models.TalkCommunityJoinModel, error) {
 	var members []*models.TalkCommunityJoinModel
 
-	// 使用前缀查询，因为key是communityId_pinId格式
+	// Use prefix query, because key is communityId_pinId format
 	prefix := []byte(communityId + "_")
 	// iter, err := Pb[TalkCommunityJoinCollection].NewIter(&pebble.IterOptions{
 	iter, err := Pb[TalkCommunityPersonCollection].NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with communityId_
 	})
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (cdb *CommunityDB) GetCommunityMembers(communityId string) ([]*models.TalkC
 		if err != nil {
 			continue
 		}
-		// 只返回在社区中的成员
+		// Only return members in the community
 		if join.CommunityState == models.RoomStateIn {
 			members = append(members, &join)
 		}
@@ -189,21 +189,21 @@ func (cdb *CommunityDB) GetCommunityMembers(communityId string) ([]*models.TalkC
 	return members, nil
 }
 
-// 保存社区成员信息
+// Save community member info
 func (cdb *CommunityDB) SaveCommunityPerson(person *models.TalkCommunityPerson) error {
 	data, err := json.Marshal(person)
 	if err != nil {
 		return err
 	}
 
-	// 使用 CommunityId_MetaId 作为主键
+	// Use CommunityId_MetaId as primary key
 	key := []byte(person.CommunityId + "_" + person.MetaId)
 	return Pb[TalkCommunityPersonCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据社区ID和MetaId获取成员信息
+// Get member info by community ID and MetaId
 func (cdb *CommunityDB) GetCommunityPersonByCommunityIdAndMetaId(communityId, metaId string) (*models.TalkCommunityPerson, error) {
-	// 构造 CommunityId_MetaId
+	// Construct CommunityId_MetaId
 	key := []byte(communityId + "_" + metaId)
 	value, closer, err := Pb[TalkCommunityPersonCollection].Get(key)
 	if err != nil {
@@ -223,15 +223,15 @@ func (cdb *CommunityDB) GetCommunityPersonByCommunityIdAndMetaId(communityId, me
 	return &person, nil
 }
 
-// 获取社区成员列表
+// Get community member list
 func (cdb *CommunityDB) GetCommunityPersonList(communityId string) ([]*models.TalkCommunityPerson, error) {
 	var persons []*models.TalkCommunityPerson
 
-	// 使用前缀查询，因为key是communityId_metaId格式
+	// Use prefix query, because key is communityId_metaId format
 	prefix := []byte(communityId + "_")
 	iter, err := Pb[TalkCommunityPersonCollection].NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with communityId_
 	})
 	if err != nil {
 		return nil, err
@@ -244,7 +244,7 @@ func (cdb *CommunityDB) GetCommunityPersonList(communityId string) ([]*models.Ta
 		if err != nil {
 			continue
 		}
-		// 只返回在社区中的成员
+		// Only return members in the community
 		if person.CommunityState == models.RoomStateIn {
 			persons = append(persons, &person)
 		}
@@ -253,14 +253,14 @@ func (cdb *CommunityDB) GetCommunityPersonList(communityId string) ([]*models.Ta
 	return persons, nil
 }
 
-// 保存社区地址关联
+// Save community address association
 func (cdb *CommunityDB) SaveCommunityAddress(communityId, address string, data []byte) error {
-	// 使用 CommunityId_Address 作为主键
+	// Use CommunityId_Address as primary key
 	key := []byte(communityId + "_" + address)
 	return Pb[TalkCommunityAddressCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据社区ID和地址获取地址关联信息
+// Get address association info by community ID and address
 func (cdb *CommunityDB) GetCommunityAddressByCommunityIdAndAddress(communityId, address string) ([]byte, error) {
 	key := []byte(communityId + "_" + address)
 	value, closer, err := Pb[TalkCommunityAddressCollection].Get(key)
@@ -275,7 +275,7 @@ func (cdb *CommunityDB) GetCommunityAddressByCommunityIdAndAddress(communityId, 
 	return value, nil
 }
 
-// 总的处理 Community 方法
+// Main method to process Community
 func (cdb *CommunityDB) ProcessCommunityPin(pin *pin.PinInscription) error {
 	switch pin.Operation {
 	case "create":
@@ -287,7 +287,7 @@ func (cdb *CommunityDB) ProcessCommunityPin(pin *pin.PinInscription) error {
 			return cdb.processCommunityJoin(pin)
 		}
 	case "modify":
-		//检查ParentPath
+		// Check ParentPath
 		parentPath := pin.Path
 		parentProtocol := strings.Replace(parentPath, "/protocols/", "", -1)
 		if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleCommunity) {
@@ -295,21 +295,21 @@ func (cdb *CommunityDB) ProcessCommunityPin(pin *pin.PinInscription) error {
 		}
 		return nil
 	default:
-		return nil // 未知操作类型，跳过
+		return nil // Unknown operation type, skip
 	}
 	return nil
 }
 
-// 处理社区创建
+// Process community creation
 func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleCommunity protocols.SimpleCommunity
 	err := json.Unmarshal(pin.ContentBody, &simpleCommunity)
 	if err != nil {
 		return err
 	}
 
-	// 创建社区模型
+	// Create community model
 	community := &models.TalkCommunityModel{
 		// CommunityId: simpleCommunity.CommunityId,
 		CommunityId: pin.Id,
@@ -331,19 +331,19 @@ func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
 		Timestamp:   pin.Timestamp,
 	}
 
-	// 保存到版本信息表
+	// Save to version info table
 	err = cdb.SaveCommunityVersionInfo(community)
 	if err != nil {
 		return err
 	}
 
-	// 保存到基本信息表
+	// Save to basic info table
 	err = cdb.SaveCommunityInfo(community)
 	if err != nil {
 		return err
 	}
 
-	// 保存地址关联
+	// Save address association
 	addressData, _ := json.Marshal(community)
 	err = cdb.SaveCommunityAddress(community.CommunityId, pin.Address, addressData)
 	if err != nil {
@@ -353,16 +353,16 @@ func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理社区加入
+// Process community join
 func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleCommunityJoin protocols.SimpleCommunityJoin
 	err := json.Unmarshal(pin.ContentBody, &simpleCommunityJoin)
 	if err != nil {
 		return err
 	}
 
-	// 确定加入状态
+	// Determine join state
 	var communityState models.RoomState
 	if state, ok := simpleCommunityJoin.State.(float64); ok {
 		if state == 1 {
@@ -371,10 +371,10 @@ func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
 			communityState = models.RoomStateOut
 		}
 	} else {
-		communityState = models.RoomStateIn // 默认加入
+		communityState = models.RoomStateIn // Default join
 	}
 
-	// 创建社区加入模型
+	// Create community join model
 	join := &models.TalkCommunityJoinModel{
 		CommunityId: simpleCommunityJoin.CommunityId,
 		MetaId:      pin.MetaId,
@@ -390,23 +390,23 @@ func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
 		Timestamp:   pin.Timestamp,
 	}
 
-	// 保存社区加入信息
+	// Save community join info
 	err = cdb.SaveCommunityJoin(join)
 	if err != nil {
 		return err
 	}
 
-	// 创建社区成员信息
+	// Create community member info
 	person := &models.TalkCommunityPerson{
 		CommunityId:    simpleCommunityJoin.CommunityId,
 		MetaId:         pin.MetaId,
-		UserName:       pin.MetaId, // 使用 MetaId 作为用户名
+		UserName:       pin.MetaId, // Use MetaId as username
 		UserNickName:   pin.MetaId,
 		CommunityState: communityState,
 		Timestamp:      pin.Timestamp,
 	}
 
-	// 保存社区成员信息
+	// Save community member info
 	err = cdb.SaveCommunityPerson(person)
 	if err != nil {
 		return err
@@ -415,23 +415,23 @@ func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理社区修改
+// Process community modification
 func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleCommunity protocols.SimpleCommunity
 	err := json.Unmarshal(pin.ContentBody, &simpleCommunity)
 	if err != nil {
 		return err
 	}
 
-	// 获取现有社区信息
+	// Get existing community info
 	existingCommunity, err := cdb.GetCommunityInfoByCommunityId(simpleCommunity.CommunityId)
 	if err != nil {
 		return err
 	}
 
 	if existingCommunity == nil {
-		// 如果社区不存在，按创建处理
+		// If community doesn't exist, process as creation
 		return cdb.processCommunityCreate(pin)
 	}
 
@@ -439,7 +439,7 @@ func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
 		return errors.New("community creator not match")
 	}
 
-	// 更新社区信息
+	// Update community info
 	existingCommunity.Name = simpleCommunity.Name
 	existingCommunity.Description = simpleCommunity.Description
 	existingCommunity.Cover = simpleCommunity.Cover
@@ -452,13 +452,13 @@ func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
 	existingCommunity.PinId = pin.Id
 	existingCommunity.Timestamp = pin.Timestamp
 
-	// 保存到版本信息表
+	// Save to version info table
 	err = cdb.SaveCommunityVersionInfo(existingCommunity)
 	if err != nil {
 		return err
 	}
 
-	// 保存到基本信息表
+	// Save to basic info table
 	err = cdb.SaveCommunityInfo(existingCommunity)
 	if err != nil {
 		return err

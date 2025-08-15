@@ -13,13 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ServerConfig 服务器配置
+// ServerConfig server configuration
 type ServerConfig struct {
 	Port string
 	Host string
 }
 
-// DefaultConfig 默认配置
+// DefaultConfig default configuration
 func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
 		Port: common.Config.GroupChat.Port,
@@ -27,24 +27,24 @@ func DefaultConfig() *ServerConfig {
 	}
 }
 
-// Server 群聊服务器
+// Server group chat server
 type Server struct {
 	config *ServerConfig
 	router *gin.Engine
 }
 
-// NewServer 创建新的服务器实例
+// NewServer create new server instance
 func NewServer(config *ServerConfig) *Server {
 	if config == nil {
 		config = DefaultConfig()
 	}
 
-	// 设置 Gin 模式
+	// Set Gin mode
 	gin.SetMode(gin.DebugMode)
 
 	router := gin.Default()
 
-	// 添加中间件
+	// Add middleware
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
@@ -55,7 +55,7 @@ func NewServer(config *ServerConfig) *Server {
 	}
 }
 
-// corsMiddleware CORS 中间件
+// corsMiddleware CORS middleware
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -71,18 +71,18 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
-// SetupRoutes 设置路由
+// SetupRoutes setup routes
 func (s *Server) SetupRoutes() error {
-	// 注册 group_chat 路由
+	// Register group_chat routes
 	err := RegisterRoutes(s.router)
 	if err != nil {
 		return err
 	}
 
-	// 设置群聊模块的Swagger
+	// Setup Swagger for group chat module
 	swagger.SetupSwagger(s.router)
 
-	// 添加健康检查路由
+	// Add health check route
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
@@ -90,7 +90,7 @@ func (s *Server) SetupRoutes() error {
 		})
 	})
 
-	// 添加服务状态路由
+	// Add service status route
 	s.router.GET("/status", func(c *gin.Context) {
 		stats := GetServiceStats()
 		c.JSON(http.StatusOK, gin.H{
@@ -99,7 +99,7 @@ func (s *Server) SetupRoutes() error {
 		})
 	})
 
-	// 添加根路由
+	// Add root route
 	s.router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"service": "group-chat",
@@ -113,30 +113,30 @@ func (s *Server) SetupRoutes() error {
 	return nil
 }
 
-// Start 启动服务器
+// Start start server
 func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
-	// 初始化 group_chat 模块
+	// Initialize group_chat module
 	err := Init(indexerChainAdapter)
 	if err != nil {
 		log.Printf("Failed to initialize group chat module: %v", err)
 		return err
 	}
 
-	// 设置路由
+	// Setup routes
 	err = s.SetupRoutes()
 	if err != nil {
 		log.Printf("Failed to setup routes: %v", err)
 		return err
 	}
 
-	// 创建 HTTP 服务器
+	// Create HTTP server
 	addr := s.config.Host + ":" + s.config.Port
 	server := &http.Server{
 		Addr:    addr,
 		Handler: s.router,
 	}
 
-	// 优雅关闭
+	// Graceful shutdown
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -144,13 +144,13 @@ func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
 
 		log.Println("Shutting down server...")
 
-		// 停止 group_chat 模块
+		// Stop group_chat module
 		err := Stop()
 		if err != nil {
 			log.Printf("Failed to stop group chat module: %v", err)
 		}
 
-		// 关闭 HTTP 服务器
+		// Close HTTP server
 		if err := server.Close(); err != nil {
 			log.Printf("Failed to close server: %v", err)
 		}
@@ -163,14 +163,14 @@ func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
 	return server.ListenAndServe()
 }
 
-// Run 运行服务器的便捷方法
+// Run convenient method to run server
 func Run(indexerChainAdapter map[string]adapter.Chain) error {
 	config := DefaultConfig()
 	server := NewServer(config)
 	return server.Start(indexerChainAdapter)
 }
 
-// RunWithConfig 使用自定义配置运行服务器
+// RunWithConfig run server with custom configuration
 func RunWithConfig(config *ServerConfig, indexerChainAdapter map[string]adapter.Chain) error {
 	server := NewServer(config)
 	return server.Start(indexerChainAdapter)

@@ -12,33 +12,33 @@ import (
 )
 
 const (
-	// 社区相关数据库
-	TalkCommunityVersionInfoCollection string = "talk_community_version_info" // key: communityId_pinId 和 pinId_communityId
+	// Community related databases
+	TalkCommunityVersionInfoCollection string = "talk_community_version_info" // key: communityId_pinId and pinId_communityId
 	TalkCommunityInfoCollection        string = "talk_community_info"         // key: communityId
-	TalkCommunityAddressCollection     string = "talk_community_address"      // key: communityId_address 和 address_communityId
+	TalkCommunityAddressCollection     string = "talk_community_address"      // key: communityId_address and address_communityId
 
 	TalkCommunityJoinCollection   string = "talk_community_join"   // key: communityId_pinId
-	TalkCommunityPersonCollection string = "talk_community_person" // key: communityId_metaId 和 metaId_communityId
+	TalkCommunityPersonCollection string = "talk_community_person" // key: communityId_metaId and metaId_communityId
 
-	// 群组相关数据库
+	// Group related databases
 	TalkGroupInfoCollection        string = "talk_group_info"         // key: groupId
-	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId 和 pinId_groupId
+	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId and pinId_groupId
 	TalkGroupCommunityCollection   string = "talk_group_community"    // key: communityId_groupId
 
 	TalkGroupMetaIdJoinCollection string = "talk_group_metaid_join" // key: metaId_groupId, value: []{joinPinId, joinType, joinTimestamp}
-	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId 和 pinId_groupId
-	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId 和 metaId_groupId
+	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId and pinId_groupId
+	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId and metaId_groupId
 
 	TalkGroupLatestChatCollection   string = "talk_group_latest_chat"    // key: groupId，value: {groupId, timestamp, chatType, content, createAddress}
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
-	// 消息队列相关数据库
-	TalkGroupChatQueueCollection            string = "talk_group_chat_queue"              // key: timestamp_pinId，value: chat消息数据
+	// Message queue related databases
+	TalkGroupChatQueueCollection            string = "talk_group_chat_queue"              // key: timestamp_pinId，value: chat message data
 	TalkGroupOpenLuckyBagQueueCollection    string = "talk_group_open_lucky_bag_queue"    // key: timestamp_pinId，value:
 	TalkGroupResidueLuckyBagQueueCollection string = "talk_group_residue_lucky_bag_queue" // key: timestamp_pinId，value:
-	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: 处理状态
+	// TalkGroupChatQueueProcessingCollection string = "talk_group_chat_queue_processing" // key: pinId，value: processing status
 
-	// 聊天相关数据库
+	// Chat related databases
 	TalkGroupChatPinCollection             string = "talk_group_chat_pin"               // key: pinId
 	TalkGroupLuckyBagPinCollection         string = "talk_group_lucky_bag_pin"          // key: pinId
 	TalkGroupOpenLuckyBagPinCollection     string = "talk_group_open_lucky_bag_pin"     // key: pinId
@@ -48,11 +48,11 @@ const (
 	TalkGroupChatTimestampCollection       string = "talk_group_chat_timestamp"         // key: groupId_timestamp，value: pinId_chatType_timestamp
 	TalkGroupChatTimestampOutCollection    string = "talk_group_chat_timestamp_out"     // key: groupId_timestamp，value: pinId_chatType_timestamp
 
-	//私聊
+	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
-	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp和to_from_timestamp，value: pinId_chatType_timestamp
-	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp和to_from_timestamp，value: pinId_chatType_timestamp
-	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat消息数据
+	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat message data
 )
 
 type Pebble struct{}
@@ -71,7 +71,7 @@ var Pb map[string]*pebble.DB
 func (pb *Pebble) InitDatabase() error {
 	Pb = make(map[string]*pebble.DB, 10)
 
-	// 初始化社区相关数据库
+	// Initialize community related databases
 	err := open(TalkCommunityVersionInfoCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkCommunityVersionInfoCollection, err)
@@ -93,7 +93,7 @@ func (pb *Pebble) InitDatabase() error {
 		return fmt.Errorf("Pebble %s init error: %v", TalkCommunityPersonCollection, err)
 	}
 
-	// 初始化群组相关数据库
+	// Initialize group related databases
 	err = open(TalkGroupInfoCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupInfoCollection, err)
@@ -115,30 +115,30 @@ func (pb *Pebble) InitDatabase() error {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupPersonCollection, err)
 	}
 
-	// 初始化群组MetaId加入数据库
+	// Initialize group MetaId join database
 	err = open(TalkGroupMetaIdJoinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupMetaIdJoinCollection, err)
 	}
 
-	// 初始化用户群列表数据库
+	// Initialize user group list database
 	err = open(TalkMetaIdContextListCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkMetaIdContextListCollection, err)
 	}
 
-	// 初始化群组最新聊天数据库
+	// Initialize group latest chat database
 	err = open(TalkGroupLatestChatCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLatestChatCollection, err)
 	}
 
-	// 初始化消息队列数据库
+	// Initialize message queue databases
 	err = open(TalkGroupChatQueueCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueCollection, err)
 	}
-	// 初始化抢红包队列数据库
+	// Initialize grab lucky bag queue database
 	err = open(TalkGroupOpenLuckyBagQueueCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupOpenLuckyBagQueueCollection, err)
@@ -152,7 +152,7 @@ func (pb *Pebble) InitDatabase() error {
 	// 	return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatQueueProcessingCollection, err)
 	// }
 
-	// 初始化聊天相关数据库
+	// Initialize chat related databases
 	err = open(TalkGroupChatPinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatPinCollection, err)
@@ -186,7 +186,7 @@ func (pb *Pebble) InitDatabase() error {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestampOutCollection, err)
 	}
 
-	// 初始化私聊相关数据库
+	// Initialize private chat related databases
 	err = open(TalkPrivateChatPinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatPinCollection, err)
@@ -209,12 +209,12 @@ func (pb *Pebble) InitDatabase() error {
 func open(dbName string) (err error) {
 	lg := Logger{}
 
-	// 设置默认数据库路径
+	// Set default database path
 	var dbPath string
 	if common.Config != nil && common.Config.Pebble.Dir != "" {
 		dbPath = common.Config.Pebble.Dir
 	} else {
-		// 使用默认路径
+		// Use default path
 		dbPath = "./data"
 	}
 
@@ -234,7 +234,7 @@ func open(dbName string) (err error) {
 	return
 }
 
-// 关闭所有数据库连接
+// Close all database connections
 func (pb *Pebble) CloseAll() {
 	for name, db := range Pb {
 		if err := db.Close(); err != nil {

@@ -13,18 +13,18 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-// 私聊队列消息项
+// Private chat queue message item
 type PrivateQueueChatMessage struct {
-	PinId      string                    `json:"pinId"`      // 消息PinId
-	From       string                    `json:"from"`       // 发送者MetaId
-	To         string                    `json:"to"`         // 接收者MetaId
-	Chat       *models.TalkPrivateChatV3 `json:"chat"`       // 私聊消息
-	Timestamp  int64                     `json:"timestamp"`  // 入队时间戳
-	RetryCount int                       `json:"retryCount"` // 重试次数
-	Status     string                    `json:"status"`     // 处理状态：pending, processing, completed, failed
+	PinId      string                    `json:"pinId"`      // Message PinId
+	From       string                    `json:"from"`       // Sender MetaId
+	To         string                    `json:"to"`         // Receiver MetaId
+	Chat       *models.TalkPrivateChatV3 `json:"chat"`       // Private chat message
+	Timestamp  int64                     `json:"timestamp"`  // Enqueue timestamp
+	RetryCount int                       `json:"retryCount"` // Retry count
+	Status     string                    `json:"status"`     // Processing status: pending, processing, completed, failed
 }
 
-// 私聊数据库操作
+// Private chat database operations
 type PrivateChatDB struct {
 	pb *Pebble
 }
@@ -33,36 +33,36 @@ func NewPrivateChatDB(pb *Pebble) *PrivateChatDB {
 	return &PrivateChatDB{pb: pb}
 }
 
-// 保存私聊消息
+// Save private chat message
 func (pcdb *PrivateChatDB) SavePrivateChat(chat *models.TalkPrivateChatV3) error {
 	data, err := json.Marshal(chat)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId 作为主键
+	// Use PinId as primary key
 	key := []byte(chat.PinId)
 	return Pb[TalkPrivateChatPinCollection].Set(key, data, pebble.Sync)
 }
 
-// 保存私聊时间戳索引（双向索引：from_to_timestamp 和 to_from_timestamp）
+// Save private chat timestamp index (bidirectional index: from_to_timestamp and to_from_timestamp)
 func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChatV3) error {
-	// 构造时间戳索引值：pinId_chatType_timestamp
+	// Construct timestamp index value: pinId_chatType_timestamp
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
-	// 保存 from_to_timestamp 索引
+	// Save from_to_timestamp index
 	fromToKey := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	err := Pb[TalkPrivateChatTimestampCollection].Set(fromToKey, []byte(value), pebble.Sync)
 	if err != nil {
 		return err
 	}
 
-	// 保存 to_from_timestamp 索引（反向索引，便于查询）
+	// Save to_from_timestamp index (reverse index for easy querying)
 	toFromKey := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	return Pb[TalkPrivateChatTimestampCollection].Set(toFromKey, []byte(value), pebble.Sync)
 }
 
-// 根据PinId获取私聊消息
+// Get private chat message by PinId
 func (pcdb *PrivateChatDB) GetPrivateChatByPinId(pinId string) (*models.TalkPrivateChatV3, error) {
 	key := []byte(pinId)
 	value, closer, err := Pb[TalkPrivateChatPinCollection].Get(key)
@@ -83,7 +83,7 @@ func (pcdb *PrivateChatDB) GetPrivateChatByPinId(pinId string) (*models.TalkPriv
 	return &chat, nil
 }
 
-// 根据两个MetaId获取私聊消息列表
+// Get private chat message list by two MetaIds
 func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIds(selfMetaId, otherMetaId string, page, size int64) ([]*models.TalkPrivateChatV3, error) {
 	var chats []*models.TalkPrivateChatV3
 	iter, err := Pb[TalkPrivateChatPinCollection].NewIter(nil)
@@ -101,7 +101,7 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIds(selfMetaId, otherMetaId stri
 		if err != nil {
 			continue
 		}
-		// 检查是否是这两个用户之间的聊天
+		// Check if it's a chat between these two users
 		if (chat.From == selfMetaId && chat.To == otherMetaId) ||
 			(chat.From == otherMetaId && chat.To == selfMetaId) {
 			if count < skip {
@@ -120,7 +120,7 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIds(selfMetaId, otherMetaId stri
 	return chats, nil
 }
 
-// 根据两个MetaId和时间戳范围获取私聊消息列表（倒序，基于时间戳分页）
+// Get private chat message list by two MetaIds and timestamp range (reverse order, pagination based on timestamp)
 func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId string, startTimestamp int64, size int64) ([]*models.TalkPrivateChatV3, error) {
 	var chats []*models.TalkPrivateChatV3
 	iter, err := Pb[TalkPrivateChatTimestampCollection].NewIter(nil)
@@ -129,21 +129,21 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 	}
 	defer iter.Close()
 
-	// 构造查询起始键：from_to_startTimestamp 和 to_from_startTimestamp
+	// Construct query start keys: from_to_startTimestamp and to_from_startTimestamp
 	fromToStartKey := []byte(selfMetaId + "_" + otherMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
 	toFromStartKey := []byte(otherMetaId + "_" + selfMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
 
-	// 从指定时间戳开始倒序遍历（最新的消息在前）
+	// Start reverse iteration from specified timestamp (latest messages first)
 	for iter.SeekLT(fromToStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
 		key := string(iter.Key())
 
-		// 检查是否属于这两个用户之间的聊天
+		// Check if it belongs to chat between these two users
 		if !strings.HasPrefix(key, selfMetaId+"_"+otherMetaId+"_") &&
 			!strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
 			continue
 		}
 
-		// 解析索引值获取 PinId
+		// Parse index value to get PinId
 		value := string(iter.Value())
 		valueParts := strings.Split(value, "_")
 		if len(valueParts) < 1 {
@@ -151,13 +151,13 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 		}
 		pinId := valueParts[0]
 
-		// 获取完整的私聊消息
+		// Get complete private chat message
 		chat, err := pcdb.GetPrivateChatByPinId(pinId)
 		if err != nil || chat == nil {
 			continue
 		}
 
-		// 达到分页大小限制
+		// Reach pagination size limit
 		if int64(len(chats)) >= size {
 			break
 		}
@@ -165,17 +165,17 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 		chats = append(chats, chat)
 	}
 
-	// 如果从from_to方向没有找到足够的消息，继续从to_from方向查找
+	// If not enough messages found from from_to direction, continue searching from to_from direction
 	if int64(len(chats)) < size {
 		for iter.SeekLT(toFromStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
 			key := string(iter.Key())
 
-			// 检查是否属于这两个用户之间的聊天
+			// Check if it belongs to chat between these two users
 			if !strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
 				continue
 			}
 
-			// 解析索引值获取 PinId
+			// Parse index value to get PinId
 			value := string(iter.Value())
 			valueParts := strings.Split(value, "_")
 			if len(valueParts) < 1 {
@@ -183,13 +183,13 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 			}
 			pinId := valueParts[0]
 
-			// 获取完整的私聊消息
+			// Get complete private chat message
 			chat, err := pcdb.GetPrivateChatByPinId(pinId)
 			if err != nil || chat == nil {
 				continue
 			}
 
-			// 达到分页大小限制
+			// Reach pagination size limit
 			if int64(len(chats)) >= size {
 				break
 			}
@@ -201,20 +201,20 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 	return chats, nil
 }
 
-// 获取两个用户之间的最新私聊消息（基于时间戳倒序）
+// Get latest private chat messages between two users (reverse order based on timestamp)
 func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, error) {
-	// 使用当前时间作为起始时间戳
+	// Use current time as start timestamp
 	currentTimestamp := time.Now().Unix()
 	return pcdb.GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId, currentTimestamp, size)
 }
 
-// 删除私聊消息
+// Delete private chat message
 func (pcdb *PrivateChatDB) DeletePrivateChat(pinId string) error {
 	key := []byte(pinId)
 	return Pb[TalkPrivateChatPinCollection].Delete(key, pebble.Sync)
 }
 
-// 将私聊消息加入队列（异步处理）
+// Enqueue private chat message (asynchronous processing)
 func (pcdb *PrivateChatDB) EnqueuePrivateChatMessage(chat *models.TalkPrivateChatV3) error {
 	queueMessage := &PrivateQueueChatMessage{
 		PinId:      chat.PinId,
@@ -231,12 +231,12 @@ func (pcdb *PrivateChatDB) EnqueuePrivateChatMessage(chat *models.TalkPrivateCha
 		return err
 	}
 
-	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	// Use timestamp_pinId as primary key to support processing in time order
 	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + chat.PinId)
 	return Pb[TalkPrivateChatQueueCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取队列中的待处理私聊消息
+// Get pending private chat messages from queue
 func (pcdb *PrivateChatDB) GetPendingPrivateQueueMessages(limit int) ([]*PrivateQueueChatMessage, error) {
 	var messages []*PrivateQueueChatMessage
 	iter, err := Pb[TalkPrivateChatQueueCollection].NewIter(nil)
@@ -255,7 +255,7 @@ func (pcdb *PrivateChatDB) GetPendingPrivateQueueMessages(limit int) ([]*Private
 			continue
 		}
 
-		// 只处理pending状态的消息
+		// Only process messages with pending status
 		if queueMessage.Status == "pending" {
 			messages = append(messages, &queueMessage)
 			count++
@@ -265,7 +265,7 @@ func (pcdb *PrivateChatDB) GetPendingPrivateQueueMessages(limit int) ([]*Private
 	return messages, nil
 }
 
-// 删除私聊队列消息数据
+// Delete private chat queue message data
 func (pcdb *PrivateChatDB) deletePrivateQueueMessage(pinId string) error {
 	iter, err := Pb[TalkPrivateChatQueueCollection].NewIter(nil)
 	if err != nil {
@@ -273,7 +273,7 @@ func (pcdb *PrivateChatDB) deletePrivateQueueMessage(pinId string) error {
 	}
 	defer iter.Close()
 
-	// 查找包含该pinId的队列消息
+	// Find queue message containing this pinId
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := string(iter.Value())
 
@@ -283,7 +283,7 @@ func (pcdb *PrivateChatDB) deletePrivateQueueMessage(pinId string) error {
 			continue
 		}
 
-		// 找到匹配的pinId，删除该队列消息
+		// Found matching pinId, delete this queue message
 		if queueMessage.PinId == pinId {
 			return Pb[TalkPrivateChatQueueCollection].Delete(iter.Key(), pebble.Sync)
 		}
@@ -292,7 +292,7 @@ func (pcdb *PrivateChatDB) deletePrivateQueueMessage(pinId string) error {
 	return nil
 }
 
-// 获取用户的上下文列表（群聊+私聊）
+// Get user's context list (group chat + private chat)
 func (pcdb *PrivateChatDB) GetMetaIdContextList(metaId string) (*models.MetaIdContextList, error) {
 	key := []byte(metaId)
 	value, closer, err := Pb[TalkMetaIdContextListCollection].Get(key)
@@ -313,7 +313,7 @@ func (pcdb *PrivateChatDB) GetMetaIdContextList(metaId string) (*models.MetaIdCo
 	return &contextList, nil
 }
 
-// 保存用户的上下文列表
+// Save user's context list
 func (pcdb *PrivateChatDB) SaveMetaIdContextList(contextList *models.MetaIdContextList) error {
 	data, err := json.Marshal(contextList)
 	if err != nil {
@@ -324,15 +324,15 @@ func (pcdb *PrivateChatDB) SaveMetaIdContextList(contextList *models.MetaIdConte
 	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 }
 
-// 更新私聊联系人列表
+// Update private chat contact list
 func (pcdb *PrivateChatDB) UpdatePrivateContactList(chat *models.TalkPrivateChatV3) error {
-	// 更新发送者的联系人列表
+	// Update sender's contact list
 	err := pcdb.updateSingleUserPrivateContactList(chat.From, chat.To, chat)
 	if err != nil {
 		return err
 	}
 
-	// 更新接收者的联系人列表
+	// Update receiver's contact list
 	err = pcdb.updateSingleUserPrivateContactList(chat.To, chat.From, chat)
 	if err != nil {
 		return err
@@ -341,39 +341,39 @@ func (pcdb *PrivateChatDB) UpdatePrivateContactList(chat *models.TalkPrivateChat
 	return nil
 }
 
-// 更新单个用户的私聊联系人列表
+// Update single user's private chat contact list
 func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherMetaId string, chat *models.TalkPrivateChatV3) error {
-	// 获取用户的上下文列表
+	// Get user's context list
 	contextList, err := pcdb.GetMetaIdContextList(selfMetaId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的私聊联系人项
+	// Create new private chat contact item
 	newItem := &models.MetaIdContextItem{
 		GroupId:          "",             //
-		MetaId:           otherMetaId,    // 对方的MetaId
-		Address:          chat.ToAddress, // 对方的地址
-		Type:             "2",            // 2表示私聊
+		MetaId:           otherMetaId,    // Other party's MetaId
+		Address:          chat.ToAddress, // Other party's address
+		Type:             "2",            // 2 indicates private chat
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,
-		CreateMetaId:     chat.From,        // 消息创建者的MetaId
-		CreateAddress:    chat.FromAddress, // 私聊消息中没有地址字段
+		CreateMetaId:     chat.From,        // MetaId of message creator
+		CreateAddress:    chat.FromAddress, // Private chat message doesn't have address field
 		LastMessagePinId: chat.PinId,
 		BlockHeight:      chat.BlockHeight,
 	}
 
-	// 查找是否已存在该私聊联系人的项
+	// Check if private chat contact item already exists
 	found := false
 	shouldUpdate := false
 	for i, item := range contextList.Items {
-		// 对于私聊，通过GroupId和Type来识别
+		// For private chat, identify by GroupId and Type
 		if item.GroupId == otherMetaId && item.Type == "2" {
-			// 检查是否需要更新
+			// Check if update is needed
 			if item.LastMessagePinId != newItem.LastMessagePinId ||
 				item.BlockHeight != newItem.BlockHeight {
-				// 更新现有项
+				// Update existing item
 				contextList.Items[i] = newItem
 				shouldUpdate = true
 			}
@@ -382,27 +382,27 @@ func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherM
 		}
 	}
 
-	// 如果不存在，添加新项
+	// If not found, add new item
 	if !found {
 		contextList.Items = append(contextList.Items, newItem)
 		shouldUpdate = true
 	}
 
-	// 如果不需要更新，直接返回
+	// If no update needed, return directly
 	if !shouldUpdate {
 		return nil
 	}
 
-	// 按时间戳倒序排序
+	// Sort context list by timestamp in reverse order
 	pcdb.sortContextListByTimestamp(contextList)
 
-	// 保存更新后的上下文列表
+	// Save updated context list
 	return pcdb.SaveMetaIdContextList(contextList)
 }
 
-// 按时间戳倒序排序上下文列表
+// Sort context list by timestamp in reverse order
 func (pcdb *PrivateChatDB) sortContextListByTimestamp(contextList *models.MetaIdContextList) {
-	// 简单的冒泡排序，按时间戳倒序
+	// Simple bubble sort, reverse order by timestamp
 	for i := 0; i < len(contextList.Items)-1; i++ {
 		for j := 0; j < len(contextList.Items)-1-i; j++ {
 			if contextList.Items[j].Timestamp < contextList.Items[j+1].Timestamp {
@@ -412,30 +412,30 @@ func (pcdb *PrivateChatDB) sortContextListByTimestamp(contextList *models.MetaId
 	}
 }
 
-// 批量处理私聊队列消息
+// Batch process private chat queue messages
 func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
-	// 获取待处理的消息
+	// Get pending messages
 	messages, err := pcdb.GetPendingPrivateQueueMessages(batchSize)
 	if err != nil {
 		return err
 	}
 
-	// 批量处理消息
+	// Batch process messages
 	for _, message := range messages {
-		// 更新私聊联系人列表
+		// Update private chat contact list
 		err = pcdb.UpdatePrivateContactList(message.Chat)
 		if err != nil {
-			// 处理失败，记录错误但不删除队列消息，可以稍后重试
+			// Processing failed, log error but don't delete queue message, can retry later
 			log.Printf("Failed to update private contact list for pinId %s: %v", message.PinId, err)
 			continue
 		}
 
 		log.Printf("Processing private chat message for pinId %s", message.PinId)
 
-		// 处理成功，删除队列消息
+		// Processing successful, delete queue message
 		err = pcdb.deletePrivateQueueMessage(message.PinId)
 		if err != nil {
-			// 记录错误但不影响主流程
+			// Log error but don't affect main flow
 			log.Printf("Failed to delete private queue message for pinId %s: %v", message.PinId, err)
 		}
 	}
@@ -443,19 +443,19 @@ func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
 	return nil
 }
 
-// 启动私聊队列处理协程（需要在应用启动时调用）
+// Start private chat queue processing goroutine (needs to be called when application starts)
 func (pcdb *PrivateChatDB) StartPrivateQueueProcessor() {
 	go func() {
-		ticker := time.NewTicker(5 * time.Second) // 每5秒处理一次
+		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				// 批量处理队列消息
-				err := pcdb.ProcessPrivateQueueMessages(100) // 每次处理100条消息
+				// Batch process queue messages
+				err := pcdb.ProcessPrivateQueueMessages(100) // Process 100 messages each time
 				if err != nil {
-					// 记录错误日志
+					// Log error
 					continue
 				}
 			}
@@ -463,7 +463,7 @@ func (pcdb *PrivateChatDB) StartPrivateQueueProcessor() {
 	}()
 }
 
-// 总的处理私聊 Pin 方法
+// Main method to process private chat Pin
 func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription) error {
 	switch pin.Operation {
 	case "create":
@@ -475,59 +475,59 @@ func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription) error 
 			return pcdb.processFilePrivateChat(pin)
 		}
 	default:
-		return nil // 未知操作类型，跳过
+		return nil // Unknown operation type, skip
 	}
 	return nil
 }
 
-// 处理私聊消息
+// Process private chat message
 func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingChat, err := pcdb.GetPrivateChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleMsg protocols.SimpleMsg
 	err = json.Unmarshal(pin.ContentBody, &simpleMsg)
 	if err != nil {
 		return err
 	}
 
-	// 创建私聊消息模型
+	// Create private chat message model
 	chat := &models.TalkPrivateChatV3{
-		From:        pin.CreateMetaId,  // 发送者MetaId
-		FromAddress: pin.CreateAddress, // 发送者地址
-		To:          simpleMsg.To,      // 接收者MetaId
-		ToAddress:   "",                // 接收者地址
+		From:        pin.CreateMetaId,  // Sender MetaId
+		FromAddress: pin.CreateAddress, // Sender address
+		To:          simpleMsg.To,      // Receiver MetaId
+		ToAddress:   "",                // Receiver address
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		Protocol:    pin.Path,
 		Content:     simpleMsg.Content,
 		ContentType: simpleMsg.ContentType,
 		Encryption:  simpleMsg.Encrypt,
-		ChatType:    models.ChatTypeMsg, // 默认为消息类型
+		ChatType:    models.ChatTypeMsg, // Default to message type
 		ReplyPin:    simpleMsg.ReplyPin,
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存私聊消息到 TalkPrivateChatPinCollection
+	// Save private chat message to TalkPrivateChatPinCollection
 	err = pcdb.SavePrivateChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引
+	// Save timestamp index
 	err = pcdb.SavePrivateChatTimestamp(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步处理
+	// Enqueue message for asynchronous processing
 	err = pcdb.EnqueuePrivateChatMessage(chat)
 	if err != nil {
 		return err
@@ -536,9 +536,9 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理文件私聊消息
+// Process file private chat message
 func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingChat, err := pcdb.GetPrivateChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
 		if existingChat.BlockHeight != pin.GenesisHeight {
@@ -548,46 +548,46 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 				return err
 			}
 		}
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleFileMsg protocols.SimpleFileMsg
 	err = json.Unmarshal(pin.ContentBody, &simpleFileMsg)
 	if err != nil {
 		return err
 	}
 
-	// 创建私聊消息模型
+	// Create private chat message model
 	chat := &models.TalkPrivateChatV3{
-		From:        pin.CreateMetaId, // 发送者MetaId
-		To:          simpleFileMsg.To, // 接收者MetaId
+		From:        pin.CreateMetaId, // Sender MetaId
+		To:          simpleFileMsg.To, // Receiver MetaId
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		Protocol:    pin.Path,
-		Content:     simpleFileMsg.Attachment, // 文件附件
-		ContentType: simpleFileMsg.FileType,   // 文件类型
+		Content:     simpleFileMsg.Attachment, // File attachment
+		ContentType: simpleFileMsg.FileType,   // File type
 		Encryption:  simpleFileMsg.Encrypt,
-		ChatType:    models.ChatTypeFile, // 文件类型
+		ChatType:    models.ChatTypeFile, // File type
 		ReplyPin:    simpleFileMsg.ReplyPin,
 		Timestamp:   pin.Timestamp,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存私聊消息到 TalkPrivateChatPinCollection
+	// Save private chat message to TalkPrivateChatPinCollection
 	err = pcdb.SavePrivateChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引
+	// Save timestamp index
 	err = pcdb.SavePrivateChatTimestamp(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步处理
+	// Enqueue message for asynchronous processing
 	err = pcdb.EnqueuePrivateChatMessage(chat)
 	if err != nil {
 		return err

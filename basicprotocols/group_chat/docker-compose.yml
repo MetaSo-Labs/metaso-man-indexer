@@ -21,21 +21,8 @@ services:
     networks:
       - group_chat_network
 
-  # 可选：添加 Redis 用于缓存
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    networks:
-      - group_chat_network
-
 volumes:
   group_chat_data:
-    driver: local
-  redis_data:
     driver: local
 
 networks:

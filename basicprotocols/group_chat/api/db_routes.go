@@ -4,14 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterDbRoutes 注册数据库相关的路由
+// RegisterDbRoutes Register database-related routes
 func RegisterDbRoutes(router *gin.Engine) {
 	dbController := NewDbController()
 
-	// 数据库查询API组
+	// Database query API group
 	dbGroup := router.Group("/api/db")
 	{
-		// 社区相关API
+		// Community-related APIs
 		communityGroup := dbGroup.Group("/community")
 		{
 			communityGroup.GET("/version", dbController.GetCommunityVersionInfo)
@@ -20,7 +20,7 @@ func RegisterDbRoutes(router *gin.Engine) {
 			communityGroup.GET("/person", dbController.GetCommunityPerson)
 		}
 
-		// 群组相关API
+		// Group-related APIs
 		groupGroup := dbGroup.Group("/group")
 		{
 			groupGroup.GET("/info", dbController.GetGroupInfo)
@@ -30,7 +30,7 @@ func RegisterDbRoutes(router *gin.Engine) {
 			groupGroup.GET("/person", dbController.GetGroupPerson)
 		}
 
-		// 聊天相关API
+		// Chat-related APIs
 		chatGroup := dbGroup.Group("/chat")
 		{
 			chatGroup.GET("/queue", dbController.GetChatQueue)
@@ -39,13 +39,13 @@ func RegisterDbRoutes(router *gin.Engine) {
 			chatGroup.GET("/timestamp", dbController.GetChatTimestamp)
 		}
 
-		// 用户相关API
+		// User-related APIs
 		userGroup := dbGroup.Group("/user")
 		{
 			userGroup.GET("/context", dbController.GetUserContext)
 		}
 
-		// 统计相关API
+		// Statistics-related APIs
 		dbGroup.GET("/stats", dbController.GetDatabaseStats)
 		dbGroup.GET("/collections", dbController.GetCollections)
 	}

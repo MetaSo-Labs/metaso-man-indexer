@@ -1,22 +1,22 @@
 #!/bin/bash
 
-# 群聊模块 Swagger 文档生成脚本
+# Group Chat Module Swagger Documentation Generation Script
 
 set -e
 
-echo "🚀 开始生成群聊模块的 Swagger 文档..."
+echo "🚀 Starting to generate Swagger documentation for group chat module..."
 
-# 检查 swag 工具是否安装
+# Check if swag tool is installed
 if ! command -v swag &> /dev/null; then
-    echo "❌ swag 工具未安装，正在安装..."
+    echo "❌ swag tool not installed, installing..."
     go install github.com/swaggo/swag/cmd/swag@latest
 fi
 
-# 创建 docs 目录（如果不存在）
+# Create docs directory (if it doesn't exist)
 mkdir -p docs
 
-# 生成 swagger 文档
-echo "📝 生成 Swagger 文档..."
+# Generate swagger documentation
+echo "📝 Generating Swagger documentation..."
 swag init \
     -g ../../cmd/main.go \
     -o ./docs \
@@ -27,21 +27,21 @@ swag init \
     --generatedTime \
     --instanceName group_chat_swagger
 
-# 检查生成是否成功
+# Check if generation was successful
 if [ -f "docs/group_chat_swagger_docs.go" ]; then
-    echo "✅ Swagger 文档生成成功！"
-    echo "📁 生成的文件："
+    echo "✅ Swagger documentation generated successfully!"
+    echo "📁 Generated files:"
     ls -la docs/
     echo ""
-    echo "🌐 访问地址：http://0.0.0.0:7568/group-chat/docs/index.html"
-    echo "📖 文档文件位置：./docs/"
+    echo "🌐 Access URL: http://0.0.0.0:7568/group-chat/docs/index.html"
+    echo "📖 Documentation location: ./docs/"
     echo ""
-    echo "⚠️  重要提醒："
-    echo "   如果添加了新的 API 接口，请手动更新 docs/group_chat_swagger_swagger.json 文件"
-    echo "   确保新接口的路径定义包含在 paths 部分中"
+    echo "⚠️  Important reminder:"
+    echo "   If you added new API interfaces, please manually update the docs/group_chat_swagger_swagger.json file"
+    echo "   Ensure new interface path definitions are included in the paths section"
 else
-    echo "❌ Swagger 文档生成失败！"
+    echo "❌ Swagger documentation generation failed!"
     exit 1
 fi
 
-echo "🎉 完成！" 
+echo "🎉 Complete!" 

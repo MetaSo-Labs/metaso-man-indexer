@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-// 群组数据库操作
+// Group database operations
 type GroupDB struct {
 	pb *Pebble
 }
@@ -20,15 +20,15 @@ func NewGroupDB(pb *Pebble) *GroupDB {
 	return &GroupDB{pb: pb}
 }
 
-// 保存群组信息
+// Save group info
 func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
-	// 先获取现有的群组信息
+	// First get existing group info
 	existingGroup, err := gdb.GetGroupInfoByGroupId(group.GroupId)
 	if err != nil {
 		return err
 	}
 
-	// 如果不存在现有数据，直接保存
+	// If no existing data, save directly
 	if existingGroup == nil {
 		data, err := json.Marshal(group)
 		if err != nil {
@@ -38,23 +38,23 @@ func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 判断是否需要更新
+	// Determine if update is needed
 	shouldUpdate := false
 
-	// 1. 先判断pinId是否一样
+	// 1. First check if pinId is the same
 	if existingGroup.PinId == group.PinId {
-		// pinId一样，检查blockHeight是否不一样
+		// pinId is the same, check if blockHeight is different
 		if existingGroup.BlockHeight != group.BlockHeight {
 			shouldUpdate = true
 		}
 	} else {
-		// pinId不一样，比较timestamp
+		// pinId is different, compare timestamp
 		if group.Timestamp > existingGroup.Timestamp {
 			shouldUpdate = true
 		}
 	}
 
-	// 如果需要更新，则保存新数据
+	// If update is needed, save new data
 	if shouldUpdate {
 		data, err := json.Marshal(group)
 		if err != nil {
@@ -64,11 +64,11 @@ func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 不需要更新，直接返回
+	// No update needed, return directly
 	return nil
 }
 
-// 根据GroupId获取群组信息
+// Get group info by GroupId
 func (gdb *GroupDB) GetGroupInfoByGroupId(groupId string) (*models.TalkGroupModel, error) {
 	key := []byte(groupId)
 	value, closer, err := Pb[TalkGroupInfoCollection].Get(key)
@@ -89,26 +89,26 @@ func (gdb *GroupDB) GetGroupInfoByGroupId(groupId string) (*models.TalkGroupMode
 	return &group, nil
 }
 
-// 保存群组版本信息
+// Save group version info
 func (gdb *GroupDB) SaveGroupVersionInfo(group *models.TalkGroupModel) error {
 	data, err := json.Marshal(group)
 	if err != nil {
 		return err
 	}
 
-	// 使用 GroupId_PinId 作为主键
+	// Use GroupId_PinId as primary key
 	key1 := []byte(group.GroupId + "_" + group.PinId)
 	err = Pb[TalkGroupVersionInfoCollection].Set(key1, data, pebble.Sync)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId_GroupId 作为主键
+	// Use PinId_GroupId as primary key
 	key2 := []byte(group.PinId + "_" + group.GroupId)
 	return Pb[TalkGroupVersionInfoCollection].Set(key2, data, pebble.Sync)
 }
 
-// 根据GroupId和PinId获取群组版本信息
+// Get group version info by GroupId and PinId
 func (gdb *GroupDB) GetGroupVersionInfoByGroupIdAndPinId(groupId, pinId string) (*models.TalkGroupModel, error) {
 	key := []byte(groupId + "_" + pinId)
 	value, closer, err := Pb[TalkGroupVersionInfoCollection].Get(key)
@@ -129,7 +129,7 @@ func (gdb *GroupDB) GetGroupVersionInfoByGroupIdAndPinId(groupId, pinId string) 
 	return &group, nil
 }
 
-// 根据PinId和GroupId获取群组版本信息
+// Get group version info by PinId and GroupId
 func (gdb *GroupDB) GetGroupVersionInfoByPinIdAndGroupId(pinId, groupId string) (*models.TalkGroupModel, error) {
 	key := []byte(pinId + "_" + groupId)
 	value, closer, err := Pb[TalkGroupVersionInfoCollection].Get(key)
@@ -150,33 +150,33 @@ func (gdb *GroupDB) GetGroupVersionInfoByPinIdAndGroupId(pinId, groupId string) 
 	return &group, nil
 }
 
-// 保存群组社区关联
+// Save group community association
 func (gdb *GroupDB) SaveGroupCommunity(group *models.TalkGroupModel) error {
 	data, err := json.Marshal(group)
 	if err != nil {
 		return err
 	}
 
-	// 使用 CommunityId_GroupId 作为主键
+	// Use CommunityId_GroupId as primary key
 	key := []byte(group.CommunityId + "_" + group.GroupId)
 	return Pb[TalkGroupCommunityCollection].Set(key, data, pebble.Sync)
 }
 
-// 删除群组社区关联
+// Delete group community association
 func (gdb *GroupDB) DeleteGroupCommunity(communityId, groupId string) error {
 	key := []byte(communityId + "_" + groupId)
 	return Pb[TalkGroupCommunityCollection].Delete(key, pebble.Sync)
 }
 
-// 根据社区ID获取群组列表
+// Get group list by community ID
 func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
 
-	// 使用前缀查询，因为key是communityId_groupId格式
+	// Use prefix query, because key is communityId_groupId format
 	prefix := []byte(communityId + "_")
 	iter, err := Pb[TalkGroupCommunityCollection].NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以communityId_开头的key
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with communityId_
 	})
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGr
 	return groups, nil
 }
 
-// 获取群组列表
+// Get group list
 func (gdb *GroupDB) GetGroupList(page, size int64) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
 	iter, err := Pb[TalkGroupInfoCollection].NewIter(nil)
@@ -228,13 +228,13 @@ func (gdb *GroupDB) GetGroupList(page, size int64) ([]*models.TalkGroupModel, er
 	return groups, nil
 }
 
-// 删除群组
+// Delete group
 func (gdb *GroupDB) DeleteGroup(groupId string) error {
 	key := []byte(groupId)
 	return Pb[TalkGroupInfoCollection].Delete(key, pebble.Sync)
 }
 
-// 总的处理 Group 方法
+// Main method to process Group
 func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 	switch pin.Operation {
 	case "create":
@@ -246,7 +246,7 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 			return gdb.processGroupJoin(pin)
 		}
 	case "modify":
-		//检查ParentPath
+		// Check ParentPath
 		parentPath := pin.Path
 		parentProtocol := strings.Replace(parentPath, "/protocols/", "", -1)
 		if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupCreate) {
@@ -254,21 +254,21 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 		}
 		return nil
 	default:
-		return nil // 未知操作类型，跳过
+		return nil // Unknown operation type, skip
 	}
 	return nil
 }
 
-// 处理群组创建
+// Process group creation
 func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleGroupCreate protocols.SimpleGroupCreate
 	err := json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
 	if err != nil {
 		return err
 	}
 
-	// 创建群组模型
+	// Create group model
 	group := &models.TalkGroupModel{
 		// GroupId:           simpleGroupCreate.GroupId,
 		GroupId:           pin.Id,
@@ -289,45 +289,45 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		BlockHeight:       pin.GenesisHeight,
 	}
 
-	// 保存到版本信息表
+	// Save to version info table
 	err = gdb.SaveGroupVersionInfo(group)
 	if err != nil {
 		return err
 	}
 
-	// 保存到基本信息表
+	// Save to basic info table
 	err = gdb.SaveGroupInfo(group)
 	if err != nil {
 		return err
 	}
 
 	if group.CommunityId != "" {
-		// 保存群组社区关联
+		// Save group community association
 		err = gdb.SaveGroupCommunity(group)
 		if err != nil {
 			return err
 		}
 	}
 
-	// 创建者自动加入群组
+	// Creator automatically joins group
 	err = gdb.processCreatorAutoJoin(group, pin)
 	if err != nil {
 		return err
 	}
 
-	// 初始化群组最新聊天记录
+	// Initialize group latest chat record
 	err = gdb.initGroupLatestChat(group.GroupId, pin)
 	if err != nil {
 		return err
 	}
 
-	// 初始化创建者的群列表
+	// Initialize creator's group list
 	err = gdb.initMetaIdContextList(pin.CreateMetaId, group.GroupId, pin)
 	if err != nil {
 		return err
 	}
 
-	// 初始化创建者的群组加入列表
+	// Initialize creator's group join list
 	err = gdb.initGroupMetaIdJoinList(pin.CreateMetaId, group.GroupId, pin)
 	if err != nil {
 		return err
@@ -336,16 +336,16 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理群组修改
+// Process group modification
 func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleGroupCreate protocols.SimpleGroupCreate
 	err := json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
 	if err != nil {
 		return err
 	}
 
-	// 获取现有群组信息
+	// Get existing group info
 	existingGroup, err := gdb.GetGroupInfoByGroupId(simpleGroupCreate.GroupId)
 	if err != nil {
 		return err
@@ -353,7 +353,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 
 	if existingGroup == nil {
 		return errors.New("group not found in db, no modify")
-		// // 如果群组不存在，按创建处理
+		// // If group doesn't exist, process as creation
 		// return gdb.processGroupCreate(pin)
 	}
 
@@ -361,7 +361,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 		return errors.New("group creator not match")
 	}
 
-	// 更新群组信息
+	// Update group info
 	existingGroup.RoomName = simpleGroupCreate.GroupName
 	existingGroup.RoomNote = simpleGroupCreate.GroupNote
 	existingGroup.RoomType = getStringValue(simpleGroupCreate.GroupType)
@@ -369,16 +369,16 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	existingGroup.RoomJoinType = getStringValue(simpleGroupCreate.JoinType)
 	existingGroup.ChatSettingType = getInt64Value(simpleGroupCreate.ChatSettingType)
 	existingGroup.DeleteStatus = getInt64Value(simpleGroupCreate.DeleteStatus)
-	existingGroup.TxId = pin.Id[:len(pin.Id)-2] //截取掉后两位
+	existingGroup.TxId = pin.Id[:len(pin.Id)-2] // Remove last two characters
 	existingGroup.PinId = pin.Id
 	existingGroup.Timestamp = pin.Timestamp
 	existingGroup.BlockHeight = pin.GenesisHeight
 
-	// 处理群组与社区的关系变化
+	// Handle changes in group-community relationship
 	oldCommunityId := existingGroup.CommunityId
 	newCommunityId := simpleGroupCreate.CommunityId
 
-	// 情况一：原来没有communityId，现在有了
+	// Case 1: No communityId before, now has one
 	if oldCommunityId == "" && newCommunityId != "" {
 		existingGroup.CommunityId = newCommunityId
 		err = gdb.SaveGroupCommunity(existingGroup)
@@ -386,41 +386,41 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 			return err
 		}
 	} else if oldCommunityId != "" && newCommunityId == "" {
-		// 情况二：原来有communityId，现在没有了
+		// Case 2: Had communityId before, now doesn't have one
 		err = gdb.DeleteGroupCommunity(oldCommunityId, existingGroup.GroupId)
 		if err != nil {
 			return err
 		}
 		existingGroup.CommunityId = ""
 	} else if oldCommunityId != "" && newCommunityId != "" && oldCommunityId != newCommunityId {
-		// 情况三：原来有communityId，现在有新的不同的communityId
-		// 删除旧的关联
+		// Case 3: Had communityId before, now has a different new communityId
+		// Delete old association
 		err = gdb.DeleteGroupCommunity(oldCommunityId, existingGroup.GroupId)
 		if err != nil {
 			return err
 		}
-		// 保存新的关联
+		// Save new association
 		existingGroup.CommunityId = newCommunityId
 		err = gdb.SaveGroupCommunity(existingGroup)
 		if err != nil {
 			return err
 		}
 	} else if oldCommunityId != "" && newCommunityId != "" && oldCommunityId == newCommunityId {
-		// 情况四：原来有communityId，现在有相同的communityId
-		// 直接更新关联
+		// Case 4: Had communityId before, now has the same communityId
+		// Update association directly
 		err = gdb.SaveGroupCommunity(existingGroup)
 		if err != nil {
 			return err
 		}
 	}
 
-	// 保存到版本信息表
+	// Save to version info table
 	err = gdb.SaveGroupVersionInfo(existingGroup)
 	if err != nil {
 		return err
 	}
 
-	// 保存到基本信息表
+	// Save to basic info table
 	err = gdb.SaveGroupInfo(existingGroup)
 	if err != nil {
 		return err
@@ -429,16 +429,16 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理群组加入
+// Process group join
 func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
-	// 解析协议数据
+	// Parse protocol data
 	var simpleGroupJoin protocols.SimpleGroupJoin
 	err := json.Unmarshal(pin.ContentBody, &simpleGroupJoin)
 	if err != nil {
 		return err
 	}
 
-	// 确定加入状态
+	// Determine join state
 	var groupState models.RoomState
 	if state, ok := simpleGroupJoin.State.(float64); ok {
 		if state == 1 {
@@ -447,14 +447,14 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 			groupState = models.RoomStateOut
 		}
 	} else {
-		groupState = models.RoomStateIn // 默认加入
+		groupState = models.RoomStateIn // Default join
 	}
 
-	// 创建群组加入模型
+	// Create group join model
 	join := &models.TalkGroupJoinModel{
 		GroupId:    simpleGroupJoin.GroupId,
 		MetaId:     pin.CreateMetaId,
-		TxId:       pin.Id[:len(pin.Id)-2], //截取掉后两位
+		TxId:       pin.Id[:len(pin.Id)-2], // Remove last two characters
 		PinId:      pin.Id,
 		Address:    pin.CreateAddress,
 		GroupState: groupState,
@@ -467,23 +467,23 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 		Timestamp:    pin.Timestamp,
 	}
 
-	// 保存群组加入信息（无论状态如何都要保存）
+	// Save group join info (save regardless of state)
 	err = gdb.SaveGroupJoin(join)
 	if err != nil {
 		return err
 	}
 
-	// 获取现有的成员信息
+	// Get existing member info
 	existingPerson, err := gdb.GetGroupPersonByGroupIdAndMetaId(simpleGroupJoin.GroupId, pin.MetaId)
 	if err != nil {
 		return err
 	}
 
-	// 处理成员状态变化
+	// Handle member state changes
 	if existingPerson == nil {
-		// 新成员，根据状态决定是否保存
+		// New member, decide whether to save based on state
 		if groupState == models.RoomStateIn {
-			// 创建群组成员信息
+			// Create group member info
 			person := &models.TalkGroupPerson{
 				GroupId:      simpleGroupJoin.GroupId,
 				MetaId:       pin.CreateMetaId,
@@ -496,31 +496,31 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				BlockHeight:  pin.GenesisHeight,
 			}
 
-			// 保存群组成员信息
+			// Save group member info
 			err = gdb.SaveGroupPerson(person)
 			if err != nil {
 				return err
 			}
 
-			// 添加到用户的群列表
+			// Add to user's group list
 			err = gdb.addGroupToMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin)
 			if err != nil {
 				return err
 			}
 
-			// 添加加入记录到MetaId加入列表
+			// Add join record to MetaId join list
 			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
 			if err != nil {
 				return err
 			}
 		}
-		// 如果是 Out 状态且是新成员，不需要保存
+		// If Out state and new member, no need to save
 	} else {
-		// 现有成员，检查状态变化
+		// Existing member, check state changes
 		if existingPerson.GroupState != groupState {
-			// 状态发生变化，需要更新
+			// State has changed, need to update
 			if groupState == models.RoomStateIn {
-				// 从 Out 变为 In，保存成员信息
+				// Changed from Out to In, save member info
 				existingPerson.GroupState = groupState
 				existingPerson.Timestamp = pin.Timestamp
 				existingPerson.PinId = pin.Id
@@ -530,85 +530,85 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 					return err
 				}
 
-				// 添加到用户的群列表
+				// Add to user's group list
 				err = gdb.addGroupToMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin)
 				if err != nil {
 					return err
 				}
 
-				// 添加加入记录到MetaId加入列表
+				// Add join record to MetaId join list
 				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
 				if err != nil {
 					return err
 				}
 			} else {
-				// 从 In 变为 Out，删除成员信息
+				// Changed from In to Out, delete member info
 				err = gdb.DeleteGroupPerson(simpleGroupJoin.GroupId, pin.MetaId)
 				if err != nil {
 					return err
 				}
 
-				// 从用户的群列表中移除
+				// Remove from user's group list
 				err = gdb.removeGroupFromMetaIdContextList(pin.CreateMetaId, simpleGroupJoin.GroupId)
 				if err != nil {
 					return err
 				}
 
-				// 添加退出记录到MetaId加入列表（状态为out）
+				// Add leave record to MetaId join list (state is out)
 				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer)
 				if err != nil {
 					return err
 				}
 			}
 		}
-		// 如果状态没有变化，不需要更新
+		// If state hasn't changed, no need to update
 	}
 
 	return nil
 }
 
-// 处理创建者自动加入群组
+// Process creator auto join group
 func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pin.PinInscription) error {
-	// 创建群组加入记录
+	// Create group join record
 	join := &models.TalkGroupJoinModel{
 		GroupId:      group.GroupId,
 		MetaId:       pin.CreateMetaId,
-		TxId:         pin.Id[:len(pin.Id)-2], // 截取掉后两位
+		TxId:         pin.Id[:len(pin.Id)-2], // Remove last two characters
 		PinId:        pin.Id,
 		Address:      pin.CreateAddress,
-		GroupState:   models.RoomStateIn, // 创建者默认加入
-		Referrer:     "",                 // 创建者没有推荐人
+		GroupState:   models.RoomStateIn, // Creator joins by default
+		Referrer:     "",                 // Creator has no referrer
 		BlockHeight:  pin.GenesisHeight,
 		Chain:        pin.ChainName,
 		ConfirmState: 0,
 		Timestamp:    pin.Timestamp,
 	}
 
-	// 保存群组加入信息
+	// Save group join info
 	err := gdb.SaveGroupJoin(join)
 	if err != nil {
 		return err
 	}
 
-	// 创建群组成员信息
+	// Create group member info
 	person := &models.TalkGroupPerson{
 		GroupId:      group.GroupId,
 		MetaId:       pin.CreateMetaId,
 		Address:      pin.CreateAddress,
 		UserName:     "",
 		UserNickName: "",
-		GroupState:   models.RoomStateIn, // 创建者默认加入
+		GroupState:   models.RoomStateIn, // Creator joins by default
 		Timestamp:    pin.Timestamp,
 		BlockHeight:  pin.GenesisHeight,
 	}
 
-	// 保存群组成员信息
+	// Save group member info
 	err = gdb.SaveGroupPerson(person)
 	if err != nil {
 		return err
 	}
 
-	// 添加创建者加入记录到MetaId加入列表
+	// Add creator join record to MetaId join list
 	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "")
 	if err != nil {
 		return err
@@ -617,22 +617,22 @@ func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pi
 	return nil
 }
 
-// 初始化群组最新聊天记录
+// Initialize group latest chat record
 func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription) error {
-	// 先获取现有的最新聊天记录
+	// First get existing latest chat record
 	existingLatestChat, err := gdb.getGroupLatestChat(groupId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的最新聊天记录
+	// Create new latest chat record
 	newLatestChat := &models.TalkGroupLatestChat{
 		GroupId:          groupId,
 		Timestamp:        pin.Timestamp,
-		ChatType:         models.ChatTypeMsg, // 默认为消息类型
-		Content:          "",                 // 初始为空
+		ChatType:         models.ChatTypeMsg, // Default to message type
+		Content:          "",                 // Initially empty
 		CreateAddress:    pin.CreateAddress,
-		LastMessagePinId: "", // 初始为空
+		LastMessagePinId: "", // Initially empty
 		MetaId:           pin.CreateMetaId,
 		TxId:             pin.Id[:len(pin.Id)-2],
 		Protocol:         pin.Path,
@@ -643,7 +643,7 @@ func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription)
 		BlockHeight:      pin.GenesisHeight,
 	}
 
-	// 如果不存在现有数据，直接保存
+	// If no existing data, save directly
 	if existingLatestChat == nil {
 		data, err := json.Marshal(newLatestChat)
 		if err != nil {
@@ -653,23 +653,23 @@ func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription)
 		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 判断是否需要更新
+	// Determine if update is needed
 	shouldUpdate := false
 
-	// 1. 先判断pinId是否一样（这里LastMessagePinId都是空的，所以主要比较其他字段）
+	// 1. First check if pinId is the same (here LastMessagePinId are all empty, so mainly compare other fields)
 	if existingLatestChat.LastMessagePinId == newLatestChat.LastMessagePinId {
-		// pinId一样，检查blockHeight是否不一样
+		// pinId is the same, check if blockHeight is different
 		if existingLatestChat.BlockHeight != newLatestChat.BlockHeight {
 			shouldUpdate = true
 		}
 	} else {
-		// pinId不一样，比较timestamp
+		// pinId is different, compare timestamp
 		if newLatestChat.Timestamp > existingLatestChat.Timestamp {
 			shouldUpdate = true
 		}
 	}
 
-	// 如果需要更新，则保存新数据
+	// If update is needed, save new data
 	if shouldUpdate {
 		data, err := json.Marshal(newLatestChat)
 		if err != nil {
@@ -679,11 +679,11 @@ func (gdb *GroupDB) initGroupLatestChat(groupId string, pin *pin.PinInscription)
 		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 不需要更新，直接返回
+	// No update needed, return directly
 	return nil
 }
 
-// 获取群组最新聊天记录（GroupDB内部方法）
+// Get group latest chat record (GroupDB internal method)
 func (gdb *GroupDB) getGroupLatestChat(groupId string) (*models.TalkGroupLatestChat, error) {
 	key := []byte(groupId)
 	value, closer, err := Pb[TalkGroupLatestChatCollection].Get(key)
@@ -704,64 +704,64 @@ func (gdb *GroupDB) getGroupLatestChat(groupId string) (*models.TalkGroupLatestC
 	return &latestChat, nil
 }
 
-// 初始化用户的群列表
+// Initialize user's group list
 func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
-	// 先获取现有的群列表
+	// First get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的群列表项
+	// Create new group list item
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
 		Timestamp:        pin.Timestamp,
-		ChatType:         models.ChatTypeMsg, // 默认为消息类型
-		Content:          "",                 // 初始为空
+		ChatType:         models.ChatTypeMsg, // Default to message type
+		Content:          "",                 // Initially empty
 		CreateAddress:    pin.CreateAddress,
-		LastMessagePinId: "", // 初始为空
+		LastMessagePinId: "", // Initially empty
 		BlockHeight:      pin.GenesisHeight,
 	}
 
-	// 如果不存在现有数据，直接保存
+	// If no existing data, save directly
 	if existingList == nil || len(existingList.Items) == 0 {
-		// 创建群列表
+		// Create group list
 		contextList := &models.MetaIdContextList{
 			MetaId: metaId,
 			Items:  []*models.MetaIdContextItem{newItem},
 		}
 
-		// 序列化数据
+		// Serialize data
 		data, err := json.Marshal(contextList)
 		if err != nil {
 			return err
 		}
 
-		// 使用 MetaId 作为主键保存到 TalkMetaIdContextListCollection
+		// Use MetaId as primary key to save to TalkMetaIdContextListCollection
 		key := []byte(metaId)
 		return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 检查是否已存在该群组
+	// Check if group already exists
 	found := false
 	shouldUpdate := false
 	for i, item := range existingList.Items {
 		if item.GroupId == groupId {
-			// 判断是否需要更新
+			// Determine if update is needed
 			if item.LastMessagePinId == newItem.LastMessagePinId {
-				// LastMessagePinId一样，检查blockHeight是否不一样
+				// LastMessagePinId is the same, check if blockHeight is different
 				if item.BlockHeight != newItem.BlockHeight {
 					shouldUpdate = true
 				}
 			} else {
-				// LastMessagePinId不一样，比较timestamp
+				// LastMessagePinId is different, compare timestamp
 				if newItem.Timestamp > item.Timestamp {
 					shouldUpdate = true
 				}
 			}
 
 			if shouldUpdate {
-				// 更新现有项
+				// Update existing item
 				existingList.Items[i] = newItem
 			}
 			found = true
@@ -769,26 +769,26 @@ func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinIn
 		}
 	}
 
-	// 如果不存在该群组，添加新项
+	// If group doesn't exist, add new item
 	if !found {
 		existingList.Items = append(existingList.Items, newItem)
 		shouldUpdate = true
 	}
 
-	// 如果需要更新，保存数据
+	// If update is needed, save data
 	if shouldUpdate {
-		// 按时间戳倒序排序
+		// Sort by timestamp in reverse order
 		gdb.sortContextListByTimestamp(existingList)
 		return gdb.saveMetaIdContextList(existingList)
 	}
 
-	// 不需要更新，直接返回
+	// No update needed, return directly
 	return nil
 }
 
-// 初始化用户的群组加入列表
+// Initialize user's group join list
 func (gdb *GroupDB) initGroupMetaIdJoinList(metaId, groupId string, pin *pin.PinInscription) error {
-	// 创建初始的加入记录项
+	// Create initial join record item
 	joinItem := &GroupMetaIdJoinItem{
 		JoinPinId:     pin.Id,
 		JoinType:      "create",
@@ -800,13 +800,13 @@ func (gdb *GroupDB) initGroupMetaIdJoinList(metaId, groupId string, pin *pin.Pin
 		Chain:         pin.ChainName,
 	}
 
-	// 创建加入列表
+	// Create join list
 	joinList := &GroupMetaIdJoinList{
 		MetaId: metaId,
 		Items:  []*GroupMetaIdJoinItem{joinItem},
 	}
 
-	// 序列化数据
+	// Serialize data
 	data, err := json.Marshal(joinList)
 	if err != nil {
 		return err
@@ -817,31 +817,31 @@ func (gdb *GroupDB) initGroupMetaIdJoinList(metaId, groupId string, pin *pin.Pin
 	return Pb[TalkGroupMetaIdJoinCollection].Set(key, data, pebble.Sync)
 }
 
-// 更新用户的群列表（添加群组）
+// Update user's group list (add group)
 func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
-	// 获取现有的群列表
+	// Get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
 		return err
 	}
 
-	// 从TalkGroupLatestChatCollection获取群组最新聊天信息
+	// Get group latest chat info from TalkGroupLatestChatCollection
 	latestChat, err := gdb.getGroupLatestChat(groupId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的群列表项
+	// Create new group list item
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
 		Timestamp:        pin.Timestamp,
-		ChatType:         models.ChatTypeMsg, // 默认为消息类型
-		Content:          "",                 // 初始为空
+		ChatType:         models.ChatTypeMsg, // Default to message type
+		Content:          "",                 // Initially empty
 		CreateAddress:    pin.CreateAddress,
-		LastMessagePinId: "", // 初始为空
+		LastMessagePinId: "", // Initially empty
 	}
 
-	// 如果获取到了最新聊天信息，使用其数据
+	// If latest chat info is obtained, use its data
 	if latestChat != nil {
 		newItem.Content = latestChat.Content
 		newItem.LastMessagePinId = latestChat.LastMessagePinId
@@ -850,26 +850,26 @@ func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin
 		newItem.BlockHeight = latestChat.BlockHeight
 	}
 
-	// 检查是否已存在该群组
+	// Check if group already exists
 	found := false
 	shouldUpdate := false
 	for i, item := range existingList.Items {
 		if item.GroupId == groupId {
-			// 判断是否需要更新
+			// Determine if update is needed
 			if item.LastMessagePinId == newItem.LastMessagePinId {
-				// LastMessagePinId一样，检查blockHeight是否不一样
+				// LastMessagePinId is the same, check if blockHeight is different
 				if item.BlockHeight != newItem.BlockHeight {
 					shouldUpdate = true
 				}
 			} else {
-				// LastMessagePinId不一样，比较timestamp
+				// LastMessagePinId is different, compare timestamp
 				if newItem.Timestamp > item.Timestamp {
 					shouldUpdate = true
 				}
 			}
 
 			if shouldUpdate {
-				// 更新现有项
+				// Update existing item
 				existingList.Items[i] = newItem
 			}
 			found = true
@@ -877,32 +877,32 @@ func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin
 		}
 	}
 
-	// 如果不存在该群组，添加新项
+	// If group doesn't exist, add new item
 	if !found {
 		existingList.Items = append(existingList.Items, newItem)
 		shouldUpdate = true
 	}
 
-	// 如果需要更新，保存数据
+	// If update is needed, save data
 	if shouldUpdate {
-		// 按时间戳倒序排序
+		// Sort by timestamp in reverse order
 		gdb.sortContextListByTimestamp(existingList)
 		return gdb.saveMetaIdContextList(existingList)
 	}
 
-	// 不需要更新，直接返回
+	// No update needed, return directly
 	return nil
 }
 
-// 从用户的群列表中移除群组
+// Remove group from user's group list
 func (gdb *GroupDB) removeGroupFromMetaIdContextList(metaId, groupId string) error {
-	// 获取现有的群列表
+	// Get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
 		return err
 	}
 
-	// 移除指定群组
+	// Remove specified group
 	var newItems []*models.MetaIdContextItem
 	for _, item := range existingList.Items {
 		if item.GroupId != groupId {
@@ -912,11 +912,11 @@ func (gdb *GroupDB) removeGroupFromMetaIdContextList(metaId, groupId string) err
 
 	existingList.Items = newItems
 
-	// 保存更新后的群列表
+	// Save updated group list
 	return gdb.saveMetaIdContextList(existingList)
 }
 
-// 获取用户的群列表
+// Get user's group list
 func (gdb *GroupDB) getMetaIdContextList(metaId string) (*models.MetaIdContextList, error) {
 	key := []byte(metaId)
 	value, closer, err := Pb[TalkMetaIdContextListCollection].Get(key)
@@ -937,7 +937,7 @@ func (gdb *GroupDB) getMetaIdContextList(metaId string) (*models.MetaIdContextLi
 	return &contextList, nil
 }
 
-// 保存用户的群列表
+// Save user's group list
 func (gdb *GroupDB) saveMetaIdContextList(contextList *models.MetaIdContextList) error {
 	data, err := json.Marshal(contextList)
 	if err != nil {
@@ -948,9 +948,9 @@ func (gdb *GroupDB) saveMetaIdContextList(contextList *models.MetaIdContextList)
 	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 }
 
-// 按时间戳倒序排序群列表
+// Sort group list by timestamp in reverse order
 func (gdb *GroupDB) sortContextListByTimestamp(contextList *models.MetaIdContextList) {
-	// 简单的冒泡排序，按时间戳倒序
+	// Simple bubble sort, reverse order by timestamp
 	for i := 0; i < len(contextList.Items)-1; i++ {
 		for j := 0; j < len(contextList.Items)-1-i; j++ {
 			if contextList.Items[j].Timestamp < contextList.Items[j+1].Timestamp {
@@ -960,7 +960,7 @@ func (gdb *GroupDB) sortContextListByTimestamp(contextList *models.MetaIdContext
 	}
 }
 
-// 辅助函数：获取字符串值
+// Helper function: get string value
 func getStringValue(v interface{}) string {
 	if v == nil {
 		return ""
@@ -971,7 +971,7 @@ func getStringValue(v interface{}) string {
 	return ""
 }
 
-// 辅助函数：获取int64值
+// Helper function: get int64 value
 func getInt64Value(v interface{}) int64 {
 	if v == nil {
 		return 0
@@ -988,26 +988,26 @@ func getInt64Value(v interface{}) int64 {
 	}
 }
 
-// 保存群组加入信息
+// Save group join info
 func (gdb *GroupDB) SaveGroupJoin(join *models.TalkGroupJoinModel) error {
 	data, err := json.Marshal(join)
 	if err != nil {
 		return err
 	}
 
-	// 使用 GroupId_PinId 作为主键
+	// Use GroupId_PinId as primary key
 	key1 := []byte(join.GroupId + "_" + join.PinId)
 	err = Pb[TalkGroupJoinCollection].Set(key1, data, pebble.Sync)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId_GroupId 作为主键
+	// Use PinId_GroupId as primary key
 	key2 := []byte(join.PinId + "_" + join.GroupId)
 	return Pb[TalkGroupJoinCollection].Set(key2, data, pebble.Sync)
 }
 
-// 根据群组ID和PinId获取加入信息
+// Get join info by group ID and PinId
 func (gdb *GroupDB) GetGroupJoinByGroupIdAndPinId(groupId, pinId string) (*models.TalkGroupJoinModel, error) {
 	key := []byte(groupId + "_" + pinId)
 	value, closer, err := Pb[TalkGroupJoinCollection].Get(key)
@@ -1028,16 +1028,16 @@ func (gdb *GroupDB) GetGroupJoinByGroupIdAndPinId(groupId, pinId string) (*model
 	return &join, nil
 }
 
-// 获取群组成员列表
+// Get group member list
 func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinModel, error) {
 	var members []*models.TalkGroupJoinModel
 
-	// 使用前缀查询，因为key是groupId_pinId格式
+	// Use prefix query, because key is groupId_pinId format
 	prefix := []byte(groupId + "_")
 	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
 		// iter, err := Pb[TalkGroupJoinCollection].NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以groupId_开头的key
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with groupId_
 	})
 	if err != nil {
 		return nil, err
@@ -1050,7 +1050,7 @@ func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinMode
 		if err != nil {
 			continue
 		}
-		// 只返回在群组中的成员
+		// Only return members in the group
 		if join.GroupState == models.RoomStateIn {
 			members = append(members, &join)
 		}
@@ -1059,42 +1059,138 @@ func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinMode
 	return members, nil
 }
 
-// 保存群组成员信息
+// Get group member list (with pagination support)
+func (gdb *GroupDB) GetGroupMembersWithPagination(groupId string, cursor, size int64) ([]*models.TalkGroupJoinModel, int64, error) {
+	var members []*models.TalkGroupJoinModel
+	var total int64 = 0
+
+	// Use prefix query, because key is groupId_pinId format
+	prefix := []byte(groupId + "_")
+	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with groupId_
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	// First calculate total count
+	for iter.First(); iter.Valid(); iter.Next() {
+		var join models.TalkGroupJoinModel
+		err := json.Unmarshal(iter.Value(), &join)
+		if err != nil {
+			continue
+		}
+		// Only count members in the group
+		if join.GroupState == models.RoomStateIn {
+			total++
+		}
+	}
+
+	// Restart iteration for pagination
+	iter, err = Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	count := int64(0)
+	skip := cursor
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var join models.TalkGroupJoinModel
+		err := json.Unmarshal(iter.Value(), &join)
+		if err != nil {
+			continue
+		}
+		// Only return members in the group
+		if join.GroupState == models.RoomStateIn {
+			if count < skip {
+				count++
+				continue
+			}
+
+			if int64(len(members)) >= size {
+				break
+			}
+
+			members = append(members, &join)
+		}
+	}
+
+	return members, total, nil
+}
+
+// Get group member count
+func (gdb *GroupDB) GetGroupMemberCount(groupId string) (int64, error) {
+	var count int64 = 0
+
+	// Use prefix query, because key is groupId_pinId format
+	prefix := []byte(groupId + "_")
+	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with groupId_
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var join models.TalkGroupJoinModel
+		err := json.Unmarshal(iter.Value(), &join)
+		if err != nil {
+			continue
+		}
+		// Only count members in the group
+		if join.GroupState == models.RoomStateIn {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// Save group member info
 func (gdb *GroupDB) SaveGroupPerson(person *models.TalkGroupPerson) error {
 	data, err := json.Marshal(person)
 	if err != nil {
 		return err
 	}
 
-	// 使用 GroupId_MetaId 作为主键
+	// Use GroupId_MetaId as primary key
 	key1 := []byte(person.GroupId + "_" + person.MetaId)
 	err = Pb[TalkGroupPersonCollection].Set(key1, data, pebble.Sync)
 	if err != nil {
 		return err
 	}
 
-	// 使用 MetaId_GroupId 作为主键
+	// Use MetaId_GroupId as primary key
 	key2 := []byte(person.MetaId + "_" + person.GroupId)
 	return Pb[TalkGroupPersonCollection].Set(key2, data, pebble.Sync)
 }
 
-// 删除群组成员信息
+// Delete group member info
 func (gdb *GroupDB) DeleteGroupPerson(groupId, metaId string) error {
-	// 使用 GroupId_MetaId 作为主键
+	// Use GroupId_MetaId as primary key
 	key1 := []byte(groupId + "_" + metaId)
 	err := Pb[TalkGroupPersonCollection].Delete(key1, pebble.Sync)
 	if err != nil {
 		return err
 	}
 
-	// 使用 MetaId_GroupId 作为主键
+	// Use MetaId_GroupId as primary key
 	key2 := []byte(metaId + "_" + groupId)
 	return Pb[TalkGroupPersonCollection].Delete(key2, pebble.Sync)
 }
 
-// 根据群组ID和MetaId获取成员信息
+// Get member info by group ID and MetaId
 func (gdb *GroupDB) GetGroupPersonByGroupIdAndMetaId(groupId, metaId string) (*models.TalkGroupPerson, error) {
-	// 构造 GroupId_MetaId
+	// Construct GroupId_MetaId
 	key := []byte(groupId + "_" + metaId)
 	value, closer, err := Pb[TalkGroupPersonCollection].Get(key)
 	if err != nil {
@@ -1114,9 +1210,9 @@ func (gdb *GroupDB) GetGroupPersonByGroupIdAndMetaId(groupId, metaId string) (*m
 	return &person, nil
 }
 
-// 根据MetaId和GroupId获取成员信息
+// Get member info by MetaId and group ID
 func (gdb *GroupDB) GetGroupPersonByMetaIdAndGroupId(metaId, groupId string) (*models.TalkGroupPerson, error) {
-	// 构造 MetaId_GroupId
+	// Construct MetaId_GroupId
 	key := []byte(metaId + "_" + groupId)
 	value, closer, err := Pb[TalkGroupPersonCollection].Get(key)
 	if err != nil {
@@ -1136,15 +1232,15 @@ func (gdb *GroupDB) GetGroupPersonByMetaIdAndGroupId(metaId, groupId string) (*m
 	return &person, nil
 }
 
-// 获取群组成员列表
+// Get group member list
 func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerson, error) {
 	var persons []*models.TalkGroupPerson
 
-	// 使用前缀查询，因为key是groupId_metaId格式
+	// Use prefix query, because key is groupId_metaId format
 	prefix := []byte(groupId + "_")
 	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix, 0xff), // 使用0xff作为上界，确保只查询以groupId_开头的key
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with groupId_
 	})
 	if err != nil {
 		return nil, err
@@ -1157,7 +1253,7 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 		if err != nil {
 			continue
 		}
-		// 只返回在群组中的成员
+		// Only return members in the group
 		if person.GroupState == models.RoomStateIn {
 			persons = append(persons, &person)
 		}
@@ -1166,21 +1262,21 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 	return persons, nil
 }
 
-// 根据MetaId获取用户加入的群组列表
-func (gdb *GroupDB) GetGroupListByMetaId(metaId string, page, size int64) ([]*models.TalkGroupModel, error) {
+// Get group list joined by user based on MetaId
+func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
 
-	// 获取用户的群组加入列表
+	// Get user's group join list
 	joinList, err := gdb.getGroupMetaIdJoinList(metaId)
 	if err != nil {
 		return nil, err
 	}
 
-	// 计算分页
-	start := (page - 1) * size
-	end := start + size
+	// Calculate pagination
+	start := cursor
+	end := cursor + size
 
-	// 获取群组信息
+	// Get group info
 	for i, item := range joinList.Items {
 		if int64(i) < start {
 			continue
@@ -1189,7 +1285,7 @@ func (gdb *GroupDB) GetGroupListByMetaId(metaId string, page, size int64) ([]*mo
 			break
 		}
 
-		// 只返回在群组中的记录
+		// Only return records in the group
 		if item.GroupState == models.RoomStateIn {
 			group, err := gdb.GetGroupInfoByGroupId(item.JoinPinId)
 			if err != nil {
@@ -1204,25 +1300,25 @@ func (gdb *GroupDB) GetGroupListByMetaId(metaId string, page, size int64) ([]*mo
 	return groups, nil
 }
 
-// 群组MetaId加入记录项
+// Group MetaId join record item
 type GroupMetaIdJoinItem struct {
-	JoinPinId     string           `json:"joinPinId"`     // 加入的PinId
-	JoinType      string           `json:"joinType"`      // 加入类型：create, join
-	JoinTimestamp int64            `json:"joinTimestamp"` // 加入时间戳
-	GroupState    models.RoomState `json:"groupState"`    // 群组状态：1-in, -1-out
-	Address       string           `json:"address"`       // 用户地址
-	Referrer      string           `json:"referrer"`      // 推荐人
-	BlockHeight   int64            `json:"blockHeight"`   // 区块高度
-	Chain         string           `json:"chain"`         // 链类型
+	JoinPinId     string           `json:"joinPinId"`     // Join PinId
+	JoinType      string           `json:"joinType"`      // Join type: create, join
+	JoinTimestamp int64            `json:"joinTimestamp"` // Join timestamp
+	GroupState    models.RoomState `json:"groupState"`    // Group state: 1-in, -1-out
+	Address       string           `json:"address"`       // User address
+	Referrer      string           `json:"referrer"`      // Referrer
+	BlockHeight   int64            `json:"blockHeight"`   // Block height
+	Chain         string           `json:"chain"`         // Chain type
 }
 
-// 群组MetaId加入列表
+// Group MetaId join list
 type GroupMetaIdJoinList struct {
-	MetaId string                 `json:"metaId"` // 用户MetaId
-	Items  []*GroupMetaIdJoinItem `json:"items"`  // 加入记录列表
+	MetaId string                 `json:"metaId"` // User MetaId
+	Items  []*GroupMetaIdJoinItem `json:"items"`  // Join record list
 }
 
-// 获取用户的群组加入列表
+// Get user's group join list
 func (gdb *GroupDB) getGroupMetaIdJoinList(metaId string) (*GroupMetaIdJoinList, error) {
 	key := []byte(metaId)
 	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
@@ -1243,7 +1339,7 @@ func (gdb *GroupDB) getGroupMetaIdJoinList(metaId string) (*GroupMetaIdJoinList,
 	return &joinList, nil
 }
 
-// 保存用户的群组加入列表
+// Save user's group join list
 func (gdb *GroupDB) saveGroupMetaIdJoinList(joinList *GroupMetaIdJoinList, groupId string) error {
 	data, err := json.Marshal(joinList)
 	if err != nil {
@@ -1255,15 +1351,15 @@ func (gdb *GroupDB) saveGroupMetaIdJoinList(joinList *GroupMetaIdJoinList, group
 	return Pb[TalkGroupMetaIdJoinCollection].Set(key, data, pebble.Sync)
 }
 
-// 添加群组加入记录到用户的加入列表
+// Add group join record to user's join list
 func (gdb *GroupDB) addGroupJoinToMetaIdList(metaId, groupId, pinId, joinType string, pin *pin.PinInscription, groupState models.RoomState, referrer string) error {
-	// 获取现有的加入列表
+	// Get existing join list
 	existingList, err := gdb.getGroupMetaIdJoinList(metaId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的加入记录项
+	// Create new join record item
 	newItem := &GroupMetaIdJoinItem{
 		JoinPinId:     pinId,
 		JoinType:      joinType,
@@ -1275,33 +1371,33 @@ func (gdb *GroupDB) addGroupJoinToMetaIdList(metaId, groupId, pinId, joinType st
 		Chain:         pin.ChainName,
 	}
 
-	// 检查是否已存在该群组的记录
+	// Check if group record already exists
 	found := false
 	for i, item := range existingList.Items {
-		// 通过JoinPinId来判断是否已存在（因为每次加入都有不同的PinId）
+		// Determine if already exists by JoinPinId (because each join has different PinId)
 		if item.JoinPinId == pinId {
-			// 更新现有项
+			// Update existing item
 			existingList.Items[i] = newItem
 			found = true
 			break
 		}
 	}
 
-	// 如果不存在，添加新项
+	// If not found, add new item
 	if !found {
 		existingList.Items = append(existingList.Items, newItem)
 	}
 
-	// 按时间戳倒序排序
+	// Sort by timestamp in reverse order
 	gdb.sortGroupJoinListByTimestamp(existingList)
 
-	// 保存更新后的加入列表
+	// Save updated join list
 	return gdb.saveGroupMetaIdJoinList(existingList, groupId)
 }
 
-// 按时间戳倒序排序群组加入列表
+// Sort group join list by timestamp in reverse order
 func (gdb *GroupDB) sortGroupJoinListByTimestamp(joinList *GroupMetaIdJoinList) {
-	// 简单的冒泡排序，按时间戳倒序
+	// Simple bubble sort, reverse order by timestamp
 	for i := 0; i < len(joinList.Items)-1; i++ {
 		for j := 0; j < len(joinList.Items)-1-i; j++ {
 			if joinList.Items[j].JoinTimestamp < joinList.Items[j+1].JoinTimestamp {

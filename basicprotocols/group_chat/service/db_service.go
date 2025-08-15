@@ -10,11 +10,11 @@ import (
 
 type DbService struct{}
 
-// 通用查询方法 - 根据前缀查询数据
+// Generic query method - Query data by prefix
 func (s *DbService) QueryByPrefix(collectionName, prefix string, limit int) ([]map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
-		return nil, fmt.Errorf("数据库 %s 不存在", collectionName)
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
 	}
 
 	var results []map[string]interface{}
@@ -29,10 +29,10 @@ func (s *DbService) QueryByPrefix(collectionName, prefix string, limit int) ([]m
 		key := string(iter.Key())
 		value := string(iter.Value())
 
-		// 尝试解析JSON
+		// Try to parse JSON
 		var jsonData interface{}
 		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
-			// 如果不是JSON，直接使用字符串
+			// If not JSON, use string directly
 			jsonData = value
 		}
 
@@ -46,23 +46,23 @@ func (s *DbService) QueryByPrefix(collectionName, prefix string, limit int) ([]m
 	return results, nil
 }
 
-// 通用查询方法 - 根据key查询单条数据
+// Generic query method - Query single data by key
 func (s *DbService) QueryByKey(collectionName, key string) (map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
-		return nil, fmt.Errorf("数据库 %s 不存在", collectionName)
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
 	}
 
 	value, closer, err := dbInstance.Get([]byte(key))
 	if err != nil {
-		return nil, fmt.Errorf("查询失败: %v", err)
+		return nil, fmt.Errorf("query failed: %v", err)
 	}
 	defer closer.Close()
 
-	// 尝试解析JSON
+	// Try to parse JSON
 	var jsonData interface{}
 	if err := json.Unmarshal(value, &jsonData); err != nil {
-		// 如果不是JSON，直接使用字符串
+		// If not JSON, use string directly
 		jsonData = string(value)
 	}
 
@@ -72,11 +72,11 @@ func (s *DbService) QueryByKey(collectionName, key string) (map[string]interface
 	}, nil
 }
 
-// 通用查询方法 - 获取所有数据（限制数量）
+// Generic query method - Get all data (with limit)
 func (s *DbService) QueryAll(collectionName string, limit int) ([]map[string]interface{}, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
-		return nil, fmt.Errorf("数据库 %s 不存在", collectionName)
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
 	}
 
 	var results []map[string]interface{}
@@ -88,10 +88,10 @@ func (s *DbService) QueryAll(collectionName string, limit int) ([]map[string]int
 		key := string(iter.Key())
 		value := string(iter.Value())
 
-		// 尝试解析JSON
+		// Try to parse JSON
 		var jsonData interface{}
 		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
-			// 如果不是JSON，直接使用字符串
+			// If not JSON, use string directly
 			jsonData = value
 		}
 
@@ -105,148 +105,148 @@ func (s *DbService) QueryAll(collectionName string, limit int) ([]map[string]int
 	return results, nil
 }
 
-// 社区相关查询方法
+// Community-related query methods
 
-// 查询社区信息
+// Query community info
 func (s *DbService) QueryCommunityInfo(communityId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkCommunityInfoCollection, communityId)
 }
 
-// 查询所有社区信息
+// Query all community info
 func (s *DbService) QueryAllCommunityInfo(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkCommunityInfoCollection, limit)
 }
 
-// 查询社区版本信息
+// Query community version info
 func (s *DbService) QueryCommunityVersionInfo(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
 	return s.QueryByPrefix(db.TalkCommunityVersionInfoCollection, prefix, limit)
 }
 
-// 查询社区地址信息
+// Query community address info
 func (s *DbService) QueryCommunityAddress(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
 	return s.QueryByPrefix(db.TalkCommunityAddressCollection, prefix, limit)
 }
 
-// 查询社区加入记录
+// Query community join records
 func (s *DbService) QueryCommunityJoin(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
 	return s.QueryByPrefix(db.TalkCommunityJoinCollection, prefix, limit)
 }
 
-// 查询社区成员
+// Query community members
 func (s *DbService) QueryCommunityPerson(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
 	return s.QueryByPrefix(db.TalkCommunityPersonCollection, prefix, limit)
 }
 
-// 群组相关查询方法
+// Group-related query methods
 
-// 查询群组信息
+// Query group info
 func (s *DbService) QueryGroupInfo(groupId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkGroupInfoCollection, groupId)
 }
 
-// 查询所有群组信息
+// Query all group info
 func (s *DbService) QueryAllGroupInfo(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkGroupInfoCollection, limit)
 }
 
-// 查询群组版本信息
+// Query group version info
 func (s *DbService) QueryGroupVersionInfo(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
 	return s.QueryByPrefix(db.TalkGroupVersionInfoCollection, prefix, limit)
 }
 
-// 查询群组社区关联
+// Query group community association
 func (s *DbService) QueryGroupCommunity(communityId string, limit int) ([]map[string]interface{}, error) {
 	prefix := communityId + "_"
 	return s.QueryByPrefix(db.TalkGroupCommunityCollection, prefix, limit)
 }
 
-// 查询群组加入记录
+// Query group join records
 func (s *DbService) QueryGroupJoin(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
 	return s.QueryByPrefix(db.TalkGroupJoinCollection, prefix, limit)
 }
 
-// 查询群组成员
+// Query group members
 func (s *DbService) QueryGroupPerson(groupId string, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
 	return s.QueryByPrefix(db.TalkGroupPersonCollection, prefix, limit)
 }
 
-// 用户群列表相关查询方法
+// User group list related query methods
 
-// 查询用户的群列表
+// Query user's group list
 func (s *DbService) QueryMetaIdContextList(metaId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkMetaIdContextListCollection, metaId)
 }
 
-// 查询所有用户的群列表
+// Query all users' group lists
 func (s *DbService) QueryAllMetaIdContextList(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkMetaIdContextListCollection, limit)
 }
 
-// 消息队列相关查询方法
+// Message queue related query methods
 
-// 查询聊天队列
+// Query chat queue
 func (s *DbService) QueryGroupChatQueue(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkGroupChatQueueCollection, limit)
 }
 
-// 聊天相关查询方法
+// Chat related query methods
 
-// 查询群聊消息
+// Query group chat message
 func (s *DbService) QueryGroupChatPin(pinId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkGroupChatPinCollection, pinId)
 }
 
-// 查询群聊消息（按时间戳范围）
+// Query group chat message (by timestamp range)
 func (s *DbService) QueryGroupChatByTimestamp(groupId string, startTime, endTime int64, limit int) ([]map[string]interface{}, error) {
 	prefix := groupId + "_"
 	return s.QueryByPrefix(db.TalkGroupChatTimestampCollection, prefix, limit)
 }
 
-// 查询红包消息
+// Query lucky bag message
 func (s *DbService) QueryRedEnvelopePin(pinId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkGroupLuckyBagPinCollection, pinId)
 }
 
-// 查询所有红包消息
+// Query all lucky bag messages
 func (s *DbService) QueryAllRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkGroupLuckyBagPinCollection, limit)
 }
 
-// 查询抢红包记录
+// Query grab lucky bag records
 func (s *DbService) QueryOpenRedEnvelopePin(pinId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkGroupOpenLuckyBagPinCollection, pinId)
 }
 
-// 查询所有抢红包记录
+// Query all grab lucky bag records
 func (s *DbService) QueryAllOpenRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkGroupOpenLuckyBagPinCollection, limit)
 }
 
-// 查询剩余红包
+// Query remaining lucky bag
 func (s *DbService) QueryResidueRedEnvelopePin(pinId string) (map[string]interface{}, error) {
 	return s.QueryByKey(db.TalkGroupResidueLuckyBagPinCollection, pinId)
 }
 
-// 查询所有剩余红包
+// Query all remaining lucky bags
 func (s *DbService) QueryAllResidueRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
 	return s.QueryAll(db.TalkGroupResidueLuckyBagPinCollection, limit)
 }
 
-// 统计相关方法
+// Statistics related methods
 
-// 获取数据库统计信息
+// Get database statistics
 func (s *DbService) GetDatabaseStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	for collectionName, dbInstance := range db.Pb {
-		// 获取数据库大小
+		// Get database size
 		iter, _ := dbInstance.NewIter(nil)
 		defer iter.Close()
 
@@ -263,11 +263,11 @@ func (s *DbService) GetDatabaseStats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
-// 获取指定数据库的记录数量
+// Get record count for specified database
 func (s *DbService) GetCollectionCount(collectionName string) (int, error) {
 	dbInstance, exists := db.Pb[collectionName]
 	if !exists {
-		return 0, fmt.Errorf("数据库 %s 不存在", collectionName)
+		return 0, fmt.Errorf("database %s does not exist", collectionName)
 	}
 
 	iter, _ := dbInstance.NewIter(nil)
@@ -281,7 +281,7 @@ func (s *DbService) GetCollectionCount(collectionName string) (int, error) {
 	return count, nil
 }
 
-// 获取所有可用的数据库名称
+// Get all available database names
 func (s *DbService) GetAvailableCollections() []string {
 	var collections []string
 	for collectionName := range db.Pb {

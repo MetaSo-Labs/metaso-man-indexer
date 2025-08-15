@@ -5,20 +5,20 @@ package protocols
 
 	{
 	  "communityId": "hash(metaname)",
-	  "name": "社区名称",
-	  "description": "社区描述",
+	  "name": "Community name",
+	  "description": "Community description",
 	  "icon": "https://example.com/icon.png",
 	  "cover": "https://example.com/cover.png",
 	  "metaName": "metaname",
 	  "metaNameNft": "meta/codehash/genesis/tokenIndex",
 	  "admins": ["metaId1", "metaId2"],
-	  "reserved": "ECDH签名"
+	  "reserved": "ECDH signature"
 	}
 
 *
 */
 type SimpleCommunity struct {
-	CommunityId string   `json:"communityId"` //{社区Id: hash(metaname) }
+	CommunityId string   `json:"communityId"` //{Community ID: hash(metaname) }
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Icon        string   `json:"icon"`
@@ -26,7 +26,7 @@ type SimpleCommunity struct {
 	MetaName    string   `json:"metaName"`
 	MetaNameNft string   `json:"metaNameNft"` //meta/codehash/genesis/tokenIndex
 	Admins      []string `json:"admins"`
-	Reserved    string   `json:"reserved"` //show签名，用生成节点的metaId用户的00私钥对metaName进行签名 - ECDH
+	Reserved    string   `json:"reserved"` //Show signature, use 00 private key of metaId user who generates node to sign metaName - ECDH
 }
 
 /*
@@ -40,8 +40,8 @@ type SimpleCommunity struct {
 *
 */
 type SimpleCommunityJoin struct {
-	CommunityId string      `json:"communityId"` //{社区Id: hash(metaname) }
-	State       interface{} `json:"state"`       //加入状态：1-加入，-1-离开
+	CommunityId string      `json:"communityId"` //{Community ID: hash(metaname) }
+	State       interface{} `json:"state"`       //Join state: 1-join, -1-leave
 }
 
 /*
@@ -55,9 +55,9 @@ type SimpleCommunityJoin struct {
 *
 */
 type SimpleGroupJoin struct {
-	GroupId  string      `json:"groupId"`  //{群组Id: hash(metaname) }
-	State    interface{} `json:"state"`    //加入状态：1-加入，-1-离开
-	Referrer string      `json:"referrer"` //推荐人
+	GroupId  string      `json:"groupId"`  //{Group ID: hash(metaname) }
+	State    interface{} `json:"state"`    //Join state: 1-join, -1-leave
+	Referrer string      `json:"referrer"` //Referrer
 }
 
 /*
@@ -66,8 +66,8 @@ type SimpleGroupJoin struct {
 	{
 	  "groupId": "group123",
 	  "communityId": "hash(metaname)",
-	  "groupName": "群组名称",
-	  "groupNote": "群组公告",
+	  "groupName": "Group name",
+	  "groupNote": "Group announcement",
 	  "timestamp": 1234567890,
 	  "groupType": "1",
 	  "status": "1",
@@ -87,14 +87,14 @@ type SimpleGroupCreate struct {
 	GroupName       string      `json:"groupName"`
 	GroupNote       string      `json:"groupNote"`
 	Timestamp       interface{} `json:"timestamp"`
-	GroupType       interface{} `json:"groupType"`    //创建房间的类型 ”1“不加密 “2”加密 加密采用AES加密算法
-	Status          interface{} `json:"status"`       //"1" 未加密时为“1” 加密时为加密后的信息, 保留字段
-	JoinType        interface{} `json:"type"`         //加入方式，1为密码，2为nft, 3-FT限制
-	TickId          string      `json:"tickId"`       //FT-限制需要 暂mrc20
-	CollectionId    string      `json:"collectionId"` //NFT-限制需要 暂mrc721
+	GroupType       interface{} `json:"groupType"`    //Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
+	Status          interface{} `json:"status"`       //"1" when not encrypted is "1", when encrypted is encrypted information, reserved field
+	JoinType        interface{} `json:"type"`         //Join method, 1 is password, 2 is nft, 3-FT limit
+	TickId          string      `json:"tickId"`       //FT-limit requires temporarily mrc20
+	CollectionId    string      `json:"collectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount     interface{} `json:"limitAmount"`
-	ChatSettingType interface{} `json:"chatSettingType"` //用于设置发言限制， 0-所有人，1-管理员
-	DeleteStatus    interface{} `json:"deleteStatus"`    //删除状态，0-正常，1-删除
+	ChatSettingType interface{} `json:"chatSettingType"` //Used to set speech restrictions, 0-everyone, 1-administrators
+	DeleteStatus    interface{} `json:"deleteStatus"`    //Delete status, 0-normal, 1-deleted
 }
 
 /*
@@ -102,8 +102,8 @@ type SimpleGroupCreate struct {
 
 	{
 	  "groupId": "group123",
-	  "nickName": "用户昵称",
-	  "content": "聊天内容",
+	  "nickName": "User nickname",
+	  "content": "Chat content",
 	  "contentType": "text",
 	  "encryption": "none",
 	  "timestamp": 1234567890,
@@ -131,7 +131,7 @@ type SimpleGroupChat struct {
 	  "groupId": "group123",
 	//   "channelId": "channel123",
 	  "fileType": "png/jpg/gif",
-	  "nickName": "用户昵称",
+	  "nickName": "User nickname",
 	  "timestamp": 1234567890,
 	  "replyTx": "txId"
 	}
@@ -139,7 +139,7 @@ type SimpleGroupChat struct {
 *
 */
 type SimpleFileGroupChat struct {
-	Encrypt    string `json:"encrypt"`    //是否加密和加密方式,0 为不加密；1为采用AES加密。默认不加密
+	Encrypt    string `json:"encrypt"`    //Whether to encrypt and encryption method, 0 for no encryption; 1 for AES encryption. Default no encryption
 	Attachment string `json:"attachment"` //metafile://pinId.jpg
 	GroupId    string `json:"groupId"`
 	// ChannelId  string      `json:"channelId"`
@@ -157,7 +157,7 @@ type SimpleFileGroupChat struct {
 	  "groupId": "group123",
 	  "code": "redcode",
 	  "createTime": 1234567890,
-	  "content": "恭喜发财",
+	  "content": "Congratulations and prosperity",
 	  "img": "https://example.com/red.png",
 	  "imgType": "png",
 	  "amount": "100",
@@ -190,9 +190,9 @@ type SimpleGroupLuckyBag struct {
 	Count               interface{}       `json:"count"`
 	PayList             []*ProInfoPayList `json:"payList"`
 	Type                string            `json:"type"`
-	RequireType         interface{}       `json:"requireType"`         //0-无限制，1-FT，2-NFT
-	RequireTickId       string            `json:"requireTickId"`       //FT-限制需要 暂mrc20
-	RequireCollectionId string            `json:"requireCollectionId"` //NFT-限制需要 暂mrc721
+	RequireType         interface{}       `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
+	RequireTickId       string            `json:"requireTickId"`       //FT-limit requires temporarily mrc20
+	RequireCollectionId string            `json:"requireCollectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount         interface{}       `json:"limitAmount"`
 }
 
@@ -352,7 +352,7 @@ type SimpleFileMsg struct {
 	ReplyPin   string      `json:"replyPin"`
 }
 
-// 协议常量定义
+// Protocol constant definitions
 const (
 	MonitorSimpleCommunity            = "SimpleCommunity"
 	MonitorSimpleCommunityJoin        = "SimpleCommunityJoin"

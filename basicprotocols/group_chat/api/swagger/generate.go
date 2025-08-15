@@ -6,24 +6,24 @@ import (
 	"os/exec"
 )
 
-// GenerateDocs 生成swagger文档
+// GenerateDocs Generate swagger documentation
 func GenerateDocs() error {
-	// 检查swag工具是否安装
+	// Check if swag tool is installed
 	if !isSwagInstalled() {
-		fmt.Println("正在安装swag工具...")
+		fmt.Println("Installing swag tool...")
 		if err := installSwag(); err != nil {
-			return fmt.Errorf("安装swag工具失败: %v", err)
+			return fmt.Errorf("failed to install swag tool: %v", err)
 		}
 	}
 
-	// 创建docs目录
+	// Create docs directory
 	docsDir := "./docs"
 	if err := os.MkdirAll(docsDir, 0755); err != nil {
-		return fmt.Errorf("创建docs目录失败: %v", err)
+		return fmt.Errorf("failed to create docs directory: %v", err)
 	}
 
-	// 生成swagger文档
-	fmt.Println("正在生成swagger文档...")
+	// Generate swagger documentation
+	fmt.Println("Generating swagger documentation...")
 	cmd := exec.Command("swag", "init",
 		"-g", "cmd/main.go",
 		"-o", docsDir,
@@ -36,23 +36,23 @@ func GenerateDocs() error {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("生成swagger文档失败: %v", err)
+		return fmt.Errorf("failed to generate swagger documentation: %v", err)
 	}
 
-	fmt.Println("✅ swagger文档生成成功！")
-	fmt.Printf("📁 文档位置: %s\n", docsDir)
-	fmt.Println("🌐 访问地址: http://0.0.0.0:7568/group-chat/docs/index.html")
+	fmt.Println("✅ Swagger documentation generated successfully!")
+	fmt.Printf("📁 Documentation location: %s\n", docsDir)
+	fmt.Println("🌐 Access URL: http://0.0.0.0:7568/group-chat/docs/index.html")
 
 	return nil
 }
 
-// isSwagInstalled 检查swag工具是否已安装
+// isSwagInstalled Check if swag tool is installed
 func isSwagInstalled() bool {
 	_, err := exec.LookPath("swag")
 	return err == nil
 }
 
-// installSwag 安装swag工具
+// installSwag Install swag tool
 func installSwag() error {
 	cmd := exec.Command("go", "install", "github.com/swaggo/swag/cmd/swag@latest")
 	cmd.Stdout = os.Stdout
@@ -60,25 +60,25 @@ func installSwag() error {
 	return cmd.Run()
 }
 
-// CleanDocs 清理生成的文档
+// CleanDocs Clean generated documentation
 func CleanDocs() error {
 	docsDir := "./docs"
 	if err := os.RemoveAll(docsDir); err != nil {
-		return fmt.Errorf("清理docs目录失败: %v", err)
+		return fmt.Errorf("failed to clean docs directory: %v", err)
 	}
-	fmt.Println("✅ 文档清理完成")
+	fmt.Println("✅ Documentation cleanup completed")
 	return nil
 }
 
-// RegenerateDocs 重新生成文档
+// RegenerateDocs Regenerate documentation
 func RegenerateDocs() error {
-	fmt.Println("🔄 重新生成swagger文档...")
+	fmt.Println("🔄 Regenerating swagger documentation...")
 
-	// 清理旧文档
+	// Clean old documentation
 	if err := CleanDocs(); err != nil {
 		return err
 	}
 
-	// 生成新文档
+	// Generate new documentation
 	return GenerateDocs()
 }

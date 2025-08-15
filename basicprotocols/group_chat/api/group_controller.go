@@ -13,15 +13,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @Summary 获取群组列表
-// @Description 获取群组列表，支持分页
+// @Summary Get group list
+// @Description Get group list with pagination support
 // @Produce json
-// @Param metaId query string false "用户MetaId"
-// @Param cursor query int false "游标，默认为1"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳"
+// @Param metaId query string false "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupResponse} "成功返回群组列表"
+// @Success 200 {object} respond.Message{data=respond.GroupResponse} "Successfully return group list"
 // @Router /group-chat/group-list [get]
 func GetGroupList(c *gin.Context) {
 	var (
@@ -29,7 +29,7 @@ func GetGroupList(c *gin.Context) {
 		req = &request.FetchGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
-				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
 				return cursor
 			}(),
 			Size: func() int64 {
@@ -52,15 +52,15 @@ func GetGroupList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取最新聊天群组列表
-// @Description 获取用户的最新聊天群组列表，基于最新聊天时间排序
+// @Summary Get latest chat group list
+// @Description Get user's latest chat group list, sorted by latest chat time
 // @Produce json
-// @Param metaId query string true "用户MetaId"
-// @Param cursor query int false "游标，默认为1"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳"
+// @Param metaId query string true "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupResponse} "成功返回最新聊天群组列表"
+// @Success 200 {object} respond.Message{data=respond.GroupResponse} "Successfully return latest chat group list"
 // @Router /group-chat/user/latest-group-list [get]
 func GetLatestChatGroupList(c *gin.Context) {
 	var (
@@ -68,7 +68,7 @@ func GetLatestChatGroupList(c *gin.Context) {
 		req = &request.FetchLatestChatGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
-				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
 				return cursor
 			}(),
 			Size: func() int64 {
@@ -97,12 +97,12 @@ func GetLatestChatGroupList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取群组信息
-// @Description 获取指定群组的详细信息
+// @Summary Get group info
+// @Description Get detailed information of a specified group
 // @Produce json
-// @Param groupId query string true "群组ID"
+// @Param groupId query string true "Group ID"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupItem} "成功返回群组信息"
+// @Success 200 {object} respond.Message{data=respond.GroupItem} "Successfully return group information"
 // @Router /group-chat/group-info [get]
 func GetGroupInfo(c *gin.Context) {
 	var (
@@ -132,16 +132,16 @@ func GetGroupInfo(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取群组聊天记录
-// @Description 获取群组的聊天记录，支持时间戳分页
+// @Summary Get group chat record
+// @Description Get chat records of a group, support timestamp pagination
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param metaId query string false "用户MetaId"
-// @Param cursor query int false "游标，默认为0"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳，用于分页"
+// @Param groupId query string true "Group ID"
+// @Param metaId query string false "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp for pagination"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "成功返回群组聊天记录"
+// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "Successfully return group chat records"
 // @Router /group-chat/group-chat-list [get]
 func GetGroupChatList(c *gin.Context) {
 	var (
@@ -179,15 +179,15 @@ func GetGroupChatList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取群组成员列表
-// @Description 获取群组的成员列表，支持分页
+// @Summary Get group member list
+// @Description Get member list of a group, support pagination
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param cursor query int false "游标，默认为1"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳"
+// @Param groupId query string true "Group ID"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupMemberResponse} "成功返回群组成员列表"
+// @Success 200 {object} respond.Message{data=respond.GroupMemberResponse} "Successfully return group member list"
 // @Router /group-chat/group-member-list [get]
 func GetGroupMemberList(c *gin.Context) {
 	var (
@@ -195,7 +195,7 @@ func GetGroupMemberList(c *gin.Context) {
 		req = &request.FetchGroupMemberListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			Cursor: func() int64 {
-				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
 				return cursor
 			}(),
 			Size: func() int64 {
@@ -224,13 +224,13 @@ func GetGroupMemberList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取群组成员信息
-// @Description 根据metaId和groupId获取TalkGroupPersonCollection信息，判断用户是否在指定群组中
+// @Summary Get group member info
+// @Description Get TalkGroupPersonCollection information based on metaId and groupId to determine if the user is in the specified group
 // @Produce json
-// @Param metaId query string true "用户MetaId"
-// @Param groupId query string true "群组ID"
+// @Param metaId query string true "User MetaId"
+// @Param groupId query string true "Group ID"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.GroupPersonResponse} "成功返回群组成员信息"
+// @Success 200 {object} respond.Message{data=respond.GroupPersonResponse} "Successfully return group member information"
 // @Router /group-chat/group-person [get]
 func GetGroupPerson(c *gin.Context) {
 	var (
@@ -261,15 +261,15 @@ func GetGroupPerson(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取最新聊天信息列表（群聊+私聊）
-// @Description 获取用户的最新聊天信息列表，包括群聊和私聊，基于最新聊天时间排序
+// @Summary Get latest chat info list (group chat + private chat)
+// @Description Get user's latest chat info list, including group chats and private chats, sorted by latest chat time
 // @Produce json
-// @Param metaId query string true "用户MetaId"
-// @Param cursor query int false "游标，默认为1"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳"
+// @Param metaId query string true "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.ChatInfoResponse} "成功返回最新聊天信息列表"
+// @Success 200 {object} respond.Message{data=respond.ChatInfoResponse} "Successfully return latest chat info list"
 // @Router /group-chat/user/latest-chat-info-list [get]
 func GetLatestChatInfoList(c *gin.Context) {
 	var (
@@ -277,7 +277,7 @@ func GetLatestChatInfoList(c *gin.Context) {
 		req = &request.FetchLatestChatInfoListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
-				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "1"), 10, 64)
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
 				return cursor
 			}(),
 			Size: func() int64 {
@@ -306,16 +306,16 @@ func GetLatestChatInfoList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取私聊记录
-// @Description 获取两个用户之间的私聊记录，支持时间戳分页
+// @Summary Get private chat record
+// @Description Get private chat records between two users, support timestamp pagination
 // @Produce json
-// @Param metaId query string true "当前用户MetaId"
-// @Param otherMetaId query string true "对方用户MetaId"
-// @Param cursor query int false "游标，默认为0"
-// @Param size query int false "每页大小，默认为20"
-// @Param timestamp query int false "时间戳，用于分页"
+// @Param metaId query string true "Current user MetaId"
+// @Param otherMetaId query string true "Other user MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp for pagination"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.PrivateChatResponse} "成功返回私聊记录"
+// @Success 200 {object} respond.Message{data=respond.PrivateChatResponse} "Successfully return private chat records"
 // @Router /group-chat/private-chat-list [get]
 func GetPrivateChatList(c *gin.Context) {
 	var (
@@ -358,13 +358,13 @@ func GetPrivateChatList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 获取红包信息
-// @Description 根据groupId和pinId获取红包对象和已领取列表
+// @Summary Get lucky bag info
+// @Description Get lucky bag object and unclaimed list based on groupId and pinId
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param pinId query string true "红包PinId"
+// @Param groupId query string true "Group ID"
+// @Param pinId query string true "Lucky bag PinId"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.LuckyBagInfoResponse} "成功返回红包信息"
+// @Success 200 {object} respond.Message{data=respond.LuckyBagInfoResponse} "Successfully return lucky bag info"
 // @Router /group-chat/lucky-bag-info [get]
 func GetLuckyBagInfo(c *gin.Context) {
 	var (
@@ -395,13 +395,13 @@ func GetLuckyBagInfo(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
-// @Summary 抢红包
-// @Description 根据groupId、pinId、metaId和address抢红包
+// @Summary Grab lucky bag
+// @Description Grab lucky bag based on groupId, pinId, metaId, and address
 // @Accept json
 // @Produce json
-// @Param request body request.GrabLuckyBagRequest true "抢红包请求参数"
+// @Param request body request.GrabLuckyBagRequest true "Grab lucky bag request parameters"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=string} "成功返回抢红包结果"
+// @Success 200 {object} respond.Message{data=string} "Successfully return grab lucky bag result"
 // @Router /group-chat/grab-lucky-bag [post]
 func GrabLuckyBag(c *gin.Context) {
 	var (
@@ -409,7 +409,6 @@ func GrabLuckyBag(c *gin.Context) {
 		req = &request.GrabLuckyBagRequest{}
 	)
 
-	// 绑定JSON请求体
 	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
 		return
@@ -445,21 +444,19 @@ func GrabLuckyBag(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 回收红包
-// @Description 发红包的人回收过时红包剩余的UTXO
+// @Summary Reclaim lucky bag
+// @Description Reclaim UTXOs of expired lucky bags remaining for the person who sent the lucky bag
 // @Accept json
 // @Produce json
-// @Param request body request.ReclaimLuckyBagRequest true "回收红包请求参数"
+// @Param request body request.ReclaimLuckyBagRequest true "Reclaim lucky bag request parameters"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=string} "成功返回回收红包结果"
+// @Success 200 {object} respond.Message{data=string} "Successfully return reclaim lucky bag result"
 // @Router /group-chat/reclaim-lucky-bag [post]
 func ReclaimLuckyBag(c *gin.Context) {
 	var (
 		t   = time.Now().Unix()
 		req = &request.ReclaimLuckyBagRequest{}
 	)
-
-	// 绑定JSON请求体
 	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
 		return
@@ -495,13 +492,13 @@ func ReclaimLuckyBag(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 获取红包未领取信息
-// @Description 根据groupId和pinId获取红包对象和未领取列表
+// @Summary Get lucky bag unused info
+// @Description Get lucky bag object and unclaimed list based on groupId and pinId
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param pinId query string true "红包PinId"
+// @Param groupId query string true "Group ID"
+// @Param pinId query string true "Lucky bag PinId"
 // @Tags Group
-// @Success 200 {object} respond.Message{data=respond.LuckyBagUnusedResponse} "成功返回红包未领取信息"
+// @Success 200 {object} respond.Message{data=respond.LuckyBagUnusedResponse} "Successfully return lucky bag unused info"
 // @Router /group-chat/lucky-bag-unused-info [get]
 func GetLuckyBagUnusedInfo(c *gin.Context) {
 	var (

@@ -16,17 +16,17 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
-// 队列消息项
+// Queue message item
 type QueueChatMessage struct {
-	PinId      string                  `json:"pinId"`      // 消息PinId
-	GroupId    string                  `json:"groupId"`    // 群组ID
-	Chat       *models.TalkGroupChatV3 `json:"chat"`       // 聊天消息
-	Timestamp  int64                   `json:"timestamp"`  // 入队时间戳
-	RetryCount int                     `json:"retryCount"` // 重试次数
-	Status     string                  `json:"status"`     // 处理状态：pending, processing, completed, failed
+	PinId      string                  `json:"pinId"`      // Message PinId
+	GroupId    string                  `json:"groupId"`    // Group ID
+	Chat       *models.TalkGroupChatV3 `json:"chat"`       // Chat message
+	Timestamp  int64                   `json:"timestamp"`  // Enqueue timestamp
+	RetryCount int                     `json:"retryCount"` // Retry count
+	Status     string                  `json:"status"`     // Processing status: pending, processing, completed, failed
 }
 
-// 聊天数据库操作
+// Chat database operations
 type ChatDB struct {
 	pb *Pebble
 }
@@ -35,29 +35,29 @@ func NewChatDB(pb *Pebble) *ChatDB {
 	return &ChatDB{pb: pb}
 }
 
-// 保存聊天消息
+// Save chat message
 func (cdb *ChatDB) SaveChat(chat *models.TalkGroupChatV3) error {
 	data, err := json.Marshal(chat)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId 作为主键
+	// Use PinId as primary key
 	key := []byte(chat.PinId)
 	return Pb[TalkGroupChatPinCollection].Set(key, data, pebble.Sync)
 }
 
-// 保存聊天时间戳索引
+// Save chat timestamp index
 func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
-	// 构造时间戳索引值：pinId_chatType_timestamp
+	// Construct timestamp index value: pinId_chatType_timestamp
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
-	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
+	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	return Pb[TalkGroupChatTimestampCollection].Set(key, []byte(value), pebble.Sync)
 }
 
-// 根据PinId获取聊天消息
+// Get chat message by PinId
 func (cdb *ChatDB) GetChatByPinId(pinId string) (*models.TalkGroupChatV3, error) {
 	key := []byte(pinId)
 	value, closer, err := Pb[TalkGroupChatPinCollection].Get(key)
@@ -78,7 +78,7 @@ func (cdb *ChatDB) GetChatByPinId(pinId string) (*models.TalkGroupChatV3, error)
 	return &chat, nil
 }
 
-// 根据群组ID获取聊天消息列表
+// Get chat message list by group ID
 func (cdb *ChatDB) GetChatsByGroupId(groupId string, page, size int64) ([]*models.TalkGroupChatV3, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatPinCollection].NewIter(nil)
@@ -113,7 +113,7 @@ func (cdb *ChatDB) GetChatsByGroupId(groupId string, page, size int64) ([]*model
 	return chats, nil
 }
 
-// 根据社区ID获取聊天消息列表
+// Get chat message list by community ID
 func (cdb *ChatDB) GetChatsByCommunityId(communityId string, page, size int64) ([]*models.TalkGroupChatV3, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatPinCollection].NewIter(nil)
@@ -148,7 +148,7 @@ func (cdb *ChatDB) GetChatsByCommunityId(communityId string, page, size int64) (
 	return chats, nil
 }
 
-// 根据群组ID和开始时间戳获取聊天消息列表（倒序，基于时间戳分页）
+// Get chat message list by group ID and start timestamp (reverse order, pagination based on timestamp)
 func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatTimestampCollection].NewIter(nil)
@@ -157,19 +157,19 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 	}
 	defer iter.Close()
 
-	// 构造查询起始键：groupId_startTimestamp
+	// Construct query start key: groupId_startTimestamp
 	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
 
-	// 从指定时间戳开始倒序遍历（最新的消息在前）
+	// Start reverse iteration from specified timestamp (latest messages first)
 	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
 		key := string(iter.Key())
 
-		// 检查是否属于指定群组
+		// Check if it belongs to the specified group
 		if !strings.HasPrefix(key, groupId+"_") {
 			continue
 		}
 
-		// 解析索引值获取 PinId
+		// Parse index value to get PinId
 		value := string(iter.Value())
 		valueParts := strings.Split(value, "_")
 		if len(valueParts) < 1 {
@@ -177,13 +177,13 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 		}
 		pinId := valueParts[0]
 
-		// 获取完整的聊天消息
+		// Get complete chat message
 		chat, err := cdb.GetChatByPinId(pinId)
 		if err != nil || chat == nil {
 			continue
 		}
 
-		// 达到分页大小限制
+		// Reach pagination size limit
 		if int64(len(chats)) >= size {
 			break
 		}
@@ -194,32 +194,32 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 	return chats, nil
 }
 
-// 获取群组的最新聊天消息（基于时间戳倒序）
+// Get latest chat messages for group (reverse order based on timestamp)
 func (cdb *ChatDB) GetLatestChatsByGroupId(groupId string, size int64) ([]*models.TalkGroupChatV3, error) {
-	// 使用当前时间作为起始时间戳
+	// Use current time as start timestamp
 	currentTimestamp := time.Now().Unix()
 	return cdb.GetChatsByGroupIdAndTimestampRange(groupId, currentTimestamp, size)
 }
 
-// 删除聊天消息
+// Delete chat message
 func (cdb *ChatDB) DeleteChat(pinId string) error {
 	key := []byte(pinId)
 	return Pb[TalkGroupChatPinCollection].Delete(key, pebble.Sync)
 }
 
-// 保存红包信息
+// Save lucky bag info
 func (cdb *ChatDB) SaveLuckyBag(red *models.TalkGroupLuckyBagV3) error {
 	data, err := json.Marshal(red)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId 作为主键
+	// Use PinId as primary key
 	key := []byte(red.PinId)
 	return Pb[TalkGroupLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据PinId获取红包信息
+// Get lucky bag info by PinId
 func (cdb *ChatDB) GetLuckyBagByPinId(pinId string) (*models.TalkGroupLuckyBagV3, error) {
 	key := []byte(pinId)
 	value, closer, err := Pb[TalkGroupLuckyBagPinCollection].Get(key)
@@ -240,7 +240,7 @@ func (cdb *ChatDB) GetLuckyBagByPinId(pinId string) (*models.TalkGroupLuckyBagV3
 	return &red, nil
 }
 
-// 根据群组ID获取红包列表
+// Get lucky bag list by group ID
 func (cdb *ChatDB) GetLuckyBagsByGroupId(groupId string) ([]*models.TalkGroupLuckyBagV3, error) {
 	var reds []*models.TalkGroupLuckyBagV3
 	iter, err := Pb[TalkGroupLuckyBagPinCollection].NewIter(nil)
@@ -263,19 +263,19 @@ func (cdb *ChatDB) GetLuckyBagsByGroupId(groupId string) ([]*models.TalkGroupLuc
 	return reds, nil
 }
 
-// 保存抢红包信息
+// Save grab lucky bag info
 func (cdb *ChatDB) SaveOpenLuckyBag(open *models.TalkGroupOpenLuckyBagV3) error {
 	data, err := json.Marshal(open)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId 作为主键
+	// Use PinId as primary key
 	key := []byte(open.PinId)
 	return Pb[TalkGroupOpenLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据PinId获取抢红包信息
+// Get grab lucky bag info by PinId
 func (cdb *ChatDB) GetOpenLuckyBagByPinId(pinId string) (*models.TalkGroupOpenLuckyBagV3, error) {
 	key := []byte(pinId)
 	value, closer, err := Pb[TalkGroupOpenLuckyBagPinCollection].Get(key)
@@ -296,7 +296,7 @@ func (cdb *ChatDB) GetOpenLuckyBagByPinId(pinId string) (*models.TalkGroupOpenLu
 	return &open, nil
 }
 
-// 根据红包TxId获取抢红包列表
+// Get grab lucky bag list by lucky bag TxId
 func (cdb *ChatDB) GetOpenLuckyBagsByLuckyBagTxId(redEnvelopeTxId string) ([]*models.TalkGroupOpenLuckyBagV3, error) {
 	var opens []*models.TalkGroupOpenLuckyBagV3
 	iter, err := Pb[TalkGroupOpenLuckyBagPinCollection].NewIter(nil)
@@ -319,19 +319,19 @@ func (cdb *ChatDB) GetOpenLuckyBagsByLuckyBagTxId(redEnvelopeTxId string) ([]*mo
 	return opens, nil
 }
 
-// 保存剩余红包信息
+// Save residue lucky bag info
 func (cdb *ChatDB) SaveResidueLuckyBag(residue *models.TalkGroupResidueLuckyBagV3) error {
 	data, err := json.Marshal(residue)
 	if err != nil {
 		return err
 	}
 
-	// 使用 PinId 作为主键
+	// Use PinId as primary key
 	key := []byte(residue.PinId)
 	return Pb[TalkGroupResidueLuckyBagPinCollection].Set(key, data, pebble.Sync)
 }
 
-// 根据红包PinId获取剩余红包信息
+// Get residue lucky bag info by lucky bag PinId
 func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*models.TalkGroupResidueLuckyBagV3, error) {
 	key := []byte(redEnvelopePinId)
 	value, closer, err := Pb[TalkGroupResidueLuckyBagPinCollection].Get(key)
@@ -352,15 +352,15 @@ func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*
 	return &residue, nil
 }
 
-// 保存抢红包列表记录
+// Save grab lucky bag list record
 func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndex int64) error {
-	// 获取现有的列表
+	// Get existing list
 	list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
 	if err != nil {
 		return err
 	}
 
-	// 添加新的记录
+	// Add new record
 	newItem := &models.OpenLuckyBagListItem{
 		OpenPinId:        openPinId,
 		GroupId:          groupId,
@@ -370,7 +370,7 @@ func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, 
 		LuckyBagOutIndex: luckyBagOutIndex,
 	}
 
-	// 检查是否已存在
+	// Check if already exists
 	found := false
 	for _, item := range list.Items {
 		if item.OpenPinId == openPinId {
@@ -383,7 +383,7 @@ func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, 
 		list.Items = append(list.Items, newItem)
 	}
 
-	// 保存更新后的列表
+	// Save updated list
 	data, err := json.Marshal(list)
 	if err != nil {
 		return err
@@ -393,7 +393,7 @@ func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, 
 	return Pb[TalkGroupOpenLuckyBagListCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取抢红包列表
+// Get grab lucky bag list
 func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyBagList, error) {
 	key := []byte(luckyBagPinId)
 	value, closer, err := Pb[TalkGroupOpenLuckyBagListCollection].Get(key)
@@ -414,15 +414,15 @@ func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyB
 	return &list, nil
 }
 
-// 保存回收红包列表记录
+// Save reclaim lucky bag list record
 func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndexList []int64) error {
-	// 获取现有的列表
+	// Get existing list
 	list, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
 	if err != nil {
 		return err
 	}
 
-	// 添加新的记录
+	// Add new record
 	newItem := &models.ResidueLuckyBagListItem{
 		ResiduePinId:         residuePinId,
 		GroupId:              groupId,
@@ -432,7 +432,7 @@ func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId st
 		LuckyBagOutIndexList: luckyBagOutIndexList,
 	}
 
-	// 检查是否已存在
+	// Check if already exists
 	found := false
 	for _, item := range list.Items {
 		if item.ResiduePinId == residuePinId {
@@ -445,7 +445,7 @@ func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId st
 		list.Items = append(list.Items, newItem)
 	}
 
-	// 保存更新后的列表
+	// Save updated list
 	data, err := json.Marshal(list)
 	if err != nil {
 		return err
@@ -455,7 +455,7 @@ func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId st
 	return Pb[TalkGroupResidueLuckyBagListCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取回收红包列表
+// Get reclaim lucky bag list
 func (cdb *ChatDB) GetResidueLuckyBagList(luckyBagPinId string) (*models.ResidueLuckyBagList, error) {
 	key := []byte(luckyBagPinId)
 	value, closer, err := Pb[TalkGroupResidueLuckyBagListCollection].Get(key)
@@ -476,7 +476,7 @@ func (cdb *ChatDB) GetResidueLuckyBagList(luckyBagPinId string) (*models.Residue
 	return &list, nil
 }
 
-// 获取用户的群列表
+// Get user's group list
 func (cdb *ChatDB) GetMetaIdContextList(metaId string) (*models.MetaIdContextList, error) {
 	key := []byte(metaId)
 	value, closer, err := Pb[TalkMetaIdContextListCollection].Get(key)
@@ -497,7 +497,7 @@ func (cdb *ChatDB) GetMetaIdContextList(metaId string) (*models.MetaIdContextLis
 	return &contextList, nil
 }
 
-// 保存用户的群列表
+// Save user's group list
 func (cdb *ChatDB) SaveMetaIdContextList(contextList *models.MetaIdContextList) error {
 	data, err := json.Marshal(contextList)
 	if err != nil {
@@ -508,21 +508,21 @@ func (cdb *ChatDB) SaveMetaIdContextList(contextList *models.MetaIdContextList) 
 	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 }
 
-// 更新群组中所有成员的群列表（当有新消息时）
+// Update group list for all members in the group (when there's a new message)
 func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.TalkGroupChatV3, groupDB *GroupDB) error {
-	// 更新群组最新聊天记录
+	// Update group latest chat record
 	err := cdb.updateGroupLatestChat(groupId, chat)
 	if err != nil {
 		return err
 	}
 
-	// 获取群组的所有成员
+	// Get all members of the group
 	members, err := groupDB.GetGroupMembers(groupId)
 	if err != nil {
 		return err
 	}
 
-	// 为每个成员更新群列表
+	// Update group list for each member
 	for _, member := range members {
 		err = cdb.updateSingleMemberContextList(member.MetaId, groupId, chat)
 		if err != nil {
@@ -533,15 +533,15 @@ func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.Ta
 	return nil
 }
 
-// 更新群组最新聊天记录
+// Update group latest chat record
 func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupChatV3) error {
-	// 先获取现有的最新聊天记录
+	// First get existing latest chat record
 	existingLatestChat, err := cdb.GetGroupLatestChat(groupId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的最新聊天记录
+	// Create new latest chat record
 	newLatestChat := &models.TalkGroupLatestChat{
 		GroupId:          groupId,
 		Timestamp:        chat.Timestamp,
@@ -560,7 +560,7 @@ func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupC
 		BlockHeight:      chat.BlockHeight,
 	}
 
-	// 如果不存在现有数据，直接保存
+	// If no existing data, save directly
 	if existingLatestChat == nil {
 		data, err := json.Marshal(newLatestChat)
 		if err != nil {
@@ -570,23 +570,23 @@ func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupC
 		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 判断是否需要更新
+	// Determine if update is needed
 	shouldUpdate := false
 
-	// 1. 先判断pinId是否一样
+	// 1. First check if pinId is the same
 	if existingLatestChat.LastMessagePinId == chat.PinId {
-		// pinId一样，检查blockHeight是否不一样
+		// pinId is the same, check if blockHeight is different
 		if existingLatestChat.BlockHeight != chat.BlockHeight {
 			shouldUpdate = true
 		}
 	} else {
-		// pinId不一样，比较timestamp
+		// pinId is different, compare timestamp
 		if chat.Timestamp > existingLatestChat.Timestamp {
 			shouldUpdate = true
 		}
 	}
 
-	// 如果需要更新，则保存新数据
+	// If update is needed, save new data
 	if shouldUpdate {
 		data, err := json.Marshal(newLatestChat)
 		if err != nil {
@@ -596,11 +596,11 @@ func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupC
 		return Pb[TalkGroupLatestChatCollection].Set(key, data, pebble.Sync)
 	}
 
-	// 不需要更新，直接返回
+	// No update needed, return directly
 	return nil
 }
 
-// 获取群组最新聊天记录
+// Get group latest chat record
 func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestChat, error) {
 	key := []byte(groupId)
 	value, closer, err := Pb[TalkGroupLatestChatCollection].Get(key)
@@ -621,15 +621,15 @@ func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestCh
 	return &latestChat, nil
 }
 
-// 更新单个成员的群列表
+// Update single member's group list
 func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *models.TalkGroupChatV3) error {
-	// 获取用户的群列表
+	// Get user's group list
 	contextList, err := cdb.GetMetaIdContextList(metaId)
 	if err != nil {
 		return err
 	}
 
-	// 创建新的群列表项
+	// Create new group list item
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
 		MetaId:           "",
@@ -643,13 +643,13 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 		BlockHeight:      chat.BlockHeight,
 	}
 
-	//是否需要更新
+	// Whether update is needed
 	shouldUpdate := false
-	// 查找是否已存在该群组的项
+	// Check if group item already exists
 	found := false
 	for i, item := range contextList.Items {
 		if item.GroupId == groupId {
-			// 更新现有项
+			// Update existing item
 			contextList.Items[i] = newItem
 			found = true
 			if item.LastMessagePinId != newItem.LastMessagePinId ||
@@ -660,26 +660,26 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 		}
 	}
 
-	// 如果不存在，添加新项
+	// If not found, add new item
 	if !found {
 		contextList.Items = append(contextList.Items, newItem)
 	}
 
-	// 如果不需要更新，直接返回
+	// If no update needed, return directly
 	if !shouldUpdate {
 		return nil
 	}
 
-	// 按时间戳倒序排序
+	// Sort by timestamp in reverse order
 	cdb.sortContextListByTimestamp(contextList)
 
-	// 保存更新后的群列表
+	// Save updated group list
 	return cdb.SaveMetaIdContextList(contextList)
 }
 
-// 按时间戳倒序排序群列表
+// Sort group list by timestamp in reverse order
 func (cdb *ChatDB) sortContextListByTimestamp(contextList *models.MetaIdContextList) {
-	// 简单的冒泡排序，按时间戳倒序
+	// Simple bubble sort, reverse order by timestamp
 	for i := 0; i < len(contextList.Items)-1; i++ {
 		for j := 0; j < len(contextList.Items)-1-i; j++ {
 			if contextList.Items[j].Timestamp < contextList.Items[j+1].Timestamp {
@@ -689,7 +689,7 @@ func (cdb *ChatDB) sortContextListByTimestamp(contextList *models.MetaIdContextL
 	}
 }
 
-// 将聊天消息加入队列（异步处理群列表更新）
+// Enqueue chat message (asynchronous processing for group list updates)
 func (cdb *ChatDB) EnqueueChatMessage(chat *models.TalkGroupChatV3) error {
 	queueMessage := &QueueChatMessage{
 		PinId:      chat.PinId,
@@ -705,12 +705,12 @@ func (cdb *ChatDB) EnqueueChatMessage(chat *models.TalkGroupChatV3) error {
 		return err
 	}
 
-	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	// Use timestamp_pinId as primary key to support processing in time order
 	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + chat.PinId)
 	return Pb[TalkGroupChatQueueCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取队列中的待处理消息
+// Get pending messages from queue
 func (cdb *ChatDB) GetPendingQueueMessages(limit int) ([]*QueueChatMessage, error) {
 	var messages []*QueueChatMessage
 	iter, err := Pb[TalkGroupChatQueueCollection].NewIter(nil)
@@ -729,7 +729,7 @@ func (cdb *ChatDB) GetPendingQueueMessages(limit int) ([]*QueueChatMessage, erro
 			continue
 		}
 
-		// 只处理pending状态的消息
+		// Only process messages with pending status
 		if queueMessage.Status == "pending" {
 			messages = append(messages, &queueMessage)
 			count++
@@ -739,7 +739,7 @@ func (cdb *ChatDB) GetPendingQueueMessages(limit int) ([]*QueueChatMessage, erro
 	return messages, nil
 }
 
-// 删除队列消息数据
+// Delete queue message data
 func (cdb *ChatDB) deleteQueueMessage(pinId string) error {
 	iter, err := Pb[TalkGroupChatQueueCollection].NewIter(nil)
 	if err != nil {
@@ -747,7 +747,7 @@ func (cdb *ChatDB) deleteQueueMessage(pinId string) error {
 	}
 	defer iter.Close()
 
-	// 查找包含该pinId的队列消息
+	// Find queue message containing this pinId
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := string(iter.Value())
 
@@ -757,7 +757,7 @@ func (cdb *ChatDB) deleteQueueMessage(pinId string) error {
 			continue
 		}
 
-		// 找到匹配的pinId，删除该队列消息
+		// Found matching pinId, delete this queue message
 		if queueMessage.PinId == pinId {
 			return Pb[TalkGroupChatQueueCollection].Delete(iter.Key(), pebble.Sync)
 		}
@@ -766,16 +766,16 @@ func (cdb *ChatDB) deleteQueueMessage(pinId string) error {
 	return nil
 }
 
-// 抢红包队列消息项
+// Grab lucky bag queue message item
 type QueueOpenLuckyBagMessage struct {
-	PinId        string                          `json:"pinId"`        // 消息PinId
-	OpenLuckyBag *models.TalkGroupOpenLuckyBagV3 `json:"openLuckyBag"` // 抢红包记录
-	Timestamp    int64                           `json:"timestamp"`    // 入队时间戳
-	RetryCount   int                             `json:"retryCount"`   // 重试次数
-	Status       string                          `json:"status"`       // 处理状态：pending, processing, completed, failed
+	PinId        string                          `json:"pinId"`        // Message PinId
+	OpenLuckyBag *models.TalkGroupOpenLuckyBagV3 `json:"openLuckyBag"` // Grab lucky bag record
+	Timestamp    int64                           `json:"timestamp"`    // Enqueue timestamp
+	RetryCount   int                             `json:"retryCount"`   // Retry count
+	Status       string                          `json:"status"`       // Processing status: pending, processing, completed, failed
 }
 
-// 将抢红包记录加入队列
+// Enqueue grab lucky bag record
 func (cdb *ChatDB) EnqueueOpenLuckyBagMessage(openLuckyBag *models.TalkGroupOpenLuckyBagV3) error {
 	queueMessage := &QueueOpenLuckyBagMessage{
 		PinId:        openLuckyBag.PinId,
@@ -790,12 +790,12 @@ func (cdb *ChatDB) EnqueueOpenLuckyBagMessage(openLuckyBag *models.TalkGroupOpen
 		return err
 	}
 
-	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	// Use timestamp_pinId as primary key to support processing in time order
 	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + openLuckyBag.PinId)
 	return Pb[TalkGroupOpenLuckyBagQueueCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取抢红包队列中的待处理消息
+// Get pending messages from grab lucky bag queue
 func (cdb *ChatDB) GetPendingOpenLuckyBagMessages(limit int) ([]*QueueOpenLuckyBagMessage, error) {
 	var messages []*QueueOpenLuckyBagMessage
 	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
@@ -814,7 +814,7 @@ func (cdb *ChatDB) GetPendingOpenLuckyBagMessages(limit int) ([]*QueueOpenLuckyB
 			continue
 		}
 
-		// 只处理pending状态的消息
+		// Only process messages with pending status
 		if queueMessage.Status == "pending" {
 			messages = append(messages, &queueMessage)
 			count++
@@ -824,7 +824,7 @@ func (cdb *ChatDB) GetPendingOpenLuckyBagMessages(limit int) ([]*QueueOpenLuckyB
 	return messages, nil
 }
 
-// 删除抢红包队列消息数据
+// Delete grab lucky bag queue message data
 func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
 	if err != nil {
@@ -832,7 +832,7 @@ func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	}
 	defer iter.Close()
 
-	// 查找包含该pinId的队列消息
+	// Find queue message containing this pinId
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := string(iter.Value())
 
@@ -842,7 +842,7 @@ func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 			continue
 		}
 
-		// 找到匹配的pinId，删除该队列消息
+		// Found matching pinId, delete this queue message
 		if queueMessage.PinId == pinId {
 			return Pb[TalkGroupOpenLuckyBagQueueCollection].Delete(iter.Key(), pebble.Sync)
 		}
@@ -851,16 +851,16 @@ func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	return nil
 }
 
-// 回收红包队列消息项
+// Reclaim lucky bag queue message item
 type QueueResidueLuckyBagMessage struct {
-	PinId           string                             `json:"pinId"`           // 消息PinId
-	ResidueLuckyBag *models.TalkGroupResidueLuckyBagV3 `json:"residueLuckyBag"` // 回收红包记录
-	Timestamp       int64                              `json:"timestamp"`       // 入队时间戳
-	RetryCount      int                                `json:"retryCount"`      // 重试次数
-	Status          string                             `json:"status"`          // 处理状态：pending, processing, completed, failed
+	PinId           string                             `json:"pinId"`           // Message PinId
+	ResidueLuckyBag *models.TalkGroupResidueLuckyBagV3 `json:"residueLuckyBag"` // Reclaim lucky bag record
+	Timestamp       int64                              `json:"timestamp"`       // Enqueue timestamp
+	RetryCount      int                                `json:"retryCount"`      // Retry count
+	Status          string                             `json:"status"`          // Processing status: pending, processing, completed, failed
 }
 
-// 将回收红包记录加入队列
+// Enqueue reclaim lucky bag record
 func (cdb *ChatDB) EnqueueResidueLuckyBagMessage(residueLuckyBag *models.TalkGroupResidueLuckyBagV3) error {
 	queueMessage := &QueueResidueLuckyBagMessage{
 		PinId:           residueLuckyBag.PinId,
@@ -875,12 +875,12 @@ func (cdb *ChatDB) EnqueueResidueLuckyBagMessage(residueLuckyBag *models.TalkGro
 		return err
 	}
 
-	// 使用 timestamp_pinId 作为主键，支持按时间顺序处理
+	// Use timestamp_pinId as primary key to support processing in time order
 	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + residueLuckyBag.PinId)
 	return Pb[TalkGroupResidueLuckyBagQueueCollection].Set(key, data, pebble.Sync)
 }
 
-// 获取回收红包队列中的待处理消息
+// Get pending messages from reclaim lucky bag queue
 func (cdb *ChatDB) GetPendingResidueLuckyBagMessages(limit int) ([]*QueueResidueLuckyBagMessage, error) {
 	var messages []*QueueResidueLuckyBagMessage
 	iter, err := Pb[TalkGroupResidueLuckyBagQueueCollection].NewIter(nil)
@@ -899,7 +899,7 @@ func (cdb *ChatDB) GetPendingResidueLuckyBagMessages(limit int) ([]*QueueResidue
 			continue
 		}
 
-		// 只处理pending状态的消息
+		// Only process messages with pending status
 		if queueMessage.Status == "pending" {
 			messages = append(messages, &queueMessage)
 			count++
@@ -909,7 +909,7 @@ func (cdb *ChatDB) GetPendingResidueLuckyBagMessages(limit int) ([]*QueueResidue
 	return messages, nil
 }
 
-// 删除回收红包队列消息数据
+// Delete reclaim lucky bag queue message data
 func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
 	iter, err := Pb[TalkGroupResidueLuckyBagQueueCollection].NewIter(nil)
 	if err != nil {
@@ -917,7 +917,7 @@ func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
 	}
 	defer iter.Close()
 
-	// 查找包含该pinId的队列消息
+	// Find queue message containing this pinId
 	for iter.First(); iter.Valid(); iter.Next() {
 		value := string(iter.Value())
 
@@ -926,8 +926,7 @@ func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
 		if err != nil {
 			continue
 		}
-
-		// 找到匹配的pinId，删除该队列消息
+		// Found matching pinId, delete this queue message
 		if queueMessage.PinId == pinId {
 			return Pb[TalkGroupResidueLuckyBagQueueCollection].Delete(iter.Key(), pebble.Sync)
 		}
@@ -936,28 +935,28 @@ func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
 	return nil
 }
 
-// 批量处理队列消息（异步更新群列表）
+// Batch process queue messages (asynchronous update of group lists)
 func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
-	// 获取待处理的消息
+	// Get pending messages
 	messages, err := cdb.GetPendingQueueMessages(batchSize)
 	if err != nil {
 		return err
 	}
 
-	// 批量处理消息
+	// Batch process messages
 	for _, message := range messages {
-		// 更新群组所有成员的群列表
+		// Update group list for all members in the group
 		err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB)
 		if err != nil {
-			// 处理失败，记录错误但不删除队列消息，可以稍后重试
+			// Processing failed, log error but don't delete queue message, can retry later
 			log.Printf("Failed to process queue message for pinId %s: %v", message.PinId, err)
 			continue
 		}
 
-		// 处理成功，删除队列消息
+		// Processing successful, delete queue message
 		err = cdb.deleteQueueMessage(message.PinId)
 		if err != nil {
-			// 记录错误但不影响主流程
+			// Log error but don't affect main flow
 			log.Printf("Failed to delete queue message for pinId %s: %v", message.PinId, err)
 		}
 	}
@@ -965,19 +964,19 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 	return nil
 }
 
-// 启动队列处理协程（需要在应用启动时调用）
+// Start queue processing goroutine (needs to be called when application starts)
 func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 	go func() {
-		ticker := time.NewTicker(5 * time.Second) // 每5秒处理一次
+		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
-				// 批量处理队列消息
-				err := cdb.ProcessQueueMessages(groupDB, 100) // 每次处理100条消息
+				// Batch process queue messages
+				err := cdb.ProcessQueueMessages(groupDB, 100) // Process 100 messages each time
 				if err != nil {
-					// 记录错误日志
+					// Log error
 					continue
 				}
 			}
@@ -985,7 +984,7 @@ func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 	}()
 }
 
-// 总的处理 Group Chat 方法
+// Main method to process Group Chat
 func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
 	switch pin.Operation {
 	case "create":
@@ -997,14 +996,14 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) 
 			strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag) ||
 			strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag) {
 			if tx != nil {
-				// 判断tx的类型，如果是wire.MsgTx或*wire.MsgTx，就转成*wire.MsgTx
+				// Determine tx type, if it's wire.MsgTx or *wire.MsgTx, convert to *wire.MsgTx
 				switch txType := tx.(type) {
 				case *wire.MsgTx:
 					txData = txType
 				case wire.MsgTx:
 					txData = &txType
 				default:
-					// 其他类型，尝试直接转换
+					// Other types, try direct conversion
 					if msgTx, ok := tx.(*wire.MsgTx); ok {
 						txData = msgTx
 					} else if msgTx, ok := tx.(wire.MsgTx); ok {
@@ -1013,7 +1012,7 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) 
 				}
 			} else {
 
-				//要改用非man的
+				// Need to change to non-man
 				// var (
 				// 	chain string = "btc"
 				// 	txId  string = ""
@@ -1043,14 +1042,14 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) 
 			return cdb.processGroupResidueLuckyBag(pin, txData)
 		}
 	default:
-		return nil // 未知操作类型，跳过
+		return nil // Unknown operation type, skip
 	}
 	return nil
 }
 
-// 处理群组聊天
+// Process group chat
 func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
 		if existingChat.BlockHeight != pin.GenesisHeight {
@@ -1060,18 +1059,18 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 				return err
 			}
 		}
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleGroupChat protocols.SimpleGroupChat
 	err = json.Unmarshal(pin.ContentBody, &simpleGroupChat)
 	if err != nil {
 		return err
 	}
 
-	// 创建聊天消息模型
+	// Create chat message model
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleGroupChat.GroupId,
 		TxId:        pin.Id[:len(pin.Id)-2],
@@ -1082,27 +1081,27 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		Content:     simpleGroupChat.Content,
 		ContentType: simpleGroupChat.ContentType,
 		Encryption:  simpleGroupChat.Encryption,
-		ChatType:    models.ChatTypeMsg,       // 默认为消息类型
-		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
+		ChatType:    models.ChatTypeMsg,       // Default to message type
+		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存聊天消息到 TalkGroupChatPinCollection
+	// Save chat message to TalkGroupChatPinCollection
 	err = cdb.SaveChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// Save timestamp index (decide which collection to save to based on user state)
 	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步更新群列表
+	// Enqueue message for asynchronous group list updates
 	err = cdb.EnqueueChatMessage(chat)
 	if err != nil {
 		return err
@@ -1111,9 +1110,9 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 检查用户是否在群组中
+// Check if user is in group
 func (cdb *ChatDB) isUserInGroup(metaId, groupId string) (bool, error) {
-	// 使用 TalkGroupMetaIdJoinCollection 来检查用户是否在群组中
+	// Use TalkGroupMetaIdJoinCollection to check if user is in group
 	// key: metaId_groupId
 	key := []byte(metaId + "_" + groupId)
 	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
@@ -1131,19 +1130,19 @@ func (cdb *ChatDB) isUserInGroup(metaId, groupId string) (bool, error) {
 		return false, err
 	}
 
-	// 如果列表为空，用户不在群组中
+	// If list is empty, user is not in group
 	if len(joinList.Items) == 0 {
 		return false, nil
 	}
 
-	// 获取最新的加入记录（按时间戳倒序，第一个是最新的）
+	// Get latest join record (reverse order by timestamp, first is latest)
 	latestItem := joinList.Items[0]
 	return latestItem.GroupState == models.RoomStateIn, nil
 }
 
-// 获取用户在群组中的状态
+// Get user's state in group
 func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64) (models.RoomState, error) {
-	// 使用 TalkGroupMetaIdJoinCollection 来获取用户状态
+	// Use TalkGroupMetaIdJoinCollection to get user state
 	// key: metaId_groupId
 	key := []byte(metaId + "_" + groupId)
 	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
@@ -1161,13 +1160,13 @@ func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64
 		return models.RoomStateOut, err
 	}
 
-	// 如果列表为空，用户不在群组中
+	// If list is empty, user is not in group
 	if len(joinList.Items) == 0 {
 		return models.RoomStateOut, nil
 	}
 
-	// 按时间戳正序排序，确保时间顺序正确
-	// 简单的冒泡排序，按时间戳正序
+	// Sort by timestamp in ascending order to ensure correct time sequence
+	// Simple bubble sort, ascending order by timestamp
 	for i := 0; i < len(joinList.Items)-1; i++ {
 		for j := 0; j < len(joinList.Items)-1-i; j++ {
 			if joinList.Items[j].JoinTimestamp > joinList.Items[j+1].JoinTimestamp {
@@ -1177,22 +1176,22 @@ func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64
 	}
 
 	var startItem, endItem *GroupMetaIdJoinItem
-	// 遍历加入记录，找到聊天消息时间戳对应的区间
+	// Iterate through join records to find the interval corresponding to chat message timestamp
 	for i, item := range joinList.Items {
 		if chatTimestamp >= item.JoinTimestamp {
-			// 找到聊天消息时间戳对应的开始记录
+			// Found the start record corresponding to chat message timestamp
 			startItem = item
 
-			// 查找下一个记录作为结束记录
+			// Find next record as end record
 			if i+1 < len(joinList.Items) {
 				endItem = joinList.Items[i+1]
 			} else {
-				// 如果没有下一个记录，说明这是最新的状态
+				// If no next record, this is the latest state
 				endItem = nil
 			}
 		} else {
-			// 如果当前记录的时间戳大于聊天时间戳，说明找到了区间的结束
-			// 此时startItem应该是前一个记录
+			// If current record timestamp is greater than chat timestamp, found the end of interval
+			// At this point startItem should be the previous record
 			if startItem != nil {
 				endItem = item
 			}
@@ -1200,45 +1199,45 @@ func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64
 		}
 	}
 
-	// 如果没有找到对应的区间，说明聊天消息在用户加入群组之前
+	// If no corresponding interval found, chat message is before user joined group
 	if startItem == nil {
 		return models.RoomStateOut, nil
 	}
 
-	// 根据startItem的状态来判断用户在该时间点的状态
-	// 如果endItem存在且聊天时间超过了endItem的时间，说明状态已经改变
+	// Determine user's state at this time point based on startItem's state
+	// If endItem exists and chat time exceeds endItem's time, state has changed
 	if endItem != nil && chatTimestamp >= endItem.JoinTimestamp {
-		// 聊天时间在下一个状态变更之后，使用下一个状态
+		// Chat time is after next state change, use next state
 		return endItem.GroupState, nil
 	} else {
-		// 聊天时间在当前状态区间内，使用当前状态
+		// Chat time is within current state interval, use current state
 		return startItem.GroupState, nil
 	}
 }
 
-// 保存聊天时间戳索引（根据用户状态决定保存到哪个集合）
+// Save chat timestamp index (decide which collection to save to based on user state)
 func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) error {
-	// 获取用户在群组中的状态
+	// Get user's state in group
 	groupState, err := cdb.getUserGroupState(chat.MetaId, chat.GroupId, chat.Timestamp)
 	if err != nil {
-		// 如果获取状态失败，默认保存到正常集合
+		// If getting state fails, default to saving to normal collection
 		return cdb.SaveChatTimestamp(chat)
 	}
 
-	// 构造时间戳索引值：pinId_chatType_timestamp
+	// Construct timestamp index value: pinId_chatType_timestamp
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
-	// 根据用户状态决定保存到哪个集合
+	// Decide which collection to save to based on user state
 	var collection string
 	if groupState == models.RoomStateIn {
-		// 用户在群组中，保存到正常集合
+		// User is in group, save to normal collection
 		collection = TalkGroupChatTimestampCollection
 	} else {
-		// 用户不在群组中，保存到无效集合
+		// User is not in group, save to invalid collection
 		collection = TalkGroupChatTimestampOutCollection
 	}
 
-	// 使用 GroupId_Timestamp 作为主键，支持按时间戳范围查询
+	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	if err = Pb[collection].Set(key, []byte(value), pebble.Sync); err != nil {
 		return err
@@ -1248,9 +1247,9 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	return nil
 }
 
-// 处理文件群组聊天
+// Process file group chat
 func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
 		if existingChat.BlockHeight != pin.GenesisHeight {
@@ -1260,17 +1259,17 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 				return err
 			}
 		}
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleFileGroupChat protocols.SimpleFileGroupChat
 	err = json.Unmarshal(pin.ContentBody, &simpleFileGroupChat)
 	if err != nil {
 		return err
 	}
-	// 创建聊天消息模型
+	// Create chat message model
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleFileGroupChat.GroupId,
 		TxId:        pin.Id[:len(pin.Id)-2],
@@ -1278,29 +1277,29 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		MetaId:      pin.CreateMetaId,
 		Address:     pin.CreateAddress,
 		Protocol:    pin.Path,
-		Content:     simpleFileGroupChat.Attachment, // 文件附件
-		ContentType: simpleFileGroupChat.FileType,   // 文件类型
+		Content:     simpleFileGroupChat.Attachment, // File attachment
+		ContentType: simpleFileGroupChat.FileType,   // File type
 		Encryption:  simpleFileGroupChat.Encrypt,
-		ChatType:    models.ChatTypeFile,      // 文件类型
-		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
+		ChatType:    models.ChatTypeFile,      // File type
+		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleFileGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存聊天消息到 TalkGroupChatPinCollection
+	// Save chat message to TalkGroupChatPinCollection
 	err = cdb.SaveChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// Save timestamp index (decide which collection to save to based on user state)
 	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步更新群列表
+	// Enqueue message for asynchronous group list updates
 	err = cdb.EnqueueChatMessage(chat)
 	if err != nil {
 		return err
@@ -1309,12 +1308,12 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	return nil
 }
 
-// 处理群组红包
+// Process group lucky bag
 func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingRed, err := cdb.GetLuckyBagByPinId(pin.Id)
 	if err == nil && existingRed != nil {
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		if existingRed.BlockHeight != pin.GenesisHeight {
 			existingRed.BlockHeight = pin.GenesisHeight
 			err = cdb.SaveLuckyBag(existingRed)
@@ -1325,14 +1324,14 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleLuckyBag protocols.SimpleGroupLuckyBag
 	err = json.Unmarshal(pin.ContentBody, &simpleLuckyBag)
 	if err != nil {
 		return err
 	}
 
-	// 转换支付列表
+	// Convert payment list
 	var (
 		payList       []*models.ProInfoPayList
 		luckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
@@ -1355,9 +1354,9 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		}
 	}
 
-	// 创建红包模型
+	// Create lucky bag model
 	redEnvelope := &models.TalkGroupLuckyBagV3{
-		CommunityId:         "", // 需要从群组信息中获取
+		CommunityId:         "", // Need to get from group info
 		GroupId:             simpleLuckyBag.GroupId,
 		TxId:                pin.Id[:len(pin.Id)-2],
 		PinId:               pin.Id,
@@ -1385,13 +1384,13 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 
 	//
 
-	// 保存红包信息
+	// Save lucky bag info
 	err = cdb.SaveLuckyBag(redEnvelope)
 	if err != nil {
 		return err
 	}
 
-	// 创建聊天消息模型（用于群聊显示）
+	// Create chat message model (for group chat display)
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleLuckyBag.GroupId,
 		TxId:        pin.Id[:len(pin.Id)-2],
@@ -1399,30 +1398,30 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		MetaId:      pin.CreateMetaId,
 		Address:     pin.CreateAddress,
 		Protocol:    pin.Path,
-		Content:     "[LuckyBag]:" + simpleLuckyBag.Content, // 红包祝福语
+		Content:     "[LuckyBag]:" + simpleLuckyBag.Content, // Lucky bag blessing message
 		ContentType: "text/plain",
 		Encryption:  "",
-		ChatType:    models.ChatTypeLuckyBag,  // 红包类型
-		InsideIndex: models.ChatInsideIndexIn, // 默认为进入状态
+		ChatType:    models.ChatTypeLuckyBag,  // Lucky bag type
+		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    "",
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存聊天消息到 TalkGroupChatPinCollection
+	// Save chat message to TalkGroupChatPinCollection
 	err = cdb.SaveChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// Save timestamp index (decide which collection to save to based on user state)
 	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步更新群列表
+	// Enqueue message for asynchronous group list updates
 	err = cdb.EnqueueChatMessage(chat)
 	if err != nil {
 		return err
@@ -1431,12 +1430,12 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	return nil
 }
 
-// 处理群组抢红包
+// Process group grab lucky bag
 func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingOpen, err := cdb.GetOpenLuckyBagByPinId(pin.Id)
 	if err == nil && existingOpen != nil {
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		if existingOpen.BlockHeight != pin.GenesisHeight {
 			existingOpen.BlockHeight = pin.GenesisHeight
 			err = cdb.SaveOpenLuckyBag(existingOpen)
@@ -1447,14 +1446,14 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleOpenLuckyBag protocols.SimpleGroupOpenLuckyBag
 	err = json.Unmarshal(pin.ContentBody, &simpleOpenLuckyBag)
 	if err != nil {
 		return err
 	}
 
-	// 转换输入交易
+	// Convert input transaction
 	var (
 		vins   []*models.TxIn
 		amount int64  = 0
@@ -1478,9 +1477,9 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 
 	}
 
-	// 创建抢红包模型
+	// Create grab lucky bag model
 	openLuckyBag := &models.TalkGroupOpenLuckyBagV3{
-		CommunityId:         "", // 需要从群组信息中获取
+		CommunityId:         "", // Need to get from group info
 		GroupId:             simpleOpenLuckyBag.GroupId,
 		TxId:                pin.Id[:len(pin.Id)-2],
 		PinId:               pin.Id,
@@ -1508,20 +1507,20 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 		GrabMsg:             "success",
 	}
 
-	// 保存抢红包信息
+	// Save grab lucky bag info
 	err = cdb.SaveOpenLuckyBag(openLuckyBag)
 	if err != nil {
 		return err
 	}
 
-	// 保存抢红包列表记录
+	// Save grab lucky bag list record
 	err = cdb.SaveOpenLuckyBagList(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, int64(index))
 	if err != nil {
 		log.Printf("SaveOpenLuckyBagList err: %v", err)
-		// 不返回错误，因为主流程已经成功
+		// Don't return error because main flow has succeeded
 	}
 
-	// 创建聊天消息模型（用于群聊显示）
+	// Create chat message model (for group chat display)
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleOpenLuckyBag.GroupId,
 		TxId:        pin.Id[:len(pin.Id)-2],
@@ -1529,30 +1528,30 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 		MetaId:      pin.CreateMetaId,
 		Address:     pin.CreateAddress,
 		Protocol:    pin.Path,
-		Content:     "[Grab LuckyBag]", // 可以根据实际金额显示
+		Content:     "[Grab LuckyBag]", // Can display based on actual amount
 		ContentType: "text/plain",
 		Encryption:  "",
-		ChatType:    models.ChatTypeOpenLuckyBag, // 抢红包类型
-		InsideIndex: models.ChatInsideIndexIn,    // 默认为进入状态
+		ChatType:    models.ChatTypeOpenLuckyBag, // Grab lucky bag type
+		InsideIndex: models.ChatInsideIndexIn,    // Default to in state
 		ReplyPin:    simpleOpenLuckyBag.LuckyBagPinId,
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 	}
 
-	// 保存聊天消息到 TalkGroupChatPinCollection
+	// Save chat message to TalkGroupChatPinCollection
 	err = cdb.SaveChat(chat)
 	if err != nil {
 		return err
 	}
 
-	// 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// Save timestamp index (decide which collection to save to based on user state)
 	err = cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
-	// 将消息加入队列，异步更新群列表
+	// Enqueue message for asynchronous group list updates
 	err = cdb.EnqueueChatMessage(chat)
 	if err != nil {
 		return err
@@ -1561,12 +1560,12 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 	return nil
 }
 
-// 处理群组回收红包
+// Process group reclaim lucky bag
 func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
-	// 检查是否已经保存过该 PinId
+	// Check if this PinId has already been saved
 	existingResidue, err := cdb.GetResidueLuckyBagByLuckyBagPinId(pin.Id)
 	if err == nil && existingResidue != nil {
-		// 已经存在，跳过处理
+		// Already exists, skip processing
 		if existingResidue.BlockHeight != pin.GenesisHeight {
 			existingResidue.BlockHeight = pin.GenesisHeight
 			err = cdb.SaveResidueLuckyBag(existingResidue)
@@ -1577,14 +1576,14 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 		return nil
 	}
 
-	// 解析协议数据
+	// Parse protocol data
 	var simpleResidueLuckyBag protocols.SimpleGroupResidueLuckyBag
 	err = json.Unmarshal(pin.ContentBody, &simpleResidueLuckyBag)
 	if err != nil {
 		return err
 	}
 
-	// 转换已使用列表
+	// Convert used list
 	var (
 		usedList             []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
 		vins                 []*models.TxIn           = make([]*models.TxIn, 0)
@@ -1610,9 +1609,9 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 		}
 	}
 
-	// 创建回收红包模型
+	// Create reclaim lucky bag model
 	residueLuckyBag := &models.TalkGroupResidueLuckyBagV3{
-		CommunityId:         "", // 需要从群组信息中获取
+		CommunityId:         "", // Need to get from group info
 		GroupId:             simpleResidueLuckyBag.GroupId,
 		TxId:                pin.Id[:len(pin.Id)-2],
 		PinId:               pin.Id,
@@ -1634,22 +1633,22 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 		Chain:               pin.ChainName,
 	}
 
-	// 保存回收红包信息
+	// Save reclaim lucky bag info
 	err = cdb.SaveResidueLuckyBag(residueLuckyBag)
 	if err != nil {
 		return err
 	}
 
-	// 保存回收红包列表记录
+	// Save reclaim lucky bag list record
 	err = cdb.SaveResidueLuckyBagList(simpleResidueLuckyBag.LuckyBagPinId, pin.Id, simpleResidueLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, luckyBagOutIndexList)
 	if err != nil {
 		log.Printf("SaveResidueLuckyBagList err: %v", err)
-		// 不返回错误，因为主流程已经成功
+		// Don't return error because main flow has succeeded
 	}
 
 	return nil
 
-	// // 创建聊天消息模型（用于群聊显示）
+	// // Create chat message model (for group chat display)
 	// chat := &models.TalkGroupChatV3{
 	// 	GroupId:     simpleResidueLuckyBag.GroupId,
 	// 	TxId:        pin.Id[:len(pin.Id)-2],
@@ -1657,30 +1656,30 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 	// 	MetaId:      pin.CreateMetaId,
 	// 	Address:     pin.CreateAddress,
 	// 	Protocol:    pin.Path,
-	// 	Content:     "[Recycle LuckyBag]:" + simpleResidueLuckyBag.Code, // 可以根据实际情况显示
+	// 	Content:     "[Recycle LuckyBag]:" + simpleResidueLuckyBag.Code, // Can display based on actual situation
 	// 	ContentType: "text/plain",
 	// 	Encryption:  "",
-	// 	ChatType:    models.ChatTypeRecycleLuckyBag, // 回收红包类型
-	// 	InsideIndex: models.ChatInsideIndexIn,       // 默认为进入状态
+	// 	ChatType:    models.ChatTypeRecycleLuckyBag, // Reclaim lucky bag type
+	// 	InsideIndex: models.ChatInsideIndexIn,       // Default to in state
 	// 	ReplyPin:    "",
 	// 	Timestamp:   pin.Timestamp,
 	// 	Chain:       pin.ChainName,
 	// 	BlockHeight: pin.GenesisHeight,
 	// }
 
-	// // 保存聊天消息到 TalkGroupChatPinCollection
+	// // Save chat message to TalkGroupChatPinCollection
 	// err = cdb.SaveChat(chat)
 	// if err != nil {
 	// 	return err
 	// }
 
-	// // 保存时间戳索引（根据用户状态决定保存到哪个集合）
+	// // Save timestamp index (decide which collection to save to based on user state)
 	// err = cdb.SaveChatTimestampWithState(chat)
 	// if err != nil {
 	// 	return err
 	// }
 
-	// // 将消息加入队列，异步更新群列表
+	// // Enqueue message for asynchronous group list updates
 	// err = cdb.EnqueueChatMessage(chat)
 	// if err != nil {
 	// 	return err
@@ -1689,7 +1688,7 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 	return nil
 }
 
-// 辅助函数：将 interface{} 转换为 string
+// Helper function: convert interface{} to string
 func toString(v interface{}) string {
 	if v == nil {
 		return ""
@@ -1704,7 +1703,7 @@ func toString(v interface{}) string {
 	}
 }
 
-// 辅助函数：将 interface{} 转换为 int64
+// Helper function: convert interface{} to int64
 func toInt64(v interface{}) int64 {
 	if v == nil {
 		return 0
@@ -1730,7 +1729,7 @@ func toInt64(v interface{}) int64 {
 	}
 }
 
-// 辅助函数：将 interface{} 转换为 uint64
+// Helper function: convert interface{} to uint64
 func toUint64(v interface{}) uint64 {
 	if v == nil {
 		return 0
@@ -1758,7 +1757,7 @@ func toUint64(v interface{}) uint64 {
 	}
 }
 
-// 辅助函数：将 interface{} 转换为 bool
+// Helper function: convert interface{} to bool
 func toBool(v interface{}) bool {
 	if v == nil {
 		return false

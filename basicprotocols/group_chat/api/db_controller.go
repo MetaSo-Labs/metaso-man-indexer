@@ -21,17 +21,17 @@ func NewDbController() *DbController {
 	}
 }
 
-// @Summary 根据communityId或pinId获取社区版本信息
-// @Description 根据communityId或pinId查询TalkCommunityVersionInfoCollection数据
-// @Tags 数据库查询
+// @Summary Get community version info by communityId or pinId
+// @Description Query TalkCommunityVersionInfoCollection data by communityId or pinId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param communityId query string false "社区ID"
-// @Param pinId query string false "PinID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param communityId query string false "Community ID"
+// @Param pinId query string false "Pin ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/version [get]
 func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -41,7 +41,7 @@ func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -55,7 +55,7 @@ func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 		prefix := pinId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_community_version_info", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供communityId或pinId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or pinId parameter"), t, 1))
 		return
 	}
 
@@ -70,21 +70,21 @@ func (c *DbController) GetCommunityVersionInfo(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据communityId获取社区信息
-// @Description 根据communityId查询TalkCommunityInfoCollection数据
-// @Tags 数据库查询
+// @Summary Get community info by communityId
+// @Description Query TalkCommunityInfoCollection data by communityId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param communityId query string true "社区ID"
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param communityId query string true "Community ID"
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/info [get]
 func (c *DbController) GetCommunityInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	communityId := ctx.Query("communityId")
 	if communityId == "" {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("communityId参数不能为空"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("communityId parameter cannot be empty"), t, 1))
 		return
 	}
 
@@ -97,17 +97,17 @@ func (c *DbController) GetCommunityInfo(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 根据communityId或pinId获取社区加入记录
-// @Description 根据communityId或pinId查询TalkCommunityJoinCollection数据
-// @Tags 数据库查询
+// @Summary Get community join records by communityId or pinId
+// @Description Query TalkCommunityJoinCollection data by communityId or pinId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param communityId query string false "社区ID"
-// @Param pinId query string false "PinID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param communityId query string false "Community ID"
+// @Param pinId query string false "Pin ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/join [get]
 func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -117,7 +117,7 @@ func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -130,7 +130,7 @@ func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 		prefix := pinId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_community_join", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供communityId或pinId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or pinId parameter"), t, 1))
 		return
 	}
 
@@ -145,17 +145,17 @@ func (c *DbController) GetCommunityJoin(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据communityId或metaId获取社区成员列表
-// @Description 根据communityId或metaId查询TalkCommunityPersonCollection数据
-// @Tags 数据库查询
+// @Summary Get community person list by communityId or metaId
+// @Description Query TalkCommunityPersonCollection data by communityId or metaId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param communityId query string false "社区ID"
-// @Param metaId query string false "MetaID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param communityId query string false "Community ID"
+// @Param metaId query string false "Meta ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/person [get]
 func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -165,7 +165,7 @@ func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -178,7 +178,7 @@ func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 		prefix := metaId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_community_person", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供communityId或metaId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide communityId or metaId parameter"), t, 1))
 		return
 	}
 
@@ -193,21 +193,21 @@ func (c *DbController) GetCommunityPerson(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据groupId获取群组信息
-// @Description 根据groupId查询TalkGroupInfoCollection数据
-// @Tags 数据库查询
+// @Summary Get group info by groupId
+// @Description Query TalkGroupInfoCollection data by groupId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param groupId query string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/info [get]
 func (c *DbController) GetGroupInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId参数不能为空"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
 		return
 	}
 
@@ -220,17 +220,17 @@ func (c *DbController) GetGroupInfo(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 根据groupId或pinId获取群组版本信息
-// @Description 根据groupId或pinId查询TalkGroupVersionInfoCollection数据
-// @Tags 数据库查询
+// @Summary Get group version info by groupId or pinId
+// @Description Query TalkGroupVersionInfoCollection data by groupId or pinId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param groupId query string false "群组ID"
-// @Param pinId query string false "PinID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param groupId query string false "Group ID"
+// @Param pinId query string false "Pin ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version [get]
 func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -240,7 +240,7 @@ func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -253,7 +253,7 @@ func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 		prefix := pinId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_group_version_info", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供groupId或pinId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or pinId parameter"), t, 1))
 		return
 	}
 
@@ -268,17 +268,17 @@ func (c *DbController) GetGroupVersionInfo(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据groupId或pinId获取群组加入记录
-// @Description 根据groupId或pinId查询TalkGroupJoinCollection数据
-// @Tags 数据库查询
+// @Summary Get group join records by groupId or pinId
+// @Description Query TalkGroupJoinCollection data by groupId or pinId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param groupId query string false "群组ID"
-// @Param pinId query string false "PinID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param groupId query string false "Group ID"
+// @Param pinId query string false "Pin ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/join [get]
 func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -288,7 +288,7 @@ func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -301,7 +301,7 @@ func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 		prefix := pinId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_group_join", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供groupId或pinId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or pinId parameter"), t, 1))
 		return
 	}
 
@@ -316,17 +316,17 @@ func (c *DbController) GetGroupJoin(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据groupId或metaId获取群组成员列表
-// @Description 根据groupId或metaId查询TalkGroupPersonCollection数据
-// @Tags 数据库查询
+// @Summary Get group person list by groupId or metaId
+// @Description Query TalkGroupPersonCollection data by groupId or metaId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param groupId query string false "群组ID"
-// @Param metaId query string false "MetaID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param groupId query string false "Group ID"
+// @Param metaId query string false "Meta ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/person [get]
 func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -336,7 +336,7 @@ func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -349,7 +349,7 @@ func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 		prefix := metaId + "_"
 		results, queryErr = c.dbService.QueryByPrefix("talk_group_person", prefix, limit)
 	} else {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("必须提供groupId或metaId参数"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("must provide groupId or metaId parameter"), t, 1))
 		return
 	}
 
@@ -364,16 +364,16 @@ func (c *DbController) GetGroupPerson(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据timestamp获取聊天队列列表
-// @Description 根据timestamp查询TalkGroupChatQueueCollection数据，或不传timestamp获取所有数据
-// @Tags 数据库查询
+// @Summary Get chat queue list by timestamp
+// @Description Query TalkGroupChatQueueCollection data by timestamp, or get all data without timestamp
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param timestamp query string false "时间戳"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param timestamp query string false "Timestamp"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/queue [get]
 func (c *DbController) GetChatQueue(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -382,7 +382,7 @@ func (c *DbController) GetChatQueue(ctx *gin.Context) {
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -407,21 +407,21 @@ func (c *DbController) GetChatQueue(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据pinId获取聊天消息
-// @Description 根据pinId查询TalkGroupChatPinCollection数据
-// @Tags 数据库查询
+// @Summary Get chat message by pinId
+// @Description Query TalkGroupChatPinCollection data by pinId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param pinId query string true "PinID"
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param pinId query string true "Pin ID"
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin [get]
 func (c *DbController) GetChatPin(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	pinId := ctx.Query("pinId")
 	if pinId == "" {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId参数不能为空"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter cannot be empty"), t, 1))
 		return
 	}
 
@@ -434,29 +434,29 @@ func (c *DbController) GetChatPin(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 根据groupId获取聊天时间戳列表
-// @Description 根据groupId查询TalkGroupChatTimestampCollection数据
-// @Tags 数据库查询
+// @Summary Get chat timestamp list by groupId
+// @Description Query TalkGroupChatTimestampCollection data by groupId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param limit query int false "限制数量" default(10)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param groupId query string true "Group ID"
+// @Param limit query int false "Limit count" default(10)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/timestamp [get]
 func (c *DbController) GetChatTimestamp(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId参数不能为空"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
 		return
 	}
 
 	limitStr := ctx.DefaultQuery("limit", "10")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit参数必须是数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("limit parameter must be a number"), t, 1))
 		return
 	}
 
@@ -472,21 +472,21 @@ func (c *DbController) GetChatTimestamp(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 根据metaId获取用户群列表
-// @Description 根据metaId查询TalkMetaIdContextListCollection数据
-// @Tags 数据库查询
+// @Summary Get user group list by metaId
+// @Description Query TalkMetaIdContextListCollection data by metaId
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param metaId query string true "MetaID"
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param metaId query string true "Meta ID"
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/user/context [get]
 func (c *DbController) GetUserContext(ctx *gin.Context) {
 	var t = time.Now().Unix()
 	metaId := ctx.Query("metaId")
 	if metaId == "" {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId参数不能为空"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId parameter cannot be empty"), t, 1))
 		return
 	}
 
@@ -499,13 +499,13 @@ func (c *DbController) GetUserContext(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
 
-// @Summary 获取数据库统计信息
-// @Description 获取所有数据库集合的统计信息
-// @Tags 数据库查询
+// @Summary Get database statistics
+// @Description Get statistics for all database collections
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "统计信息"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Success 200 {object} map[string]interface{} "Statistics"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/stats [get]
 func (c *DbController) GetDatabaseStats(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -518,12 +518,12 @@ func (c *DbController) GetDatabaseStats(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(stats, t))
 }
 
-// @Summary 获取所有可用的数据库集合
-// @Description 获取所有可用的数据库集合名称
-// @Tags 数据库查询
+// @Summary Get all available database collections
+// @Description Get all available database collection names
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "集合列表"
+// @Success 200 {object} map[string]interface{} "Collection list"
 // @Router /api/db/collections [get]
 func (c *DbController) GetCollections(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -535,16 +535,16 @@ func (c *DbController) GetCollections(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 获取所有群组版本信息列表（分页）
-// @Description 获取TalkGroupVersionInfoCollection的所有数据，支持分页
-// @Tags 数据库查询
+// @Summary Get all group version info list (pagination)
+// @Description Get all data of TalkGroupVersionInfoCollection, support pagination
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param page query int false "页码，从1开始" default(1)
-// @Param size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param page query int false "Page number, starting from 1" default(1)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version/all [get]
 func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -553,34 +553,34 @@ func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("page参数必须是大于0的数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("page parameter must be a number greater than 0"), t, 1))
 		return
 	}
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil || size < 1 || size > 100 {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size参数必须是1-100之间的数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number between 1-100"), t, 1))
 		return
 	}
 
-	// 计算要跳过的记录数
+	// Calculate the number of records to skip
 	skip := (page - 1) * size
 
-	// 获取总数据量（用于分页信息）
+	// Get total data count (for pagination info)
 	totalCount, err := c.dbService.GetCollectionCount("talk_group_version_info")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	// 获取分页数据
+	// Get paginated data
 	results, err := c.dbService.QueryAll("talk_group_version_info", skip+size)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	// 跳过前面的记录，获取当前页的数据
+	// Skip previous records to get the data for the current page
 	var pageResults []map[string]interface{}
 	if skip < len(results) {
 		end := skip + size
@@ -590,7 +590,7 @@ func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 		pageResults = results[skip:end]
 	}
 
-	// 计算分页信息
+	// Calculate pagination info
 	totalPages := (totalCount + size - 1) / size
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
@@ -606,16 +606,16 @@ func (c *DbController) GetAllGroupVersionInfo(ctx *gin.Context) {
 	}, t))
 }
 
-// @Summary 获取所有聊天消息列表（分页）
-// @Description 获取TalkGroupChatPinCollection的所有数据，支持分页
-// @Tags 数据库查询
+// @Summary Get all chat message list (pagination)
+// @Description Get all data of TalkGroupChatPinCollection, support pagination
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param page query int false "页码，从1开始" default(1)
-// @Param size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{} "查询结果"
-// @Failure 400 {object} map[string]interface{} "参数错误"
-// @Failure 500 {object} map[string]interface{} "服务器错误"
+// @Param page query int false "Page number, starting from 1" default(1)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Query result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin/all [get]
 func (c *DbController) GetAllChatPin(ctx *gin.Context) {
 	var t = time.Now().Unix()
@@ -624,34 +624,34 @@ func (c *DbController) GetAllChatPin(ctx *gin.Context) {
 
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("page参数必须是大于0的数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("page parameter must be a number greater than 0"), t, 1))
 		return
 	}
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil || size < 1 || size > 100 {
-		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size参数必须是1-100之间的数字"), t, 1))
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number between 1-100"), t, 1))
 		return
 	}
 
-	// 计算要跳过的记录数
+	// Calculate the number of records to skip
 	skip := (page - 1) * size
 
-	// 获取总数据量（用于分页信息）
+	// Get total data count (for pagination info)
 	totalCount, err := c.dbService.GetCollectionCount("talk_group_chat_pin")
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	// 获取分页数据
+	// Get paginated data
 	results, err := c.dbService.QueryAll("talk_group_chat_pin", skip+size)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
 
-	// 跳过前面的记录，获取当前页的数据
+	// Skip previous records to get the data for the current page
 	var pageResults []map[string]interface{}
 	if skip < len(results) {
 		end := skip + size
@@ -661,7 +661,7 @@ func (c *DbController) GetAllChatPin(ctx *gin.Context) {
 		pageResults = results[skip:end]
 	}
 
-	// 计算分页信息
+	// Calculate pagination info
 	totalPages := (totalCount + size - 1) / size
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{

@@ -26,24 +26,24 @@ const docTemplategroup_chat_swagger = `{
     "paths": {},
     "tags": [
         {
-            "description": "数据库查询相关API，用于查看Pebble数据库中的数据",
-            "name": "数据库查询"
+            "description": "Database query related APIs for viewing data in Pebble database",
+            "name": "Database Query"
         },
         {
-            "description": "群组管理相关API，包括群组信息、成员管理等",
-            "name": "群组管理"
+            "description": "Group management related APIs, including group information, member management, etc.",
+            "name": "Group Management"
         },
         {
-            "description": "社区管理相关API，包括社区信息、成员管理等",
-            "name": "社区管理"
+            "description": "Community management related APIs, including community information, member management, etc.",
+            "name": "Community Management"
         },
         {
-            "description": "聊天功能相关API，包括消息、队列等",
-            "name": "聊天功能"
+            "description": "Chat function related APIs, including messages, queues, etc.",
+            "name": "Chat Function"
         },
         {
-            "description": "用户管理相关API，包括用户信息、群列表等",
-            "name": "用户管理"
+            "description": "User management related APIs, including user information, group lists, etc.",
+            "name": "User Management"
         }
     ]
 }`
@@ -55,7 +55,7 @@ var SwaggerInfogroup_chat_swagger = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Group Chat API",
-	Description:      "群聊服务 API 文档，包含数据库查询、群组管理、社区管理等功能",
+	Description:      "Group Chat Service API documentation, including database queries, group management, community management and other functions",
 	InfoInstanceName: "group_chat_swagger",
 	SwaggerTemplate:  docTemplategroup_chat_swagger,
 	LeftDelim:        "{{",
@@ -64,16 +64,16 @@ var SwaggerInfogroup_chat_swagger = &swag.Spec{
 
 var swaggerRegistered bool
 
-// RegisterSwagger 手动注册 Swagger
+// RegisterSwagger manually register Swagger
 func RegisterSwagger() {
 	if swaggerRegistered {
 		return
 	}
 
-	// 使用 recover 来捕获重复注册的 panic
+	// Use recover to catch duplicate registration panic
 	defer func() {
 		if r := recover(); r != nil {
-			// 如果注册失败，忽略错误
+			// If registration fails, ignore error
 			swaggerRegistered = true
 		}
 	}()

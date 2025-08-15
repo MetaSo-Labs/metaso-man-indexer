@@ -1,146 +1,146 @@
-# 群聊模块 Swagger 文档管理
+# Group Chat Module Swagger Documentation Management
 
-## 概述
+## Overview
 
-本目录包含群聊模块的 Swagger 文档管理工具，所有 swagger 相关的功能都集中在这里。
+This directory contains the Swagger documentation management tools for the group chat module. All swagger-related functionality is centralized here.
 
-## 目录结构
+## Directory Structure
 
 ```
 api/swagger/
-├── swagger.go      # Swagger 路由配置
-├── generate.go     # 文档生成工具
-├── cli.go          # 命令行接口
+├── swagger.go      # Swagger route configuration
+├── generate.go     # Documentation generation tool
+├── cli.go          # Command line interface
 ├── cmd/
-│   └── main.go     # CLI 工具入口
-├── generate.sh     # 生成脚本
-└── README.md       # 本文件
+│   └── main.go     # CLI tool entry point
+├── generate.sh     # Generation script
+└── README.md       # This file
 ```
 
-## 使用方法
+## Usage
 
-### 1. 生成 Swagger 文档
+### 1. Generate Swagger Documentation
 
-#### 方法一：使用脚本（推荐）
+#### Method 1: Using script (recommended)
 ```bash
 cd api/swagger
 ./generate.sh
 ```
 
-#### 方法二：使用 Go 工具
+#### Method 2: Using Go tool
 ```bash
 go run api/swagger/cmd/main.go generate
 ```
 
-#### 方法三：直接使用 swag 命令
+#### Method 3: Directly using swag command
 ```bash
 swag init -g cmd/main.go -o ./docs --parseDependency --parseInternal
 ```
 
-### 2. 清理文档
+### 2. Clean Documentation
 ```bash
 go run api/swagger/cmd/main.go clean
 ```
 
-### 3. 重新生成文档
+### 3. Regenerate Documentation
 ```bash
 go run api/swagger/cmd/main.go regenerate
 ```
 
-### 4. 安装 swag 工具
+### 4. Install swag tool
 ```bash
 go run api/swagger/cmd/main.go install
 ```
 
-## 启动服务器
+## Start Server
 
-生成文档后，启动服务器：
+After generating documentation, start the server:
 
 ```bash
 go run cmd/main.go -host 0.0.0.0 -port 7568
 ```
 
-## 访问 Swagger 文档
+## Access Swagger Documentation
 
-服务器启动后，访问以下地址查看 API 文档：
+After the server starts, visit the following address to view API documentation:
 
 ```
 http://0.0.0.0:7568/group-chat/docs/index.html
 ```
 
-## 开发工作流
+## Development Workflow
 
-### 1. 修改 API 代码后
+### 1. After Modifying API Code
 
-1. 更新 API 代码和注释
-2. 重新生成文档：
+1. Update API code and comments
+2. Regenerate documentation:
    ```bash
    cd api/swagger && ./generate.sh
    ```
-3. 重启服务器
-4. 访问文档查看更新
+3. Restart server
+4. Visit documentation to see updates
 
-### 2. 添加新的 API
+### 2. Adding New APIs
 
-1. 在 `api/db_controller.go` 中添加新的 API 函数
-2. 添加完整的 Swagger 注释
-3. 在 `api/db_routes.go` 中注册路由
-4. 生成文档：`cd api/swagger && ./generate.sh`
-5. 启动服务器测试
+1. Add new API function in `api/db_controller.go`
+2. Add complete Swagger comments
+3. Register route in `api/db_routes.go`
+4. Generate documentation: `cd api/swagger && ./generate.sh`
+5. Start server for testing
 
-## Swagger 注释格式
+## Swagger Comment Format
 
 ```go
-// @Summary API 标题
-// @Description API 详细描述
-// @Tags 数据库查询
+// @Summary API title
+// @Description API detailed description
+// @Tags Database Query
 // @Accept json
 // @Produce json
-// @Param 参数名 query 参数类型 是否必需 "参数描述"
-// @Success 200 {object} map[string]interface{} "成功描述"
-// @Failure 400 {object} map[string]interface{} "错误描述"
+// @Param parameter_name query parameter_type required "parameter description"
+// @Success 200 {object} map[string]interface{} "success description"
+// @Failure 400 {object} map[string]interface{} "error description"
 // @Router /api/path [get]
 func YourAPIHandler(c *gin.Context) {
-    // 你的代码
+    // Your code
 }
 ```
 
-## 注意事项
+## Notes
 
-1. **注释位置**：Swagger 注释必须紧贴在函数上方
-2. **注释格式**：必须使用 `//` 开头的注释
-3. **参数类型**：确保参数类型与实际代码匹配
-4. **路由路径**：确保 `@Router` 中的路径与实际路由一致
-5. **标签使用**：使用合适的标签来组织 API
+1. **Comment Position**: Swagger comments must be directly above the function
+2. **Comment Format**: Must use comments starting with `//`
+3. **Parameter Types**: Ensure parameter types match the actual code
+4. **Route Path**: Ensure the path in `@Router` matches the actual route
+5. **Tag Usage**: Use appropriate tags to organize APIs
 
-## 故障排除
+## Troubleshooting
 
-### 1. swag 命令未找到
+### 1. swag command not found
 ```bash
 go install github.com/swaggo/swag/cmd/swag@latest
 ```
 
-### 2. 生成的文档不完整
-检查注释格式是否正确，确保：
-- 注释以 `//` 开头
-- 每个注释都在函数上方
-- 参数类型和描述正确
+### 2. Generated documentation incomplete
+Check if comment format is correct, ensure:
+- Comments start with `//`
+- Each comment is above the function
+- Parameter types and descriptions are correct
 
-### 3. Swagger UI 无法访问
-确保：
-- 服务器正在运行
-- 访问正确的 URL：`http://0.0.0.0:7568/group-chat/swagger/index.html`
-- 端口没有被其他服务占用
+### 3. Swagger UI inaccessible
+Ensure:
+- Server is running
+- Access correct URL: `http://0.0.0.0:7568/group-chat/swagger/index.html`
+- Port is not occupied by other services
 
-## 文件说明
+## File Description
 
-- `swagger.go`: 配置 Swagger 路由和 URL 生成
-- `generate.go`: 提供文档生成、清理、重新生成等功能
-- `cli.go`: 命令行接口，支持各种操作
-- `generate.sh`: 简单的生成脚本，方便快速使用
+- `swagger.go`: Configure Swagger routes and URL generation
+- `generate.go`: Provide documentation generation, cleanup, regeneration and other functions
+- `cli.go`: Command line interface, supports various operations
+- `generate.sh`: Simple generation script for quick use
 
-## 更多资源
+## More Resources
 
-- [Swaggo 官方文档](https://github.com/swaggo/swag)
-- [Swagger 规范](https://swagger.io/specification/)
-- [Gin 框架文档](https://gin-gonic.com/docs/) 
+- [Swaggo Official Documentation](https://github.com/swaggo/swag)
+- [Swagger Specification](https://swagger.io/specification/)
+- [Gin Framework Documentation](https://gin-gonic.com/docs/) 
