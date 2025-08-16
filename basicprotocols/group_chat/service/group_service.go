@@ -8,6 +8,7 @@ import (
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/models"
+	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"time"
 )
 
@@ -42,6 +43,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	StartResidueLuckyBagQueueProcessor()
 
 	db.SetHandleGroupChatItem(wsForGroupChatItem)
+
+	// Initialize cache service for lucky bag
+	cache_service.InitCacheService("", "", 0)
 
 	return nil
 }

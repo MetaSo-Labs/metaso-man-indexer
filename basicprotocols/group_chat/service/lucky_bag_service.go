@@ -7,6 +7,7 @@ import (
 	"log"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/models"
+	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/common"
 	"strconv"
 	"strings"
@@ -424,45 +425,87 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	has := false
 
 	for _, unused := range unusedList {
-		//redis
-		// usedMetaId, _ := redis.GetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, unused.Index)
-		// if usedMetaId != "" {
-		// 	if usedMetaId != metaId {
-		// 		continue
-		// 	}else {
-		// 		has = true
-		// 		grabEntityList = append(grabEntityList, &grabEntity{
-		// 			unusedIndex:   unused.Index,
-		// 			unusedAmount:  unused.Amount,
-		// 			unusedAddress: unused.Address,
-		// 			tokenIndex:    "",
-		// 		})
-		// 		break
-		// 	}
-		// }else {
-		// 	_, err := redis.SetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, metaId, unused.Index)
-		// 	if err != nil {
-		// 		major.Println(fmt.Sprintf("[REDIS] Set userinfo err:%s", err.Error()))
-		// 		continue
-		// 	}else {
-		// 		has = true
-		// 		grabEntityList = append(grabEntityList, &grabEntity{
-		// 			unusedIndex:   unused.Index,
-		// 			unusedAmount:  unused.Amount,
-		// 			unusedAddress: unused.Address,
-		// 			tokenIndex:    "",
-		// 		})
-		// 		break
-		// 	}
-		// }
-		has = true
-		grabEntityList = append(grabEntityList, &grabEntity{
-			unusedIndex:   unused.Index,
-			unusedAmount:  unused.Amount,
-			unusedAddress: unused.Address,
-			tokenIndex:    "",
-		})
-		break // Only grab one lucky bag
+		// //redis
+		//         // usedMetaId, _ := redis.GetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, unused.Index)
+		//         // if usedMetaId != "" {
+		//         //  if usedMetaId != metaId {
+		//         //      continue
+		//         //  }else {
+		//         //      has = true
+		//         //      grabEntityList = append(grabEntityList, &grabEntity{
+		//         //          unusedIndex:   unused.Index,
+		//         //          unusedAmount:  unused.Amount,
+		//         //          unusedAddress: unused.Address,
+		//         //          tokenIndex:    "",
+		//         //      })
+		//         //      break
+		//         //  }
+		//         // }else {
+		//         //  _, err := redis.SetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, metaId, unused.Index)
+		//         //  if err != nil {
+		//         //      major.Println(fmt.Sprintf("[REDIS] Set userinfo err:%s", err.Error()))
+		//         //      continue
+		//         //  }else {
+		//         //      has = true
+		//         //      grabEntityList = append(grabEntityList, &grabEntity{
+		//         //          unusedIndex:   unused.Index,
+		//         //          unusedAmount:  unused.Amount,
+		//         //          unusedAddress: unused.Address,
+		//         //          tokenIndex:    "",
+		//         //      })
+		//         //      break
+		//         //  }
+		//         // }
+		//         has = true
+		//         grabEntityList = append(grabEntityList, &grabEntity{
+		//             unusedIndex:   unused.Index,
+		//             unusedAmount:  unused.Amount,
+		//             unusedAddress: unused.Address,
+		//             tokenIndex:    "",
+		//         })
+		//         break // Only grab one lucky bag
+
+		// Use cache service to check if lucky bag has been grabbed
+		usedMetaId, err := cache_service.GetCacheGiftInfo(luckyBag.GroupId, luckyBag.PinId, unused.Index)
+		if err != nil {
+			log.Printf("[CACHE] Get gift info err: %s", err.Error())
+			continue
+		}
+
+		if usedMetaId != "" {
+			if usedMetaId != metaId {
+				// Already grabbed by another user
+				continue
+			} else {
+				// Current user has already grabbed this lucky bag
+				has = true
+				grabEntityList = append(grabEntityList, &grabEntity{
+					unusedIndex:   unused.Index,
+					unusedAmount:  unused.Amount,
+					unusedAddress: unused.Address,
+					tokenIndex:    "",
+				})
+				break
+			}
+		} else {
+			// Try to set cache lock
+			success, err := cache_service.SetCacheGiftInfo(luckyBag.GroupId, luckyBag.PinId, metaId, unused.Index)
+			if err != nil {
+				log.Printf("[CACHE] Set gift info err: %s", err.Error())
+				continue
+			}
+
+			if success {
+				has = true
+				grabEntityList = append(grabEntityList, &grabEntity{
+					unusedIndex:   unused.Index,
+					unusedAmount:  unused.Amount,
+					unusedAddress: unused.Address,
+					tokenIndex:    "",
+				})
+				break
+			}
+		}
 	}
 
 	if !has {
