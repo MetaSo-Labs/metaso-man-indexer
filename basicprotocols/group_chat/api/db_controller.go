@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/service"
 	"net/http"
 	"strconv"
@@ -665,4 +666,24 @@ func GetAllChatPin(ctx *gin.Context) {
 			"has_prev":    page > 1,
 		},
 	}, t))
+}
+
+// @Summary Get database migration information
+// @Description Get comprehensive database migration information including current status, supported migrations, and migration history
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Migration information"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/migration/info [get]
+func GetMigrationInfo(ctx *gin.Context) {
+	var t = time.Now().Unix()
+
+	info, err := db.GetMigrationInfo()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(info, t))
 }

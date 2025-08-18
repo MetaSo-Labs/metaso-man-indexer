@@ -54,7 +54,16 @@ func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
-	return Pb[TalkGroupChatTimestampCollection].Set(key, []byte(value), pebble.Sync)
+	if err := Pb[TalkGroupChatTimestampCollection].Set(key, []byte(value), pebble.Sync); err != nil {
+		return err
+	}
+
+	// Use GroupId_Timestamp_PinId as primary key to support timestamp range queries
+	key2 := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + chat.PinId)
+	if err := Pb[TalkGroupChatTimestamp2Collection].Set(key2, []byte(value), pebble.Sync); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Get chat message by PinId
@@ -176,6 +185,74 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 			continue
 		}
 		pinId := valueParts[0]
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		// Reach pagination size limit
+		if int64(len(chats)) >= size {
+			break
+		}
+
+		chats = append(chats, chat)
+	}
+
+	return chats, nil
+}
+
+// Get chat message list by group ID and start timestamp using TalkGroupChatTimestamp2Collection
+// This function takes advantage of the new key format: groupId_timestamp_pinId
+// which provides better support for multiple messages at the same timestamp
+func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
+	var chats []*models.TalkGroupChatV3
+	iter, err := Pb[TalkGroupChatTimestamp2Collection].NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	// Construct query start key: groupId_startTimestamp
+	// This will find all messages at or before the specified timestamp
+	// Since key format is groupId_timestamp_pinId, we need to use a prefix that ensures we get all messages
+	// at or before the specified timestamp
+	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10) + "_")
+
+	// Start reverse iteration from specified timestamp (latest messages first)
+	// Use SeekLT to find the last key that is less than our startKey
+	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
+		key := string(iter.Key())
+
+		// Check if it belongs to the specified group
+		if !strings.HasPrefix(key, groupId+"_") {
+			continue
+		}
+
+		// Parse key to extract timestamp and pinId
+		// Key format: groupId_timestamp_pinId
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 3 {
+			continue
+		}
+
+		// Extract timestamp and pinId from key
+		timestampStr := keyParts[1]
+		pinId := keyParts[len(keyParts)-1] // Last part is pinId
+
+		fmt.Printf("[CHAT_DB]timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
+		// Parse timestamp to ensure it's within our range
+		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// Skip messages after our start timestamp (since we're going backwards)
+		if timestamp > startTimestamp {
+			continue
+		}
 
 		// Get complete chat message
 		chat, err := cdb.GetChatByPinId(pinId)
@@ -1228,18 +1305,29 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
 	// Decide which collection to save to based on user state
-	var collection string
+	var (
+		collection  string
+		collection2 string
+	)
 	if groupState == models.RoomStateIn {
 		// User is in group, save to normal collection
 		collection = TalkGroupChatTimestampCollection
+		collection2 = TalkGroupChatTimestamp2Collection
 	} else {
 		// User is not in group, save to invalid collection
 		collection = TalkGroupChatTimestampOutCollection
+		collection2 = TalkGroupChatTimestamp2OutCollection
 	}
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	if err = Pb[collection].Set(key, []byte(value), pebble.Sync); err != nil {
+		return err
+	}
+
+	// Use GroupId_Timestamp as primary key to support timestamp range queries
+	key2 := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + chat.PinId)
+	if err = Pb[collection2].Set(key2, []byte(value), pebble.Sync); err != nil {
 		return err
 	}
 

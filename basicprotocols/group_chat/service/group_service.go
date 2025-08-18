@@ -446,6 +446,92 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	}, nil
 }
 
+// FetchGroupChatListV2 Get group chat list using TalkGroupChatTimestamp2Collection
+func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	var chats []*models.TalkGroupChatV3
+	var err error
+
+	if req.Timestamp > 0 {
+		// Get chat records by timestamp range using new collection
+		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, req.Timestamp, req.Size)
+	} else {
+		// Get latest chat records using new collection
+		// For latest messages, we can use a very large timestamp as start point
+		currentTimestamp := time.Now().Unix()
+		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+	var nextTimestamp int64 = 0
+
+	for i, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:     chat.GroupId,
+			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			Address:     chat.Address,
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			RedMetaId:   "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+		}
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err != nil {
+				replyChat = nil
+			}
+			chatItem.ReplyInfo = &respond.ReplyInfo{
+				PinId:       replyChat.PinId,
+				MetaId:      replyChat.MetaId,
+				Address:     replyChat.Address,
+				NickName:    replyChat.NickName,
+				Protocol:    replyChat.Protocol,
+				Content:     replyChat.Content,
+				ContentType: replyChat.ContentType,
+				Encryption:  replyChat.Encryption,
+				ChatType:    replyChat.ChatType,
+				Timestamp:   replyChat.Timestamp,
+				Chain:       replyChat.Chain,
+			}
+			chatItem.RedMetaId = replyChat.MetaId
+			chatItem.BlockHeight = replyChat.BlockHeight
+		}
+
+		chatItems = append(chatItems, chatItem)
+
+		// Record next message timestamp (for pagination)
+		if i == len(chats)-1 && len(chats) > 0 {
+			nextTimestamp = chat.Timestamp
+		}
+	}
+
+	return &respond.GroupChatResponse{
+		Total:         int64(len(chatItems)),
+		NextTimestamp: nextTimestamp,
+		List:          chatItems,
+	}, nil
+}
+
 // FetchGroupMemberList Get group member list
 func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.GroupMemberResponse, error) {
 	// Set default pagination parameters

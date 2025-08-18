@@ -127,6 +127,25 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/group-chat-list-v2": {
+            "get": {
+                "description": "Get chat records of a group using TalkGroupChatTimestamp2Collection with improved key format (groupId_timestamp_pinId)",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group chat records (new format)",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": false},
+                    {"type": "integer", "description": "Cursor, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "integer", "description": "Timestamp for pagination", "name": "timestamp", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return group chat records", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/private-chat-list": {
             "get": {
                 "description": "Get private chat records between two users, support timestamp pagination",
@@ -530,6 +549,18 @@ func SetupSwagger(router *gin.Engine) {
                 "summary": "Get all available database collections",
                 "responses": {
                     "200": {"description": "Collection list", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/migration/info": {
+            "get": {
+                "description": "Get comprehensive database migration information including current status, supported migrations, and migration history",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get database migration information",
+                "responses": {
+                    "200": {"description": "Migration information", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
         },

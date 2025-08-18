@@ -23,6 +23,8 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Get group chat records
 		group.GET("/group-chat-list", GetGroupChatList)
+		// Get group chat records (new format)
+		group.GET("/group-chat-list-v2", GetGroupChatListV2)
 
 		// Get private chat records
 		group.GET("/private-chat-list", GetPrivateChatList)

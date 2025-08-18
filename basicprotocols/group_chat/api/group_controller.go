@@ -528,3 +528,50 @@ func GetLuckyBagUnusedInfo(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary Get group chat list (new format)
+// @Description Get group chat records using TalkGroupChatTimestamp2Collection with improved key format
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param metaId query string false "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "Successfully return group chat list"
+// @Router /group-chat/group-chat-list-v2 [get]
+func GetGroupChatListV2(c *gin.Context) {
+	var (
+		t   = time.Now().Unix()
+		req = &request.FetchGroupChatListRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			MetaId:  c.DefaultQuery("metaId", ""),
+			Cursor: func() int64 {
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
+				return cursor
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+			Timestamp: func() int64 {
+				timestamp, _ := strconv.ParseInt(c.DefaultQuery("timestamp", "0"), 10, 64)
+				return timestamp
+			}(),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchGroupChatListV2(req)
+	if err != nil {
+		log.Printf("Failed to fetch group chat list v2 for groupId %s: %v", req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

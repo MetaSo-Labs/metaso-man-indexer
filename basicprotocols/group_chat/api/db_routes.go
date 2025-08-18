@@ -46,5 +46,11 @@ func RegisterDbRoutes(router *gin.Engine) {
 		// Statistics-related APIs
 		dbGroup.GET("/stats", GetDatabaseStats)
 		dbGroup.GET("/collections", GetCollections)
+
+		// Migration-related APIs
+		migrationGroup := dbGroup.Group("/migration")
+		{
+			migrationGroup.GET("/info", GetMigrationInfo)
+		}
 	}
 }

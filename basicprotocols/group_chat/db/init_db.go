@@ -47,12 +47,17 @@ const (
 	TalkGroupResidueLuckyBagListCollection string = "talk_group_residue_lucky_bag_list" // key: luckyBagPinId，value: []{residuePinId, groupId, timestamp, createAddress}
 	TalkGroupChatTimestampCollection       string = "talk_group_chat_timestamp"         // key: groupId_timestamp，value: pinId_chatType_timestamp
 	TalkGroupChatTimestampOutCollection    string = "talk_group_chat_timestamp_out"     // key: groupId_timestamp，value: pinId_chatType_timestamp
+	TalkGroupChatTimestamp2Collection      string = "talk_group_chat_timestamp_2"       // key: groupId_timestamp_pinId，value: pinId_chatType_timestamp
+	TalkGroupChatTimestamp2OutCollection   string = "talk_group_chat_timestamp_out_2"   // key: groupId_timestamp_pinId，value: pinId_chatType_timestamp
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
 	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
 	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
 	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat message data
+
+	// Version info
+	TalkVersionInfoCollection string = "talk_version_info" // key: version，value: version
 )
 
 type Pebble struct{}
@@ -185,7 +190,14 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestampOutCollection, err)
 	}
-
+	err = open(TalkGroupChatTimestamp2Collection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestamp2Collection, err)
+	}
+	err = open(TalkGroupChatTimestamp2OutCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestamp2OutCollection, err)
+	}
 	// Initialize private chat related databases
 	err = open(TalkPrivateChatPinCollection)
 	if err != nil {
@@ -203,6 +215,18 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatQueueCollection, err)
 	}
+
+	// Initialize version info database
+	err = open(TalkVersionInfoCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkVersionInfoCollection, err)
+	}
+
+	err = CheckAndMigrateDatabase()
+	if err != nil {
+		return fmt.Errorf("Pebble %s migrate error: %v", TalkVersionInfoCollection, err)
+	}
+
 	return nil
 }
 
