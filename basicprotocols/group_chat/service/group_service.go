@@ -9,6 +9,7 @@ import (
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
+	"manindexer/basicprotocols/group_chat/service/common_service"
 	"time"
 )
 
@@ -143,6 +144,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 			}(),
 			CreateUserMetaId:  group.CreateUserMetaId,
 			CreateUserAddress: group.CreateUserAddress,
+			CreateUserInfo:    common_service.FetchMetaIDUserInfo(group.CreateUserAddress),
 			UserCount:         userCount,
 			ChatSettingType:   group.ChatSettingType,
 			DeleteStatus:      group.DeleteStatus,
@@ -253,6 +255,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			}(),
 			CreateUserMetaId:  group.CreateUserMetaId,
 			CreateUserAddress: group.CreateUserAddress,
+			CreateUserInfo:    common_service.FetchMetaIDUserInfo(group.CreateUserAddress),
 			UserCount:         userCount,
 			ChatSettingType:   group.ChatSettingType,
 			DeleteStatus:      group.DeleteStatus,
@@ -350,6 +353,7 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		}(),
 		CreateUserMetaId:  group.CreateUserMetaId,
 		CreateUserAddress: group.CreateUserAddress,
+		CreateUserInfo:    common_service.FetchMetaIDUserInfo(group.CreateUserAddress),
 		UserCount:         userCount,
 		ChatSettingType:   group.ChatSettingType,
 		DeleteStatus:      group.DeleteStatus,
@@ -396,6 +400,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			PinId:       chat.PinId,
 			Address:     chat.Address,
 			MetaId:      chat.MetaId,
+			UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
 			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
 			Content:     chat.Content,
@@ -418,6 +423,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 				PinId:       replyChat.PinId,
 				MetaId:      replyChat.MetaId,
 				Address:     replyChat.Address,
+				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
 				NickName:    replyChat.NickName,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
@@ -463,6 +469,8 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		// Get latest chat records using new collection
 		// For latest messages, we can use a very large timestamp as start point
 		currentTimestamp := time.Now().Unix()
+		//add 6 number 0
+		currentTimestamp = currentTimestamp * 1000000
 		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
 	}
 
@@ -481,6 +489,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
 			Address:     chat.Address,
+			UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
 			MetaId:      chat.MetaId,
 			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
@@ -504,6 +513,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 				PinId:       replyChat.PinId,
 				MetaId:      replyChat.MetaId,
 				Address:     replyChat.Address,
+				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
 				NickName:    replyChat.NickName,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
@@ -596,6 +606,7 @@ func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPerso
 			GroupId:           person.GroupId,
 			MetaId:            person.MetaId,
 			Address:           person.Address,
+			UserInfo:          common_service.FetchMetaIDUserInfo(person.Address),
 			AvatarTxId:        person.AvatarTxId,
 			UserName:          person.UserName,
 			UserNickName:      person.UserNickName,
@@ -668,6 +679,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.RoomAvatarUrl = group.RoomAvatarUrl
 			chatInfoItem.CreateUserMetaId = group.CreateUserMetaId
 			chatInfoItem.CreateUserAddress = group.CreateUserAddress
+			chatInfoItem.CreateUserInfo = common_service.FetchMetaIDUserInfo(group.CreateUserAddress)
 			chatInfoItem.UserCount = 0 // Need to calculate
 			chatInfoItem.ChatSettingType = group.ChatSettingType
 			chatInfoItem.DeleteStatus = group.DeleteStatus
@@ -701,6 +713,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.CreateAddress = latestPrivateChat.FromAddress
 				chatInfoItem.BlockHeight = latestPrivateChat.BlockHeight
 				chatInfoItem.Chain = latestPrivateChat.Chain
+				chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfo(latestPrivateChat.FromAddress)
 			}
 		}
 
@@ -748,6 +761,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			PinId:       chat.PinId,
 			MetaId:      chat.From, // Message creator MetaId
 			Address:     chat.FromAddress,
+			UserInfo:    common_service.FetchMetaIDUserInfo(chat.FromAddress),
 			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
 			Content:     chat.Content,
@@ -773,6 +787,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 					PinId:       replyChat.PinId,
 					MetaId:      replyChat.From,
 					Address:     replyChat.FromAddress,
+					UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.FromAddress),
 					NickName:    "", // Private chat message doesn't have NickName field
 					Protocol:    replyChat.Protocol,
 					Content:     replyChat.Content,

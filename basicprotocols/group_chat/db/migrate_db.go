@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	LatestTargetVersion = 2
+	LatestTargetVersion = 3
 )
 
 // Version migration record structure
@@ -56,6 +56,36 @@ func (m *MigrationV1ToV2) Execute() error {
 	}
 
 	log.Printf("[migrate_db] Version 2 migration completed")
+	return nil
+}
+
+// Migration from version 2 to version 3: Rebuild timestamp2 collections with new key format
+type MigrationV2ToV3 struct{}
+
+func (m *MigrationV2ToV3) Version() int {
+	return 3
+}
+
+func (m *MigrationV2ToV3) Description() string {
+	return "Rebuild TalkGroupChatTimestamp2Collection and TalkGroupChatTimestamp2OutCollection with new key format (groupId_timestamp+number(6)) from original collections"
+}
+
+func (m *MigrationV2ToV3) Execute() error {
+	log.Printf("[migrate_db] Starting version 3 migration: %s", m.Description())
+
+	// Clear existing TalkGroupChatTimestamp2Collection and rebuild from TalkGroupChatTimestampCollection
+	err := rebuildTimestamp2Collection(TalkGroupChatTimestampCollection, TalkGroupChatTimestamp2Collection)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkGroupChatTimestamp2Collection: %v", err)
+	}
+
+	// Clear existing TalkGroupChatTimestamp2OutCollection and rebuild from TalkGroupChatTimestampOutCollection
+	err = rebuildTimestamp2Collection(TalkGroupChatTimestampOutCollection, TalkGroupChatTimestamp2OutCollection)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkGroupChatTimestamp2OutCollection: %v", err)
+	}
+
+	log.Printf("[migrate_db] Version 3 migration completed")
 	return nil
 }
 
@@ -114,6 +144,152 @@ func copyCollectionData(sourceCollection, targetCollection string) error {
 	}
 
 	log.Printf("[migrate_db] Successfully copied %d records from %s to %s", count, sourceCollection, targetCollection)
+	return nil
+}
+
+// Rebuild timestamp2 collection with new key format from original collection
+func rebuildTimestamp2Collection(sourceCollection, targetCollection string) error {
+	sourceDB, exists := Pb[sourceCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", sourceCollection)
+	}
+
+	targetDB, exists := Pb[targetCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] target collection %s does not exist", targetCollection)
+	}
+
+	// Clear target collection first
+	log.Printf("[migrate_db] Clearing target collection %s", targetCollection)
+	err := clearCollection(targetDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear target collection: %v", err)
+	}
+
+	// Use iterator to traverse all data in source collection
+	iter, err := sourceDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create source collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	batch := targetDB.NewBatch()
+	defer batch.Close()
+
+	count := 0
+	// timestampCounter := make(map[string]int) // Track counter for each timestamp
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse original key: groupId_timestamp
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 2 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		groupId := keyParts[0]
+		timestampStr := keyParts[1]
+
+		// Parse original value: pinId_chatType_timestamp
+		valueStr := string(value)
+		valueParts := strings.Split(valueStr, "_")
+		if len(valueParts) < 3 {
+			log.Printf("[migrate_db] Skipping invalid value format: %s", valueStr)
+			continue
+		}
+
+		pinId := valueParts[0]
+		chatType := valueParts[1]
+		timestamp := valueParts[2]
+
+		// Generate counter for this timestamp
+		// timestampKey := groupId + "_" + timestampStr
+		// timestampCounter[timestampKey]++
+		//counter := timestampCounter[timestampKey]
+
+		// Generate 6-digit random number (using counter for consistency)
+		randomNum := generateRandomNumber(6)
+
+		// Construct new key: groupId_timestamp+number(6)
+		newKey := groupId + "_" + timestampStr + randomNum
+
+		// Construct new value: pinId_chatType_timestamp_number
+		newValue := pinId + "_" + chatType + "_" + timestamp + "_" + randomNum
+
+		// Write data to target collection
+		err := batch.Set([]byte(newKey), []byte(newValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to target collection: %v", err)
+		}
+
+		count++
+
+		// Commit batch every 1000 records
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = targetDB.NewBatch()
+			log.Printf("[migrate_db] Rebuilt %d records from %s to %s", count, sourceCollection, targetCollection)
+		}
+	}
+
+	// Commit remaining batch
+	if count%1000 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully rebuilt %d records from %s to %s", count, sourceCollection, targetCollection)
+	return nil
+}
+
+// Clear all data from a collection
+func clearCollection(db *pebble.DB) error {
+	iter, err := db.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create iterator for clearing: %v", err)
+	}
+	defer iter.Close()
+
+	batch := db.NewBatch()
+	defer batch.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		err := batch.Delete(key, nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to delete key: %v", err)
+		}
+		count++
+
+		// Commit batch every 1000 deletions
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit deletion batch: %v", err)
+			}
+			batch = db.NewBatch()
+		}
+	}
+
+	// Commit remaining deletions
+	if count%1000 != 0 {
+		err = batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final deletion batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Cleared %d records from collection", count)
 	return nil
 }
 
@@ -241,6 +417,7 @@ func MigrateDatabase(targetVersion int) error {
 	// Define all migration operations
 	migrations := []Migration{
 		&MigrationV1ToV2{},
+		&MigrationV2ToV3{},
 		// Add more migration operations here
 		// Note: When adding new migrations, also update the LatestTargetVersion constant
 	}
@@ -348,6 +525,7 @@ func validateMigrationConfig() error {
 	// Define all migration operations
 	migrations := []Migration{
 		&MigrationV1ToV2{},
+		&MigrationV2ToV3{},
 		// Add more migration operations here
 	}
 
@@ -412,6 +590,7 @@ func GetMigrationInfo() (*MigrationInfo, error) {
 	// Get supported migrations
 	migrations := []Migration{
 		&MigrationV1ToV2{},
+		&MigrationV2ToV3{},
 		// Add more migration operations here
 	}
 
@@ -475,6 +654,7 @@ func ShowMigrationInfo() {
 	log.Printf("[migrate_db] Supported Migrations:")
 	migrations := []Migration{
 		&MigrationV1ToV2{},
+		&MigrationV2ToV3{},
 		// Add more migration operations here
 	}
 	log.Printf("[migrate_db]   Total migrations: %d", len(migrations))

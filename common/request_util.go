@@ -101,7 +101,7 @@ func GetUrlForSingle(url string) (string, error) {
 
 func GetUrl(domain string, query, headers map[string]string) (string, error) {
 	client := &http.Client{
-		Timeout: time.Second * 30,
+		Timeout: time.Second * 8,
 	}
 	req, err := http.NewRequest("GET", domain, nil)
 	if err != nil {

@@ -3,6 +3,7 @@ package respond
 import "manindexer/basicprotocols/group_chat/models"
 
 type UserInfo struct {
+	Metaid      string `json:"metaid"`
 	Name        string `json:"name"`
 	Avatar      string `json:"avatar"`
 	AvatarImage string `json:"avatarImage"`
@@ -110,17 +111,18 @@ type GroupPersonResponse struct {
 
 // GroupPersonItem Group member info item
 type GroupPersonItem struct {
-	GroupIdMetaIdHash string `json:"groupIdMetaIdHash"` // Group ID and member unique identifier
-	GroupId           string `json:"groupId"`           // Group ID
-	MetaId            string `json:"metaId"`            // User MetaId
-	Address           string `json:"address"`           // User address
-	AvatarTxId        string `json:"avatarTxId"`        // Avatar TxId
-	UserName          string `json:"userName"`          // Username
-	UserNickName      string `json:"userNickName"`      // User nickname
-	GroupState        int64  `json:"groupState"`        // Group status: 1-in group, -1-left
-	Timestamp         int64  `json:"timestamp"`         // Join or leave group timestamp
-	BlockHeight       int64  `json:"blockHeight"`       // Block height
-	PinId             string `json:"pinId"`             // Join or leave group PinId
+	GroupIdMetaIdHash string    `json:"groupIdMetaIdHash"` // Group ID and member unique identifier
+	GroupId           string    `json:"groupId"`           // Group ID
+	MetaId            string    `json:"metaId"`            // User MetaId
+	Address           string    `json:"address"`           // User address
+	UserInfo          *UserInfo `json:"userInfo"`          // User info
+	AvatarTxId        string    `json:"avatarTxId"`        // Avatar TxId
+	UserName          string    `json:"userName"`          // Username
+	UserNickName      string    `json:"userNickName"`      // User nickname
+	GroupState        int64     `json:"groupState"`        // Group status: 1-in group, -1-left
+	Timestamp         int64     `json:"timestamp"`         // Join or leave group timestamp
+	BlockHeight       int64     `json:"blockHeight"`       // Block height
+	PinId             string    `json:"pinId"`             // Join or leave group PinId
 }
 
 // ChatInfoResponse Latest chat info response (group chat + private chat)
@@ -148,18 +150,19 @@ type ChatInfoItem struct {
 	UserInfo *UserInfo `json:"userInfo,omitempty"`
 
 	// Group chat specific fields
-	CommunityId       string `json:"communityId,omitempty"`     // Community ID (for group chat)
-	RoomName          string `json:"roomName,omitempty"`        // Room name (for group chat)
-	RoomNote          string `json:"roomNote,omitempty"`        // Room announcement (for group chat)
-	RoomType          string `json:"roomType,omitempty"`        // Room type (for group chat)
-	RoomStatus        string `json:"roomStatus,omitempty"`      // Room status (for group chat)
-	RoomJoinType      string `json:"roomJoinType,omitempty"`    // Join method (for group chat)
-	RoomAvatarUrl     string `json:"roomAvatarUrl,omitempty"`   // Room avatar (for group chat)
-	CreateUserMetaId  string `json:"createUserMetaId"`          // Creator MetaId (for group chat)
-	CreateUserAddress string `json:"createUserAddress"`         // Creator address (for group chat)
-	UserCount         int64  `json:"userCount,omitempty"`       // User count (for group chat)
-	ChatSettingType   int64  `json:"chatSettingType,omitempty"` // Chat setting type (for group chat)
-	DeleteStatus      int64  `json:"deleteStatus,omitempty"`    // Delete status (for group chat)
+	CommunityId       string    `json:"communityId,omitempty"`     // Community ID (for group chat)
+	RoomName          string    `json:"roomName,omitempty"`        // Room name (for group chat)
+	RoomNote          string    `json:"roomNote,omitempty"`        // Room announcement (for group chat)
+	RoomType          string    `json:"roomType,omitempty"`        // Room type (for group chat)
+	RoomStatus        string    `json:"roomStatus,omitempty"`      // Room status (for group chat)
+	RoomJoinType      string    `json:"roomJoinType,omitempty"`    // Join method (for group chat)
+	RoomAvatarUrl     string    `json:"roomAvatarUrl,omitempty"`   // Room avatar (for group chat)
+	CreateUserMetaId  string    `json:"createUserMetaId"`          // Creator MetaId (for group chat)
+	CreateUserAddress string    `json:"createUserAddress"`         // Creator address (for group chat)
+	CreateUserInfo    *UserInfo `json:"createUserInfo"`            // Creator info (for group chat)
+	UserCount         int64     `json:"userCount,omitempty"`       // User count (for group chat)
+	ChatSettingType   int64     `json:"chatSettingType,omitempty"` // Chat setting type (for group chat)
+	DeleteStatus      int64     `json:"deleteStatus,omitempty"`    // Delete status (for group chat)
 }
 
 // PrivateChatResponse Private chat records response

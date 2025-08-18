@@ -41,6 +41,7 @@ host = "https://man.test.com"
 [groupchat]
 port = "7568"
 host = "0.0.0.0"
+manHost = "https://man.metaid.io"
 [socket]
 isEnble = true
 port = 7555

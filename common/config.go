@@ -116,8 +116,9 @@ type pebble struct {
 	Num int    `toml:"num"`
 }
 type groupChatConfig struct {
-	Port string `toml:"port"`
-	Host string `toml:"host"`
+	Port    string `toml:"port"`
+	Host    string `toml:"host"`
+	ManHost string `toml:"manHost"`
 }
 type socketConfig struct {
 	IsEnble         bool  `toml:"isEnble"`

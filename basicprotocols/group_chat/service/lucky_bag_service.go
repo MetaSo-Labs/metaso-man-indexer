@@ -8,6 +8,7 @@ import (
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
+	"manindexer/basicprotocols/group_chat/service/common_service"
 	"manindexer/common"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		PinId:               luckyBag.PinId,
 		MetaId:              luckyBag.MetaId,
 		Address:             luckyBag.Address,
-		UserInfo:            nil, // Need to get from user info
+		UserInfo:            common_service.FetchMetaIDUserInfo(luckyBag.Address),
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
@@ -108,6 +109,7 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 						infoPayList.GradPinId = openItem.OpenPinId
 						infoPayList.GradMetaId = openItem.CreateMetaId
 						infoPayList.GradAddress = openItem.CreateAddress
+						infoPayList.UserInfo = common_service.FetchMetaIDUserInfo(openItem.CreateAddress)
 						infoPayList.Timestamp = openItem.Timestamp
 						// infoPayList.IsBest = true
 						if openLuckyBag.GrabState == models.GrabStateOpenAndSend || openLuckyBag.GrabState == models.GrabStateChain {
@@ -134,6 +136,7 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 							infoPayList.GradState = residueLuckyBag.ReclaimState
 							infoPayList.GradMsg = residueLuckyBag.ReclaimMsg
 							infoPayList.GradTxId = residueLuckyBag.ReclaimTxId
+							infoPayList.UserInfo = common_service.FetchMetaIDUserInfo(residueItem.CreateAddress)
 							infoPayList.Timestamp = residueItem.Timestamp
 							// infoPayList.IsBest = true
 							if residueLuckyBag.ReclaimState == models.GrabStateOpenAndSend || residueLuckyBag.ReclaimState == models.GrabStateChain {
@@ -212,7 +215,7 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		PinId:               luckyBag.PinId,
 		MetaId:              luckyBag.MetaId,
 		Address:             luckyBag.Address,
-		UserInfo:            nil, // Need to get from user info
+		UserInfo:            common_service.FetchMetaIDUserInfo(luckyBag.Address),
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),

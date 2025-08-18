@@ -8,6 +8,8 @@ import (
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/pin"
+	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -59,11 +61,39 @@ func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
 	}
 
 	// Use GroupId_Timestamp_PinId as primary key to support timestamp range queries
-	key2 := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + chat.PinId)
-	if err := Pb[TalkGroupChatTimestamp2Collection].Set(key2, []byte(value), pebble.Sync); err != nil {
-		return err
-	}
+	cdb.saveChatTimestamp2(chat)
 	return nil
+}
+
+func (cdb *ChatDB) saveChatTimestamp2(chat *models.TalkGroupChatV3) error {
+	return cdb.saveChatTimestamp2WithCollection(chat, TalkGroupChatTimestamp2Collection)
+}
+
+// saveChatTimestamp2WithCollection saves chat timestamp to a specific collection with timestamp + random number format
+// This method handles the new key format: groupId_timestamp+number(6) for collection2
+// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+func (cdb *ChatDB) saveChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string) error {
+	// Generate a 6-digit random number for uniqueness
+	randomNum := generateRandomNumber(6)
+
+	// Construct key: groupId_timestamp+number(6)
+	// Example: timestamp 1755500889 + random 000001 = 1755500889000001
+	key := chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum
+
+	// Construct value: pinId_chatType_timestamp_number
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + randomNum
+
+	return Pb[collection].Set([]byte(key), []byte(value), pebble.Sync)
+}
+
+// generateRandomNumber generates a random number with specified digits
+func generateRandomNumber(digits int) string {
+	// Generate a random number between 0 and 10^digits - 1
+	max := int64(math.Pow10(digits)) - 1
+	randomNum := rand.Int63n(max + 1)
+
+	// Format with leading zeros to ensure consistent length
+	return fmt.Sprintf("%0*d", digits, randomNum)
 }
 
 // Get chat message by PinId
@@ -204,7 +234,8 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 }
 
 // Get chat message list by group ID and start timestamp using TalkGroupChatTimestamp2Collection
-// This function takes advantage of the new key format: groupId_timestamp_pinId
+// This function handles the new key format: groupId_timestamp+number(6)
+// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
 // which provides better support for multiple messages at the same timestamp
 func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
 	var chats []*models.TalkGroupChatV3
@@ -214,11 +245,12 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 	}
 	defer iter.Close()
 
+	nextTimestamp := int64(0)
+
 	// Construct query start key: groupId_startTimestamp
-	// This will find all messages at or before the specified timestamp
-	// Since key format is groupId_timestamp_pinId, we need to use a prefix that ensures we get all messages
-	// at or before the specified timestamp
-	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10) + "_")
+	// Since key format is now groupId_timestamp+number(6), we can use proper range scanning
+	// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
 
 	// Start reverse iteration from specified timestamp (latest messages first)
 	// Use SeekLT to find the last key that is less than our startKey
@@ -230,20 +262,19 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 			continue
 		}
 
-		// Parse key to extract timestamp and pinId
-		// Key format: groupId_timestamp_pinId
+		// Parse key to extract timestamp
+		// Key format: groupId_timestamp+number(6)
 		keyParts := strings.Split(key, "_")
-		if len(keyParts) < 3 {
+		if len(keyParts) < 2 {
 			continue
 		}
 
-		// Extract timestamp and pinId from key
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
 		timestampStr := keyParts[1]
-		pinId := keyParts[len(keyParts)-1] // Last part is pinId
+		if len(timestampStr) > 6 {
+			timestampStr = timestampStr[:len(timestampStr)-6]
+		}
 
-		fmt.Printf("[CHAT_DB]timestampStr: %s, pinId: %s\n", timestampStr, pinId)
-
-		// Parse timestamp to ensure it's within our range
 		timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
 		if err != nil {
 			continue
@@ -254,18 +285,33 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 			continue
 		}
 
+		// Parse value: pinId_chatType_timestamp_number
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+
+		pinId := valueParts[0]
+		fmt.Printf("[CHAT_DB]timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
 		// Get complete chat message
 		chat, err := cdb.GetChatByPinId(pinId)
 		if err != nil || chat == nil {
 			continue
 		}
 
-		// Reach pagination size limit
+		if chat.Timestamp > nextTimestamp {
+			nextTimestamp = chat.Timestamp
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
 		if int64(len(chats)) >= size {
 			break
 		}
-
-		chats = append(chats, chat)
 	}
 
 	return chats, nil
@@ -1326,8 +1372,9 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	}
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
-	key2 := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + chat.PinId)
-	if err = Pb[collection2].Set(key2, []byte(value), pebble.Sync); err != nil {
+	// For collection2, we need to handle array format
+	err = cdb.saveChatTimestamp2WithCollection(chat, collection2)
+	if err != nil {
 		return err
 	}
 

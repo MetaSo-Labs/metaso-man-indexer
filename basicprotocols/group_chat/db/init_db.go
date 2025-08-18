@@ -47,8 +47,8 @@ const (
 	TalkGroupResidueLuckyBagListCollection string = "talk_group_residue_lucky_bag_list" // key: luckyBagPinId，value: []{residuePinId, groupId, timestamp, createAddress}
 	TalkGroupChatTimestampCollection       string = "talk_group_chat_timestamp"         // key: groupId_timestamp，value: pinId_chatType_timestamp
 	TalkGroupChatTimestampOutCollection    string = "talk_group_chat_timestamp_out"     // key: groupId_timestamp，value: pinId_chatType_timestamp
-	TalkGroupChatTimestamp2Collection      string = "talk_group_chat_timestamp_2"       // key: groupId_timestamp_pinId，value: pinId_chatType_timestamp
-	TalkGroupChatTimestamp2OutCollection   string = "talk_group_chat_timestamp_out_2"   // key: groupId_timestamp_pinId，value: pinId_chatType_timestamp
+	TalkGroupChatTimestamp2Collection      string = "talk_group_chat_timestamp_2"       // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
+	TalkGroupChatTimestamp2OutCollection   string = "talk_group_chat_timestamp_out_2"   // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
