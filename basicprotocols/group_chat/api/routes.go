@@ -48,8 +48,22 @@ func RegisterGroupRoutes(router *gin.Engine) {
 	}
 }
 
+// RegisterSocketRoutes Register socket-related routes
+func RegisterSocketRoutes(router *gin.Engine) {
+	// Socket-related route group
+	socket := router.Group("/group-chat/socket")
+	{
+		// Get connection statistics
+		socket.GET("/stats", GetConnectionStats)
+
+		// Check if user is online
+		socket.GET("/user-online", IsUserOnline)
+	}
+}
+
 // RegisterAllRoutes Register all routes
 func RegisterAllRoutes(router *gin.Engine) {
 	RegisterGroupRoutes(router)
 	RegisterDbRoutes(router)
+	RegisterSocketRoutes(router)
 }

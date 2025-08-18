@@ -38,3 +38,13 @@ port = ":7777"
 pemFile = ""
 keyFile = ""
 host = "https://man.test.com"
+[groupchat]
+port = "7568"
+host = "0.0.0.0"
+[socket]
+isEnble = true
+port = 7555
+maxConnections = 10000
+maxMemoryMB = 512
+cleanupInterval = 2
+connectionTTL = 20

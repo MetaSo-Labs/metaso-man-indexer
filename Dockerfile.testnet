@@ -56,7 +56,7 @@ ENV CONFIG_FILE=/man/config_testnet.toml
 ENV NETWORK=testnet
 
 # Expose ports (according to ports in configuration file)
-EXPOSE 7777 7568
+EXPOSE 7777 7568 7555
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

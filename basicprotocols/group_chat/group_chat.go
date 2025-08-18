@@ -6,6 +6,7 @@ import (
 	"manindexer/basicprotocols/group_chat/api"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/service"
+	"manindexer/basicprotocols/group_chat/service/socket_service"
 	"manindexer/pin"
 	"sync"
 
@@ -48,6 +49,13 @@ func Init(indexerChainAdapter map[string]adapter.Chain) error {
 	err = service.InitService(groupChatIndexer, indexerChainAdapter)
 	if err != nil {
 		log.Printf("Failed to initialize service: %v", err)
+		return err
+	}
+
+	// 4. Initialize Socket service
+	err = socket_service.InitGroupChatSocketService()
+	if err != nil {
+		log.Printf("Failed to initialize Socket service: %v", err)
 		return err
 	}
 

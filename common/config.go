@@ -39,6 +39,7 @@ type AllConfig struct {
 	MetaSo      metasoConfig
 	Statistics  Statistics
 	GroupChat   groupChatConfig
+	Socket      socketConfig
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
@@ -118,6 +119,14 @@ type groupChatConfig struct {
 	Port string `toml:"port"`
 	Host string `toml:"host"`
 }
+type socketConfig struct {
+	IsEnble         bool  `toml:"isEnble"`
+	Port            int64 `toml:"port"`
+	MaxConnections  int64 `toml:"maxConnections"`
+	MaxMemoryMB     int64 `toml:"maxMemoryMB"`
+	CleanupInterval int64 `toml:"cleanupInterval"`
+	ConnectionTTL   int64 `toml:"connectionTTL"`
+}
 
 func InitConfig(filePath string) {
 	configMutex.Lock()
@@ -186,6 +195,18 @@ func InitConfig(filePath string) {
 			Config.GroupChat.Port = *v
 		case "group_chat_host":
 			Config.GroupChat.Host = *v
+		// case "socket_port":
+		// 	Config.Socket.Port = *v
+		// case "socket_max_connections":
+		// 	Config.Socket.MaxConnections = *v
+		// case "socket_max_memory_mb":
+		// 	Config.Socket.MaxMemoryMB = *v
+		// case "socket_cleanup_interval":
+		// 	Config.Socket.CleanupInterval = *v
+		// case "socket_connection_ttl":
+		// 	Config.Socket.ConnectionTTL = *v
+		case "socket_is_enble":
+			Config.Socket.IsEnble = *v == "true"
 		}
 
 	}

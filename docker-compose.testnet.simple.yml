@@ -9,6 +9,7 @@ services:
     ports:
       - "7777:7777"  # Web API port
       - "7568:7568"  # Group Chat port
+      - "7555:7555"  # Socket port
     volumes:
       # Data persistence - map to external host directory
       - ../data/pebble_data:/man/pebble_data

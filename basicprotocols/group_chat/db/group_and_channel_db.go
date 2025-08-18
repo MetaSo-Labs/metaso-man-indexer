@@ -1266,28 +1266,41 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
 
-	// Get user's group join list
-	joinList, err := gdb.getGroupMetaIdJoinList(metaId)
+	// Use prefix query to get all groups joined by this MetaId
+	// Key format is MetaId_GroupId in TalkGroupPersonCollection
+	prefix := []byte(metaId + "_")
+	iter, err := Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with metaId_
+	})
 	if err != nil {
 		return nil, err
 	}
+	defer iter.Close()
 
-	// Calculate pagination
-	start := cursor
-	end := cursor + size
+	count := int64(0)
+	skip := cursor
 
-	// Get group info
-	for i, item := range joinList.Items {
-		if int64(i) < start {
+	for iter.First(); iter.Valid(); iter.Next() {
+		var person models.TalkGroupPerson
+		err := json.Unmarshal(iter.Value(), &person)
+		if err != nil {
 			continue
 		}
-		if int64(i) >= end {
-			break
-		}
 
-		// Only return records in the group
-		if item.GroupState == models.RoomStateIn {
-			group, err := gdb.GetGroupInfoByGroupId(item.JoinPinId)
+		// Only return groups where user is in the group
+		if person.GroupState == models.RoomStateIn {
+			if count < skip {
+				count++
+				continue
+			}
+
+			if int64(len(groups)) >= size {
+				break
+			}
+
+			// Get group info by GroupId
+			group, err := gdb.GetGroupInfoByGroupId(person.GroupId)
 			if err != nil {
 				continue
 			}

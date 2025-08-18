@@ -566,6 +566,34 @@ func SetupSwagger(router *gin.Engine) {
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
+        },
+        "/group-chat/socket/stats": {
+            "get": {
+                "description": "Get Socket connection statistics including total connections, active connections, etc.",
+                "produces": ["application/json"],
+                "tags": ["Socket Management"],
+                "summary": "Get connection statistics",
+                "responses": {
+                    "200": {"description": "Connection statistics", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/socket/user-online": {
+            "get": {
+                "description": "Check if a specific user is currently online based on MetaId",
+                "produces": ["application/json"],
+                "tags": ["Socket Management"],
+                "summary": "Check if user is online",
+                "parameters": [
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "User online status", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
         }
     },
     "tags": [
@@ -576,6 +604,10 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "Group management related APIs, including group information, member management, etc.",
             "name": "Group Management"
+        },
+        {
+            "description": "Socket management related APIs, including connection statistics and user online status",
+            "name": "Socket Management"
         }
     ]
 }`

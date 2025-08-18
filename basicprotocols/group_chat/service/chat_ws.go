@@ -4,6 +4,7 @@ import (
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"manindexer/basicprotocols/group_chat/service/socket_service"
 )
 
 func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
@@ -91,5 +92,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	}
 
 	// 6. Call wsPost to send message
+	socket_service.SendMessageToUser(chat.MetaId, groupChatItem)
 	common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
+
 }
