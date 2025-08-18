@@ -8,8 +8,10 @@ import (
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/models"
+	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"strings"
 	"time"
 )
 
@@ -414,6 +416,16 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
 		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), protocols.MonitorSimpleGroupOpenLuckyBag) {
+			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
+			if openLuckyBag != nil {
+				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
+					chatItem.TxId = openLuckyBag.GrabTxId
+				} else {
+					chatItem.TxId = ""
+				}
+			}
+		}
 		if chat.ReplyPin != "" {
 			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
 			if err != nil {
@@ -462,16 +474,17 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 	var chats []*models.TalkGroupChatV3
 	var err error
 
+	var nextTimestamp int64 = 0
 	if req.Timestamp > 0 {
 		// Get chat records by timestamp range using new collection
-		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, req.Timestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, req.Timestamp, req.Size)
 	} else {
 		// Get latest chat records using new collection
 		// For latest messages, we can use a very large timestamp as start point
 		currentTimestamp := time.Now().Unix()
 		//add 6 number 0
 		currentTimestamp = currentTimestamp * 1000000
-		chats, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
 	}
 
 	if err != nil {
@@ -480,9 +493,8 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 
 	// Convert to response format
 	var chatItems []*respond.GroupChatItem
-	var nextTimestamp int64 = 0
 
-	for i, chat := range chats {
+	for _, chat := range chats {
 		chatItem := &respond.GroupChatItem{
 			GroupId:     chat.GroupId,
 			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
@@ -503,6 +515,16 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
+			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
+			if openLuckyBag != nil {
+				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
+					chatItem.TxId = openLuckyBag.GrabTxId
+				} else {
+					chatItem.TxId = ""
+				}
+			}
 		}
 		if chat.ReplyPin != "" {
 			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
@@ -530,9 +552,9 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		chatItems = append(chatItems, chatItem)
 
 		// Record next message timestamp (for pagination)
-		if i == len(chats)-1 && len(chats) > 0 {
-			nextTimestamp = chat.Timestamp
-		}
+		// if i == len(chats)-1 && len(chats) > 0 {
+		// 	nextTimestamp = chat.Timestamp
+		// }
 	}
 
 	return &respond.GroupChatResponse{
@@ -564,6 +586,7 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		memberItem := &respond.GroupMemberItem{
 			MetaId: member.MetaId,
 			// Name:      member.UserName, // Use UserName field
+			UserInfo:  common_service.FetchMetaIDUserInfo(member.Address),
 			Address:   member.Address,
 			TimeStr:   time.Unix(member.Timestamp, 0).Format("2006-01-02 15:04:05"),
 			Timestamp: member.Timestamp,

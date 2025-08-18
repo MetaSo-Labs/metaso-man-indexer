@@ -237,11 +237,11 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 // This function handles the new key format: groupId_timestamp+number(6)
 // Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
 // which provides better support for multiple messages at the same timestamp
-func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
+func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatTimestamp2Collection].NewIter(nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer iter.Close()
 
@@ -271,6 +271,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 
 		// Extract timestamp from key (remove the last 6 digits which is the random number)
 		timestampStr := keyParts[1]
+		timestampKey := timestampStr
 		if len(timestampStr) > 6 {
 			timestampStr = timestampStr[:len(timestampStr)-6]
 		}
@@ -302,7 +303,8 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 		}
 
 		if chat.Timestamp > nextTimestamp {
-			nextTimestamp = chat.Timestamp
+			// nextTimestamp = chat.Timestamp
+			nextTimestamp, _ = strconv.ParseInt(timestampKey, 10, 64)
 		}
 
 		// Add to results
@@ -314,7 +316,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 		}
 	}
 
-	return chats, nil
+	return chats, nextTimestamp, nil
 }
 
 // Get latest chat messages for group (reverse order based on timestamp)
