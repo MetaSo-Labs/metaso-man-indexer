@@ -49,6 +49,9 @@ func fetchMetaIDUserInfoInfo(address string) (*MetaIDUserInfo, error) {
 		err    error
 	)
 	query := map[string]string{}
+	if common.Config.GroupChat.ManHost == "" {
+		return nil, fmt.Errorf("manHost is empty")
+	}
 	url = fmt.Sprintf("%s/api/info/address/%s", common.Config.GroupChat.ManHost, address)
 
 	result, err = common.GetUrl(url, query, nil)

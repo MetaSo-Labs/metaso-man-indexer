@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Socket.IO Client</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const socket = io('http://127.0.0.1:7555', {
+        path: '/socket.io',
+        query: {
+          'metaid': ''
+        }
+      });
+
+      // connection event listener
+      socket.on('connect', () => {
+        console.log('Connected to server');
+        document.getElementById('rev').innerHTML += 'Connected to server<br>';
+      });
+
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        document.getElementById('rev').innerHTML += 'Disconnected from server<br>';
+      });
+
+      socket.on('connect_error', (error) => {
+        console.log('Connection error:', error);
+        document.getElementById('rev').innerHTML += 'Connection error: ' + error + '<br>';
+      });
+      
+      // receive message
+      socket.on('message', (data) => {
+        console.log('Received message:', data);
+        document.getElementById('rev').innerHTML += 'Received message: ' + JSON.stringify(data) + '<br>';
+      });
+    });
+  </script>
+</head>
+<body>
+  <input type="text" id="message" placeholder="Type a message" />
+  <button id="sendMessage">Send Message</button>
+  <br>
+  Rev Msg:
+  <br>
+  <div id="rev"></div>
+</body>
+</html>
