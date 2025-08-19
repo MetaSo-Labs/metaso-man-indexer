@@ -36,7 +36,7 @@ func WsPost(pinId string, msgData interface{}, metaIdList []string) {
 	if resp.Code != code_success {
 		//fmt.Printf("Set err:%s\n", resp)
 	} else {
-		fmt.Printf("Ws Post RoomChat success[%s]\n %+v\n", pinId, msgData)
+		fmt.Printf("Ws Post Chat success[%s]\n", pinId)
 	}
 	return
 }

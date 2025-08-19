@@ -11,6 +11,7 @@ import (
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"sort"
 	"strings"
 	"time"
 )
@@ -576,10 +577,48 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		req.Cursor = 0
 	}
 
-	// Get group members with pagination - from TalkGroupPersonCollection
-	members, total, err := groupDB.GetGroupMembersWithPagination(req.GroupId, req.Cursor, req.Size)
-	if err != nil {
-		return nil, err
+	var members []*models.TalkGroupJoinModel
+	var total int64
+	var err error
+
+	// Check if orderBy is "timestamp" for timestamp descending order
+	if req.OrderBy == "timestamp" {
+		// Get all group members first
+		allMembers, err := groupDB.GetGroupMembers(req.GroupId)
+		if err != nil {
+			return nil, err
+		}
+
+		// Sort by timestamp in descending order
+		sort.Slice(allMembers, func(i, j int) bool {
+			if req.OrderType == "desc" {
+				return allMembers[i].Timestamp > allMembers[j].Timestamp
+			} else {
+				return allMembers[i].Timestamp < allMembers[j].Timestamp
+			}
+		})
+
+		total = int64(len(allMembers))
+
+		// Apply pagination in code
+		start := req.Cursor
+		end := start + req.Size
+		if start >= total {
+			// No more data
+			members = []*models.TalkGroupJoinModel{}
+		} else if end > total {
+			// Last page
+			members = allMembers[start:total]
+		} else {
+			// Regular page
+			members = allMembers[start:end]
+		}
+	} else {
+		// Use original pagination logic
+		members, total, err = groupDB.GetGroupMembersWithPagination(req.GroupId, req.Cursor, req.Size)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Convert to response format

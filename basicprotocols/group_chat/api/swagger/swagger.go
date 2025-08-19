@@ -176,7 +176,9 @@ func SetupSwagger(router *gin.Engine) {
                     {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
                     {"type": "integer", "description": "Cursor, default is 0", "name": "cursor", "in": "query", "required": false},
                     {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
-                    {"type": "integer", "description": "Timestamp", "name": "timestamp", "in": "query", "required": false}
+                    {"type": "integer", "description": "Timestamp", "name": "timestamp", "in": "query", "required": false},
+                    {"type": "string", "description": "Order by field, use 'timestamp' for timestamp descending order", "name": "orderBy", "in": "query", "required": false},
+                    {"type": "string", "description": "Order type, use 'desc' for descending order", "name": "orderType", "in": "query", "required": false}
                 ],
                 "responses": {
                     "200": {"description": "Successfully return group member list", "schema": {"type": "object"}},

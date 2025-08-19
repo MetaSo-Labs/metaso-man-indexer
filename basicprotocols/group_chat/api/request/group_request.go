@@ -16,6 +16,8 @@ type FetchGroupMemberListRequest struct {
 	Cursor    int64  `form:"cursor"`
 	Size      int64  `form:"size"`
 	Timestamp int64  `form:"timestamp"`
+	OrderBy   string `form:"orderBy"`
+	OrderType string `form:"orderType"`
 }
 
 type FetchGroupChatListRequest struct {

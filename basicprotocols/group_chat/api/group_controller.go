@@ -186,6 +186,8 @@ func GetGroupChatList(c *gin.Context) {
 // @Param cursor query int false "Cursor, default is 0"
 // @Param size query int false "Page size, default is 20"
 // @Param timestamp query int false "Timestamp"
+// @Param orderBy query string false "Order by field, use 'timestamp' for timestamp descending order"
+// @Param orderType query string false "Order type, use 'desc' for descending order"
 // @Tags Group
 // @Success 200 {object} respond.Message{data=respond.GroupMemberResponse} "Successfully return group member list"
 // @Router /group-chat/group-member-list [get]
@@ -206,6 +208,8 @@ func GetGroupMemberList(c *gin.Context) {
 				timestamp, _ := strconv.ParseInt(c.DefaultQuery("timestamp", "0"), 10, 64)
 				return timestamp
 			}(),
+			OrderBy:   c.DefaultQuery("orderBy", ""),
+			OrderType: c.DefaultQuery("orderType", ""),
 		}
 	)
 

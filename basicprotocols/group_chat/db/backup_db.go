@@ -13,17 +13,36 @@ import (
 
 // BackupDB handles database backup operations
 type BackupDB struct {
-	backupDir     string
-	backupEnabled bool
-	stopChan      chan bool
+	backupDir       string
+	backupHour      int
+	backupRetention int
+	stopChan        chan bool
 }
 
 // NewBackupDB creates a new BackupDB instance
 func NewBackupDB(backupDir string) *BackupDB {
+	// Get backup configuration from config
+	backupHour := 3
+	backupRetention := 7
+
+	if common.Config != nil {
+		backupHour = common.Config.GroupChat.BackupHour
+		backupRetention = common.Config.GroupChat.BackupRetention
+	}
+
+	// Set default values if not configured
+	if backupHour < 0 || backupHour > 23 {
+		backupHour = 3
+	}
+	if backupRetention <= 0 {
+		backupRetention = 7
+	}
+
 	return &BackupDB{
-		backupDir:     backupDir,
-		backupEnabled: true,
-		stopChan:      make(chan bool),
+		backupDir:       backupDir,
+		backupHour:      backupHour,
+		backupRetention: backupRetention,
+		stopChan:        make(chan bool),
 	}
 }
 
@@ -54,16 +73,16 @@ func InitBackupDB() error {
 	return nil
 }
 
-// startBackupScheduler starts the backup scheduler that runs at 3 AM daily
+// startBackupScheduler starts the backup scheduler that runs at configured time daily
 func (bdb *BackupDB) startBackupScheduler() {
 	log.Printf("[backup_db] Starting backup scheduler...")
 
 	for {
-		// Calculate next backup time (3 AM)
+		// Calculate next backup time using configured hour and minute
 		now := time.Now()
-		nextBackup := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
+		nextBackup := time.Date(now.Year(), now.Month(), now.Day(), bdb.backupHour, 0, 0, 0, now.Location())
 
-		// If it's already past 3 AM today, schedule for tomorrow
+		// If it's already past the configured time today, schedule for tomorrow
 		if now.After(nextBackup) {
 			nextBackup = nextBackup.Add(24 * time.Hour)
 		}
@@ -168,7 +187,7 @@ func (bdb *BackupDB) performBackup() error {
 		log.Printf("[backup_db] Failed to create backup summary: %v", err)
 	}
 
-	// Clean up old backups (keep last 7 days)
+	// Clean up old backups based on configured retention period
 	err = bdb.cleanupOldBackups()
 	if err != nil {
 		log.Printf("[backup_db] Failed to cleanup old backups: %v", err)
@@ -303,14 +322,14 @@ Backup completed at: %s
 	return os.WriteFile(summaryPath, []byte(summary), 0644)
 }
 
-// cleanupOldBackups removes backups older than 7 days
+// cleanupOldBackups removes backups older than configured retention period
 func (bdb *BackupDB) cleanupOldBackups() error {
 	entries, err := os.ReadDir(bdb.backupDir)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory: %v", err)
 	}
 
-	cutoffTime := time.Now().AddDate(0, 0, -7) // 7 days ago
+	cutoffTime := time.Now().AddDate(0, 0, -bdb.backupRetention) // configured days ago
 	removedCount := 0
 
 	for _, entry := range entries {
@@ -330,7 +349,7 @@ func (bdb *BackupDB) cleanupOldBackups() error {
 			continue
 		}
 
-		// Check if backup is older than 7 days
+		// Check if backup is older than configured retention period
 		if info.ModTime().Before(cutoffTime) {
 			backupPath := filepath.Join(bdb.backupDir, entry.Name())
 			err := os.RemoveAll(backupPath)
@@ -357,7 +376,6 @@ func isBackupDirectory(name string) bool {
 
 // StopBackup stops the backup scheduler
 func (bdb *BackupDB) StopBackup() {
-	bdb.backupEnabled = false
 	close(bdb.stopChan)
 	log.Printf("[backup_db] Backup system stopped")
 }
@@ -376,17 +394,24 @@ func (bdb *BackupDB) GetBackupStatus() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"backup_enabled": bdb.backupEnabled,
-		"backup_dir":     bdb.backupDir,
-		"backup_count":   backupCount,
-		"next_backup":    getNextBackupTime(),
+		"backup_dir":   bdb.backupDir,
+		"backup_count": backupCount,
+		"next_backup":  getNextBackupTime(),
 	}
 }
 
 // getNextBackupTime calculates the next backup time
 func getNextBackupTime() string {
 	now := time.Now()
-	nextBackup := time.Date(now.Year(), now.Month(), now.Day(), 3, 0, 0, 0, now.Location())
+	// Use default values if config is not available
+	backupHour := 3
+	backupMinute := 0
+
+	if common.Config != nil {
+		backupHour = common.Config.GroupChat.BackupHour
+	}
+
+	nextBackup := time.Date(now.Year(), now.Month(), now.Day(), backupHour, backupMinute, 0, 0, now.Location())
 
 	if now.After(nextBackup) {
 		nextBackup = nextBackup.Add(24 * time.Hour)
