@@ -12,6 +12,11 @@ import (
 	txscript2 "github.com/bitcoinsv/bsvd/txscript"
 	wire2 "github.com/bitcoinsv/bsvd/wire"
 	bsvutil2 "github.com/bitcoinsv/bsvutil"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -186,4 +191,66 @@ func MvcToRaw(tx *wire2.MsgTx) (string, error) {
 	}
 	txHex := hex.EncodeToString(buf.Bytes())
 	return txHex, nil
+}
+
+func BuildBtcTransferAllTx(netParam *chaincfg.Params, ins []*TxInputUtxo, out *TxOutput, feeRate int64, isUnSign bool) (*wire.MsgTx, error) {
+	tx := wire.NewMsgTx(2)
+	totalAmount := int64(0)
+	outAmount := int64(0)
+
+	addr, err := btcutil.DecodeAddress(out.Address, netParam)
+	if err != nil {
+		return nil, err
+	}
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return nil, err
+	}
+	tx.AddTxOut(wire.NewTxOut(out.Amount, pkScript))
+
+	emptylegacySignature := make([]byte, 107)
+	txSignSize := 0
+	for _, in := range ins {
+		hash, err := chainhash.NewHashFromStr(in.TxId)
+		if err != nil {
+			return nil, err
+		}
+		prevOut := wire.NewOutPoint(hash, uint32(in.TxIndex))
+		txIn := wire.NewTxIn(prevOut, nil, nil)
+		tx.AddTxIn(txIn)
+		totalAmount = totalAmount + int64(in.Amount)
+		txSignSize += 40 + wire.VarIntSerializeSize(uint64(len(emptylegacySignature))) + len(emptylegacySignature)
+	}
+	txTotalSize := tx.SerializeSize() + txSignSize
+
+	txFee := int64(txTotalSize) * feeRate
+	outAmount = totalAmount - int64(txFee)
+
+	tx.TxOut[0].Value = outAmount
+
+	if !isUnSign {
+		for i, in := range ins {
+			privateKeyBytes, err := hex.DecodeString(in.PriHex)
+			if err != nil {
+				return nil, err
+			}
+			privateKey, _ := btcec.PrivKeyFromBytes(privateKeyBytes)
+
+			pkScriptByte, err := hex.DecodeString(in.PkScript)
+			if err != nil {
+				return nil, err
+			}
+
+			var sigScript []byte
+			sigScript, err = txscript.SignatureScript(tx, i, pkScriptByte, txscript.SigHashAll, privateKey, true)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+
+			tx.TxIn[i].SignatureScript = sigScript
+		}
+	}
+
+	return tx, nil
 }

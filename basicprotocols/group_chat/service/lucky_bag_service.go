@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,9 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitcoinsv/bsvd/chaincfg"
 	chaincfg2 "github.com/bitcoinsv/bsvd/chaincfg"
-	"github.com/bitcoinsv/bsvd/wire"
+	wire2 "github.com/bitcoinsv/bsvd/wire"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/libsv/go-bk/bec"
 	"github.com/tyler-smith/go-bip32"
 )
@@ -724,7 +726,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 	case "btc":
 		// BTC chain uses chaincfg.Params
 		if btcNetParam, ok := netParam.(*chaincfg.Params); ok {
-			tx, buildErr = common.BuildMvcTransferAllTx(btcNetParam, []*common.TxInputUtxo{&input}, &output, 1, false)
+			tx, buildErr = common.BuildBtcTransferAllTx(btcNetParam, []*common.TxInputUtxo{&input}, &output, 1, false)
 		} else {
 			return fmt.Errorf("failed to convert netParam to chaincfg.Params for BTC chain")
 		}
@@ -736,15 +738,31 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		return fmt.Errorf("failed to build tx: %v", buildErr)
 	}
 
-	// Type assertion to ensure tx is the correct type
-	msgTx, ok := tx.(*wire.MsgTx)
-	if !ok {
-		return fmt.Errorf("failed to convert tx to *wire.MsgTx")
-	}
+	var txRaw string
+	switch strings.ToLower(grabEntity.Chain) {
+	case "mvc":
+		// Type assertion to ensure tx is the correct type
+		msgTx, ok := tx.(*wire2.MsgTx)
+		if !ok {
+			return fmt.Errorf("[%s]failed to convert tx to *wire.MsgTx", grabEntity.Chain)
+		}
 
-	txRaw, err := common.MvcToRaw(msgTx)
-	if err != nil {
-		return fmt.Errorf("failed to convert tx to raw: %v", err)
+		txRaw, err = common.MvcToRaw(msgTx)
+		if err != nil {
+			return fmt.Errorf("[%s]failed to convert tx to raw: %v", grabEntity.Chain, err)
+		}
+	case "btc":
+		msgTx, ok := tx.(*wire.MsgTx)
+		if !ok {
+			return fmt.Errorf("[%s]failed to convert tx to *wire.MsgTx", grabEntity.Chain)
+		}
+
+		var b bytes.Buffer
+		err = msgTx.Serialize(&b)
+		if err != nil {
+			return fmt.Errorf("[%s]failed to serialize tx: %v", grabEntity.Chain, err)
+		}
+		txRaw = hex.EncodeToString(b.Bytes())
 	}
 
 	resultTxId, err := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
@@ -1110,13 +1128,15 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		} else {
 			return fmt.Errorf("failed to convert netParam to chaincfg2.Params for MVC chain")
 		}
+		break
 	case "btc":
 		// BTC chain uses chaincfg.Params
 		if btcNetParam, ok := netParam.(*chaincfg.Params); ok {
-			tx, buildErr = common.BuildMvcTransferAllTx(btcNetParam, inputs, &output, 1, false)
+			tx, buildErr = common.BuildBtcTransferAllTx(btcNetParam, inputs, &output, 1, false)
 		} else {
 			return fmt.Errorf("failed to convert netParam to chaincfg.Params for BTC chain")
 		}
+		break
 	default:
 		return fmt.Errorf("unsupported chain type: %s", reclaimEntity.Chain)
 	}
@@ -1124,15 +1144,36 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		return fmt.Errorf("failed to build tx: %v", buildErr)
 	}
 
-	// Type assertion to ensure tx is the correct type
-	msgTx, ok := tx.(*wire.MsgTx)
-	if !ok {
-		return fmt.Errorf("failed to convert tx to *wire.MsgTx")
-	}
+	var (
+		txRaw string
+		err   error
+	)
+	switch strings.ToLower(reclaimEntity.Chain) {
+	case "mvc":
+		// Type assertion to ensure tx is the correct type
+		msgTx, ok := tx.(*wire2.MsgTx)
+		if !ok {
+			return fmt.Errorf("[%s]failed to convert tx to *wire.MsgTx", reclaimEntity.Chain)
+		}
 
-	txRaw, err := common.MvcToRaw(msgTx)
-	if err != nil {
-		return fmt.Errorf("failed to convert tx to raw: %v", err)
+		txRaw, err = common.MvcToRaw(msgTx)
+		if err != nil {
+			return fmt.Errorf("[%s]failed to convert tx to raw: %v", reclaimEntity.Chain, err)
+		}
+		break
+	case "btc":
+		msgTx, ok := tx.(*wire.MsgTx)
+		if !ok {
+			return fmt.Errorf("[%s]failed to convert tx to *wire.MsgTx", reclaimEntity.Chain)
+		}
+
+		var b bytes.Buffer
+		err = msgTx.Serialize(&b)
+		if err != nil {
+			return fmt.Errorf("[%s]failed to serialize tx: %v", reclaimEntity.Chain, err)
+		}
+		txRaw = hex.EncodeToString(b.Bytes())
+		break
 	}
 
 	resultTxId, err := chainAdapter[reclaimEntity.Chain].BroadcastTx(txRaw)
