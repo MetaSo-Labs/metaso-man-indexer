@@ -8,7 +8,7 @@ Group Chat is a blockchain real-time chat module based on the MetaID-v2 protocol
 
 ### 1. Integration in Main Project
 
-In the main project's `main.go`, simply add the following code to start the chat module:
+In the main project's `app.go`, simply add the following code to start the chat module:
 
 ```go
 // Start with default configuration

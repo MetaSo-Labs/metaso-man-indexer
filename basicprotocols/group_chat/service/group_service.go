@@ -419,7 +419,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
 			if openLuckyBag != nil {
-				fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
 				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
 					chatItem.TxId = openLuckyBag.GrabTxId
 				} else {
@@ -520,7 +520,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
 			if openLuckyBag != nil {
-				fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
 				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
 					chatItem.TxId = openLuckyBag.GrabTxId
 				} else {
