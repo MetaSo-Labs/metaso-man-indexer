@@ -227,6 +227,12 @@ func (pb *Pebble) InitDatabase() error {
 		return fmt.Errorf("Pebble %s migrate error: %v", TalkVersionInfoCollection, err)
 	}
 
+	// Initialize backup system
+	err = InitBackupDB()
+	if err != nil {
+		return fmt.Errorf("Pebble backup system init error: %v", err)
+	}
+
 	return nil
 }
 
