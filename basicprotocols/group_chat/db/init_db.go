@@ -52,8 +52,8 @@ const (
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
-	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
-	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp and to_from_timestamp，value: pinId_chatType_timestamp
+	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp+number(6) and to_from_timestamp+number(6)，value: pinId_chatType_timestamp_number
+	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp+number(6) and to_from_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat message data
 
 	// Version info

@@ -47,18 +47,21 @@ func (pcdb *PrivateChatDB) SavePrivateChat(chat *models.TalkPrivateChatV3) error
 
 // Save private chat timestamp index (bidirectional index: from_to_timestamp and to_from_timestamp)
 func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChatV3) error {
+	// Generate a 6-digit random number for uniqueness
+	randomNum := generateRandomNumber(6)
+
 	// Construct timestamp index value: pinId_chatType_timestamp
-	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + randomNum
 
 	// Save from_to_timestamp index
-	fromToKey := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(chat.Timestamp, 10))
+	fromToKey := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
 	err := Pb[TalkPrivateChatTimestampCollection].Set(fromToKey, []byte(value), pebble.Sync)
 	if err != nil {
 		return err
 	}
 
 	// Save to_from_timestamp index (reverse index for easy querying)
-	toFromKey := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10))
+	toFromKey := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
 	return Pb[TalkPrivateChatTimestampCollection].Set(toFromKey, []byte(value), pebble.Sync)
 }
 
@@ -205,6 +208,7 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, error) {
 	// Use current time as start timestamp
 	currentTimestamp := time.Now().Unix()
+	currentTimestamp = currentTimestamp * 1000000
 	return pcdb.GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId, currentTimestamp, size)
 }
 

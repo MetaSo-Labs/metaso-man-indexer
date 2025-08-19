@@ -31,6 +31,8 @@ syncProtocols = ["group_chat"]
 port = "7568"           # Chat module HTTP service port
 host = "0.0.0.0"        # Chat module service listening address
 manHost = "https://man.metaid.io"  # MetaID main service address, mainly used to fetch user information
+backupHour = 3 # Backup hour, default is 3 (3 AM) means 3 AM every day
+backupRetention = 7 # Backup retention period, default is 7 days
 
 [socket]
 isEnble = true          # Whether to enable Socket.IO functionality
@@ -48,6 +50,8 @@ connectionTTL = 20      # Connection time to live (seconds)
 - `port`: HTTP API service port, default is "7568"
 - `host`: Service listening address, default is "0.0.0.0"
 - `manHost`: MetaID main service address, used for fetching user information
+- `backupHour`: Backup hour, default is 3 (3 AM) means 3 AM every day
+- `backupRetention`: Backup retention period, default is 7 days
 
 ### Socket Configuration
 
