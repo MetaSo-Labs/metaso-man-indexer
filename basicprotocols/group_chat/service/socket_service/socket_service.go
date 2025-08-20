@@ -97,7 +97,7 @@ func SendGroupMessageToUser(metaid string, message interface{}) error {
 		return err
 	}
 
-	log.Printf("Message sent successfully: metaid=%s", metaid)
+	// log.Printf("Message sent successfully: metaid=%s", metaid)
 	return nil
 }
 
@@ -123,7 +123,7 @@ func SendPrivateMessageToUser(metaid string, message interface{}) error {
 		return err
 	}
 
-	log.Printf("Private message sent successfully: metaid=%s", metaid)
+	// log.Printf("Private message sent successfully: metaid=%s", metaid)
 	return nil
 }
 
