@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -189,6 +190,47 @@ func BatchGetMetaIdInfo(lastupdate int64, limit int) (infoList map[string]*pin.M
 		infoList[pin.Address] = &pin
 	}
 	return
+}
+func FetchMetaIdInfoBatch(lastID string, batchSize int64) (pins []*pin.MetaIdInfo, nextLastID string, err error) {
+	// 构建过滤条件
+	filter := bson.M{}
+	if lastID != "" {
+		objectID, err := primitive.ObjectIDFromHex(lastID)
+		if err != nil {
+			return nil, "", fmt.Errorf("invalid lastID: %v", err)
+		}
+		filter["_id"] = bson.M{"$gt": objectID}
+	}
+
+	// 设置查询选项
+	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(batchSize)
+
+	// 查询数据
+	cursor, err := mongoClient.Collection(MetaIdInfoCollection).Find(context.TODO(), filter, opts)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 手动解析结果
+	for cursor.Next(context.TODO()) {
+		var raw bson.M
+		if err := cursor.Decode(&raw); err != nil {
+			return nil, "", err
+		}
+
+		// 提取 _id
+		id := raw["_id"].(primitive.ObjectID)
+
+		// 将其他字段映射到 MetaIdInfo
+		var pin pin.MetaIdInfo
+		bsonBytes, _ := bson.Marshal(raw)
+		bson.Unmarshal(bsonBytes, &pin)
+
+		pins = append(pins, &pin)
+		nextLastID = id.Hex() // 更新 nextLastID
+	}
+
+	return pins, nextLastID, nil
 }
 func addPDV(pins []interface{}) error {
 	var models []mongo.WriteModel

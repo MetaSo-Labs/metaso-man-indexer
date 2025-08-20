@@ -124,3 +124,18 @@ func (mg *Mongodb) GetFollowRecord(metaId string, followMetaId string) (followDa
 	err = mongoClient.Collection(FollowCollection).FindOne(context.TODO(), filter).Decode(&followData)
 	return
 }
+func GetRecommendedList(limit int) (list []*pin.MetaIdInfo, err error) {
+	filter := bson.D{} // 空过滤器，表示查询所有文档
+	opts := options.Find().
+		SetSort(bson.D{{Key: "followcount", Value: -1}}). // 按 followcount 降序排序
+		SetLimit(int64(limit))                            // 限制返回的文档数量
+
+	cursor, err := mongoClient.Collection(MetaIdInfoCollection).Find(context.TODO(), filter, opts)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(context.TODO())
+
+	err = cursor.All(context.TODO(), &list)
+	return
+}

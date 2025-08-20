@@ -50,6 +50,7 @@ func main() {
 	if common.ModuleExist("metaso") {
 		ms.SaveSynchBlockedSetting()
 		ms.SaveRecommendedAuthor()
+		metaso.InitOperationDb()
 		go ms.SynchBlockedSettings()
 		go ms.Synchronization()
 	}

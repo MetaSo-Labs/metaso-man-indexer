@@ -276,7 +276,65 @@ func deleteSlice(s []string, elem string) []string {
 	}
 	return r
 }
-func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*TweetLike, donates []*MetasoDonate, err error) {
+
+type CommentsList struct {
+	PinId         string `json:"pinId"`
+	ChainName     string `json:"chainName"`
+	CreateAddress string `json:"createAddress"`
+	CreateMetaid  string `json:"CreateMetaid"`
+	Content       string `json:"content"`
+	Timestamp     int64  `json:"timestamp"`
+	LikeNum       int64  `json:"likeNum"`
+	CommentNum    int64  `json:"commentNum"`
+}
+
+func getCommentsList(pinId string) (comments []*CommentsList, err error) {
+	var commentsList []*TweetComment
+	filter2 := bson.D{{Key: "commentpinid", Value: pinId}}
+	result, err := mongoClient.Collection(TweetCommentCollection).Find(context.TODO(), filter2)
+	if err == nil {
+		result.All(context.TODO(), &commentsList)
+	}
+	if len(commentsList) > 0 {
+		var idList []string
+		for _, c := range commentsList {
+			idList = append(idList, c.PinId)
+		}
+		filter := bson.D{{Key: "id", Value: bson.D{{Key: "$in", Value: idList}}}}
+		findOptions := options.Find().SetProjection(bson.D{
+			{Key: "id", Value: 1},
+			{Key: "likecount", Value: 1},
+			{Key: "commentcount", Value: 1},
+			{Key: "_id", Value: 0}, // 如果不需要返回 MongoDB 的 `_id` 字段
+		})
+		result, err := mongoClient.Collection(BuzzView).Find(context.TODO(), filter, findOptions)
+		if err == nil {
+			var tweetList []*Tweet
+			result.All(context.TODO(), &tweetList)
+			tweetMap := make(map[string]*Tweet, len(tweetList))
+			for _, t := range tweetList {
+				tweetMap[t.Id] = t
+			}
+
+			for _, c := range commentsList {
+				if t, ok := tweetMap[c.PinId]; ok {
+					comments = append(comments, &CommentsList{
+						PinId:         c.PinId,
+						ChainName:     c.ChainName,
+						CreateAddress: c.CreateAddress,
+						CreateMetaid:  c.CreateMetaid,
+						Content:       c.Content,
+						Timestamp:     c.Timestamp,
+						LikeNum:       int64(t.LikeCount),
+						CommentNum:    int64(t.CommentCount),
+					})
+				}
+			}
+		}
+	}
+	return
+}
+func getInfo(pinId string) (tweet *Tweet, comments []*CommentsList, like []*TweetLike, donates []*MetasoDonate, err error) {
 	filter := bson.D{{Key: "id", Value: pinId}}
 	err = mongoClient.Collection(BuzzView).FindOne(context.TODO(), filter, nil).Decode(&tweet)
 	if err != nil {
@@ -287,12 +345,8 @@ func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*Twee
 	}
 	tweet.Content = string(tweet.ContentBody)
 	tweet.ContentBody = nil
-	filter2 := bson.D{{Key: "commentpinid", Value: pinId}}
 
-	result, err := mongoClient.Collection(TweetCommentCollection).Find(context.TODO(), filter2)
-	if err == nil {
-		result.All(context.TODO(), &comments)
-	}
+	comments, _ = getCommentsList(pinId)
 
 	filter3 := bson.D{{Key: "liketopinid", Value: pinId}}
 	result2, err := mongoClient.Collection(TweetLikeCollection).Find(context.TODO(), filter3)
@@ -326,7 +380,16 @@ func getInfo(pinId string) (tweet *Tweet, comments []*TweetComment, like []*Twee
 			var commentData TweetComment
 			err := json.Unmarshal([]byte(data.Content), &commentData)
 			if err == nil {
-				comments = append(comments, &commentData)
+				comments = append(comments, &CommentsList{
+					PinId:         commentData.PinId,
+					ChainName:     commentData.ChainName,
+					CreateAddress: commentData.CreateAddress,
+					CreateMetaid:  commentData.CreateMetaid,
+					Content:       commentData.Content,
+					Timestamp:     commentData.Timestamp,
+					LikeNum:       0,
+					CommentNum:    0,
+				})
 				tweet.CommentCount += 1
 			}
 		} else if data.Path == "/protocols/simpledonate" {

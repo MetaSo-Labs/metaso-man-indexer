@@ -7,6 +7,7 @@ import (
 	"manindexer/adapter/bitcoin"
 	"manindexer/adapter/microvisionchain"
 	"manindexer/common"
+	"net/http"
 
 	"manindexer/database"
 
@@ -182,6 +183,7 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 			if onlyHost != "" && pinNode.Host != onlyHost {
 				continue
 			}
+			go handleUserInfo(pinNode)
 			if !pinNode.IsTransfered {
 				handleMempoolPin(pinNode)
 			} else if pinNode.IsTransfered {
@@ -194,7 +196,55 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 		}
 	}
 }
+func findModifyPath(pinNode *pin.PinInscription) (string, error) {
+	id := strings.ReplaceAll(pinNode.Path, "@", "")
+	path := ""
+	for i := 0; i < 500; i++ {
+		pinMsg, err := PebbleStore.GetPinById(id)
+		if err != nil {
+			//从内存池去查
+			pinMsg, err = mongodb.GetMempoolPinById(id)
+			if err != nil {
+				log.Println("GetPinById error:", err)
+				return "", err
+			}
+		}
+		if pinMsg.Operation == "modify" {
+			id = strings.ReplaceAll(pinMsg.Path, "@", "")
+		} else {
+			path = pinMsg.Path
+			break
+		}
+	}
+	return path, nil
+}
 
+func handleUserInfo(pinNode *pin.PinInscription) {
+	path := pinNode.Path
+	if pinNode.Operation == "modify" {
+		path, _ = findModifyPath(pinNode)
+		log.Println("modify pin path:", path, "content:", string(pinNode.ContentBody))
+	}
+	// if path != "/info/name" && path != "/info/avatar" && path != "/info/bio" && path != "/info/background" {
+	// 	return
+	// }
+	switch path {
+	case "/info/name":
+		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?nickname=" + string(pinNode.ContentBody)
+		log.Println("modify pin url:", url)
+		_, err := http.Get(url)
+		log.Println("modify pin http.Get error:", err)
+	case "/info/avatar":
+		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?avatar=" + string(pinNode.Id)
+		http.Get(url)
+	case "/info/bio":
+		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?bio=" + string(pinNode.ContentBody)
+		http.Get(url)
+	case "/info/background":
+		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?background=" + string(pinNode.Id)
+		http.Get(url)
+	}
+}
 func handleMempoolPin(pinNode *pin.PinInscription) {
 	if pinNode.Operation == "modify" || pinNode.Operation == "revoke" {
 		pinNode.OriginalId = strings.Replace(pinNode.Path, "@", "", -1)

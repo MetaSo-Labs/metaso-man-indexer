@@ -9,12 +9,14 @@ import (
 	"manindexer/database/mongodb"
 	"manindexer/man"
 	"manindexer/pin"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -52,6 +54,7 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/follow/record", getFollowRecord)
 	btcGroup.GET("/metaid/followerList/:metaid", getFollowerListByMetaId)
 	btcGroup.GET("/metaid/followingList/:metaid", getFollowingListByMetaId)
+	btcGroup.GET("/metaid/recommended", getRecommendedList)
 	btcGroup.POST("/getAllPinByPathAndMetaId", getAllPinByPathAndMetaId)
 	btcGroup.POST("/metaid/dataValue", getDataValueByMetaIdList)
 }
@@ -656,6 +659,42 @@ func getFollowingListByMetaId(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"list": list, "total": total}))
+
+}
+
+// getRecommendedList
+func getRecommendedList(ctx *gin.Context) {
+	limit := int(100)
+	num := int(6)
+	if ctx.Query("top") != "" {
+		limit, _ = strconv.Atoi(ctx.Query("limit"))
+	}
+	if ctx.Query("num") != "" {
+		num, _ = strconv.Atoi(ctx.Query("num"))
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if num > limit {
+		num = limit
+	}
+	list, err := mongodb.GetRecommendedList(limit)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+
+	// 使用局部随机数生成器打乱 list 的顺序
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(list), func(i, j int) {
+		list[i], list[j] = list[j], list[i]
+	})
+
+	// 取前 num 个元素
+	if len(list) > num {
+		list = list[:num]
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", list))
 
 }
 

@@ -6,3 +6,4 @@ config_mvc.toml
 manindexer
 .DS_Store
 pev_data_pebble/
+user_operation_data/

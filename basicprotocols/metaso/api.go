@@ -33,6 +33,7 @@ func Api(r *gin.Engine) {
 	hostGroup.GET("/block/ndv", blockNDV)
 	hostGroup.GET("/block/mdv", blockMDV)
 	hostGroup.GET("/info", hostInfo)
+	hostGroup.POST("/viewed/add", buzzViewedAdd)
 	ftGroup := r.Group("/ft")
 	ftGroup.Use(CorsMiddleware())
 	ftGroup.GET("/mrc20/address/deploy-list", mrc20TickList)
@@ -44,6 +45,7 @@ func Api(r *gin.Engine) {
 	settingGroup.GET("/recommended/list", listRecommendedAuthor)
 	settingGroup.GET("/recommended/add", addRecommendedAuthor)
 	settingGroup.GET("/recommended/delete", deleteRecommendedAuthor)
+	//settingGroup.GET("/recommended/delete", deleteRecommendedAuthor)
 }
 func CorsMiddleware() gin.HandlerFunc {
 	return func(context *gin.Context) {
@@ -153,7 +155,7 @@ func recommended(ctx *gin.Context) {
 		size = 10
 	}
 	ms := &MetaSo{}
-	list, total, err := ms.GetRecommendedPosts(ctx, ctx.Query("lastId"), userAddress, size)
+	list, total, err := ms.GetRecommendedPostsNew(ctx, ctx.Query("lastId"), userAddress, size)
 	lastId := ""
 	if len(list) > 0 {
 		lastId = list[len(list)-1].MogoID.Hex()
@@ -820,5 +822,38 @@ func deleteRecommendedAuthor(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
 		return
 	}
+	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
+}
+
+type buzzViewedAddReq struct {
+	PinIdList []string `json:"pinIdList" binding:"required"`
+	Address   string   `json:"address" binding:"required"`
+}
+
+func buzzViewedAdd(ctx *gin.Context) {
+	var req buzzViewedAddReq
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "invalid request"))
+		return
+	}
+	if len(req.PinIdList) == 0 {
+		ctx.JSON(http.StatusOK, ApiError(-1, "pinIdList is null"))
+		return
+	}
+	if req.Address == "" {
+		ctx.JSON(http.StatusOK, ApiError(-1, "address is null"))
+		return
+	}
+	v := []string{}
+	for _, pinId := range req.PinIdList {
+		item := fmt.Sprintf("%s_%d", pinId, time.Now().Unix())
+		v = append(v, item)
+	}
+	err := MergeUserOperationData("readed_log", req.Address, fmt.Sprintf("%s,", strings.Join(v, ",")))
+	if err != nil {
+		ctx.JSON(http.StatusOK, ApiError(-1, "service exception"))
+		return
+	}
+	go CleanOldUserOperationData("readed_log", req.Address) // Clean up after 10 days
 	ctx.JSON(http.StatusOK, ApiSuccess(1, "ok", nil))
 }

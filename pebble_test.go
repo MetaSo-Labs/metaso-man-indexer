@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"manindexer/common"
+	"manindexer/man"
+	"manindexer/pin"
+	"strings"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -53,5 +57,20 @@ func TestIter(t *testing.T) {
 	defer iter.Close()
 	iter.Last()
 	fmt.Println(string(iter.Key()))
+
+}
+func TestGetId(t *testing.T) {
+	common.GetIcCoinListFromNet()
+	list := man.ExtractAtList("{\"content\":\"@SUNNY  hi2\",\"contentType\":\"text/plain\"}")
+	for _, atId := range list {
+		key := strings.ToLower(atId)
+		if address, ok := common.IDCOINS[key]; ok {
+			toPINItem := pin.PinInscription{
+				Address: address,
+				Path:    "Mention",
+			}
+			fmt.Printf("atId: %s, address: %s, toPINItem: %+v\n", atId, address, toPINItem)
+		}
+	}
 
 }

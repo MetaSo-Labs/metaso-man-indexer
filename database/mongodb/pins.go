@@ -387,6 +387,10 @@ func (mg *Mongodb) GetMemPoolPinByNumberOrId(numberOrId string) (pinInscription 
 	}
 	return
 }
+func GetMempoolPinById(id string) (pinInscription pin.PinInscription, err error) {
+	err = mongoClient.Collection(MempoolPinsCollection).FindOne(context.TODO(), bson.D{{Key: "id", Value: id}}).Decode(&pinInscription)
+	return
+}
 
 func (mg *Mongodb) GetBlockPin(height int64, size int64) (pins []*pin.PinInscription, total int64, err error) {
 	filter := bson.D{{Key: "genesisheight", Value: height}}

@@ -274,7 +274,14 @@ func content(ctx *gin.Context) {
 		return
 	}
 	//p, err := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
-	p, err := man.PebbleStore.GetPinById(ctx.Param("number"))
+	var p pin.PinInscription
+	var err error
+	p, err = man.PebbleStore.GetPinById(ctx.Param("number"))
+	if err != nil || p.Id == "" {
+		p1, err1 := man.DbAdapter.GetPinByNumberOrId(ctx.Param("number"))
+		p = *p1
+		err = err1
+	}
 	if err != nil || p.Id == "" {
 		ctx.String(200, "fail")
 		return
@@ -396,6 +403,10 @@ type txMsgInput struct {
 func tx(ctx *gin.Context) {
 	txid := ctx.Param("txid")
 	chain := ctx.Param("chain")
+	if chain != "btc" && chain != "mvc" {
+		ctx.String(200, "fail")
+		return
+	}
 	trst, err := man.ChainAdapter[chain].GetTransaction(txid)
 	if err != nil {
 		ctx.String(200, "fail")

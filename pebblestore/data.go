@@ -318,3 +318,22 @@ func (db *Database) GetNotifcation(key string) ([]byte, error) {
 func (db *Database) DeleteNotifcation(key string) error {
 	return db.NotifcationDb.Delete([]byte(key), pebble.Sync)
 }
+
+func (db *Database) CleanUpNotifcation(key string) error {
+	result, err := db.GetNotifcation(key)
+	if err != nil {
+		return err
+	}
+
+	// 分割数据
+	arr := strings.Split(string(result), "@*@")
+
+	// 如果数据大于300条，滚动删除
+	if len(arr) > 300 {
+		remaining := arr[len(arr)-200:] // 保留最后200条
+		newValue := strings.Join(remaining, "@*@")
+		return db.NotifcationDb.Set([]byte(key), []byte(newValue), pebble.Sync)
+	}
+
+	return nil
+}

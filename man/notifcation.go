@@ -2,9 +2,12 @@ package man
 
 import (
 	"context"
+	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/pin"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -26,33 +29,46 @@ func handNotifcation(pinNode *pin.PinInscription) {
 	if !common.ModuleExist("metaso_notifcation") {
 		return
 	}
+	if _, ok := common.NotifcationBlackedHost[pinNode.Host]; ok {
+		return
+	}
 	if _, ok := notifcationPath[pinNode.Path]; !ok {
 		return
 	}
-	toPIN := getNotifcationToAddress(pinNode)
-	if toPIN.Id == "" {
+	toPINList := getNotifcationToAddress(pinNode)
+	if len(toPINList) == 0 {
 		return
 	}
-	notifcationData := pin.NotifcationData{
-		NotifcationId:   time.Now().UnixMilli(),
-		NotifcationType: pinNode.Path,
-		FromPinId:       pinNode.Id,
-		FromAddress:     pinNode.Address,
-		FromPinHost:     pinNode.Host,
-		FromPinChain:    pinNode.ChainName,
-		NotifcationPin:  toPIN.Id,
-		NotifcationTime: time.Now().Unix(),
-		NotifcationHost: toPIN.Host,
+	for _, toPIN := range toPINList {
+		notifcationType := pinNode.Path
+		if toPIN.Path == "Mention" {
+			notifcationType = "Mention"
+		}
+		notifcationData := pin.NotifcationData{
+			NotifcationId:   time.Now().UnixMilli(),
+			NotifcationType: notifcationType,
+			FromPinId:       pinNode.Id,
+			FromAddress:     pinNode.Address,
+			FromPinHost:     pinNode.Host,
+			FromPinChain:    pinNode.ChainName,
+			NotifcationPin:  toPIN.Id,
+			NotifcationTime: time.Now().Unix(),
+			NotifcationHost: toPIN.Host,
+		}
+		// Save the notification data to DB
+		content, err := sonic.Marshal(notifcationData)
+		if err != nil {
+			return
+		}
+		if toPIN.Path == "Mention" {
+			log.Printf("==> handNotifcation to %s, content: %s", toPIN.Address, content)
+		}
+		PebbleStore.Database.SetNotifcation(toPIN.Address, content)
+		PebbleStore.Database.CleanUpNotifcation(toPIN.Address)
 	}
-	// Save the notification data to DB
-	content, err := sonic.Marshal(notifcationData)
-	if err != nil {
-		return
-	}
-	PebbleStore.Database.SetNotifcation(toPIN.Address, content)
 }
 
-func getNotifcationToAddress(pinNode *pin.PinInscription) (toPIN pin.PinInscription) {
+func getNotifcationToAddress(pinNode *pin.PinInscription) (toPIN []pin.PinInscription) {
 	switch pinNode.Path {
 	case "/follow":
 		toPIN, _ = getFollowPin(pinNode)
@@ -64,6 +80,10 @@ func getNotifcationToAddress(pinNode *pin.PinInscription) (toPIN pin.PinInscript
 		toPIN, _ = getPaycommentPin(pinNode)
 	case "/protocols/simplebuzz":
 		toPIN, _ = getRepostPin(pinNode)
+		toPIN2, _ := getAtIdCoinPin(pinNode)
+		if len(toPIN2) > 0 {
+			toPIN = append(toPIN, toPIN2...)
+		}
 	}
 	return
 }
@@ -77,7 +97,7 @@ func getPINbyId(pinId string) (pinNode pin.PinInscription, err error) {
 	}
 	return
 }
-func getFollowPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+func getFollowPin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
 	metaid := string(pinNode.ContentBody)
 	filter := bson.M{"metaid": metaid}
 	findOptions := options.FindOne()
@@ -88,22 +108,25 @@ func getFollowPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err er
 		err = mongodb.Client.Collection(mongodb.MempoolPinsCollection).FindOne(context.TODO(), filter, findOptions).Decode(&toPIN)
 		return
 	} else {
-		toPIN = pin.PinInscription{
-			Id:      pinNode.Id,
-			Address: info.Address,
+		toPIN = []pin.PinInscription{
+			{
+				Id:      pinNode.Id,
+				Address: info.Address,
+			},
 		}
 	}
 	return
 }
-func getDonatePin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+func getDonatePin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
 	var dataMap map[string]interface{}
 	err = sonic.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
 		return
 	}
-	return getPINbyId(dataMap["toPin"].(string))
+	to, _ := getPINbyId(dataMap["toPin"].(string))
+	return []pin.PinInscription{to}, nil
 }
-func getPayLikePin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+func getPayLikePin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
 	var dataMap map[string]interface{}
 	err = sonic.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -118,10 +141,14 @@ func getPayLikePin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err e
 	if dataMap["likeTo"].(string) == "" || dataMap["isLike"].(string) != "1" {
 		return
 	} else {
-		return getPINbyId(dataMap["likeTo"].(string))
+		toPINItem, err1 := getPINbyId(dataMap["likeTo"].(string))
+		if err1 == nil {
+			toPIN = []pin.PinInscription{toPINItem}
+		}
+		return
 	}
 }
-func getPaycommentPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+func getPaycommentPin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
 	var dataMap map[string]interface{}
 	err = sonic.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -133,10 +160,14 @@ func getPaycommentPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, er
 		if dataMap["commentTo"] == nil || dataMap["commentTo"].(string) == "" {
 			return
 		}
-		return getPINbyId(dataMap["commentTo"].(string))
+		toPINItem, err1 := getPINbyId(dataMap["commentTo"].(string))
+		if err1 == nil {
+			toPIN = []pin.PinInscription{toPINItem}
+		}
+		return
 	}
 }
-func getRepostPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err error) {
+func getRepostPin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
 	var dataMap map[string]interface{}
 	err = sonic.Unmarshal(pinNode.ContentBody, &dataMap)
 	if err != nil {
@@ -148,6 +179,44 @@ func getRepostPin(pinNode *pin.PinInscription) (toPIN pin.PinInscription, err er
 		if dataMap["quotePin"] == nil || dataMap["quotePin"].(string) == "" {
 			return
 		}
-		return getPINbyId(dataMap["quotePin"].(string))
+		toPINItem, err1 := getPINbyId(dataMap["quotePin"].(string))
+		if err1 == nil {
+			toPIN = []pin.PinInscription{toPINItem}
+		}
+		return
 	}
+}
+func getAtIdCoinPin(pinNode *pin.PinInscription) (toPIN []pin.PinInscription, err error) {
+	content := string(pinNode.ContentBody)
+	list := ExtractAtList(content)
+	if len(list) <= 0 {
+		return
+	}
+	log.Println("==>getAtIdCoinPin list:", list)
+	for _, atId := range list {
+		key := strings.ToLower(atId)
+		if address, ok := common.IDCOINS[key]; ok {
+			toPINItem := pin.PinInscription{
+				Id:        pinNode.Id,
+				Address:   address,
+				Host:      pinNode.Host,
+				ChainName: pinNode.ChainName,
+				Path:      "Mention",
+			}
+			toPIN = append(toPIN, toPINItem)
+			log.Println("==>Mention to :", address)
+		}
+	}
+	return
+}
+func ExtractAtList(content string) []string {
+	re := regexp.MustCompile(`@(\S+?)\s`)
+	matches := re.FindAllStringSubmatch(content, -1)
+	var atList []string
+	for _, m := range matches {
+		if len(m) > 1 {
+			atList = append(atList, m[1])
+		}
+	}
+	return atList
 }

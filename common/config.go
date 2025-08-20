@@ -11,16 +11,17 @@ import (
 )
 
 var (
-	Config            *AllConfig
-	configMutex       sync.Mutex
-	Chain             string
-	Db                string
-	Server            string
-	TestNet           string
-	ConfigFile        string
-	BlockedData       map[string]struct{}
-	RecommendedAuthor map[string]struct{}
-	Cmd               string
+	Config                 *AllConfig
+	configMutex            sync.Mutex
+	Chain                  string
+	Db                     string
+	Server                 string
+	TestNet                string
+	ConfigFile             string
+	BlockedData            map[string]struct{}
+	RecommendedAuthor      map[string]struct{}
+	NotifcationBlackedHost map[string]bool
+	Cmd                    string
 )
 
 type AllConfig struct {
@@ -53,13 +54,14 @@ type Statistics struct {
 	AllowProtocols []string `toml:"allowProtocols"`
 }
 type metasoConfig struct {
-	Pubkey       string `toml:"pubkey"`
-	Prikey       string `toml:"prikey"`
-	MongoNodeURI string `toml:"mongoNodeURI"`
-	SyncMode     string `toml:"syncMode"`
-	OnlyHost     string `toml:"onlyHost"`
-	FeeRateHost  string `toml:"feeRateHost"`
-	FeeLimit     int64  `toml:"feeLimit"`
+	Pubkey                 string   `toml:"pubkey"`
+	Prikey                 string   `toml:"prikey"`
+	MongoNodeURI           string   `toml:"mongoNodeURI"`
+	SyncMode               string   `toml:"syncMode"`
+	OnlyHost               string   `toml:"onlyHost"`
+	FeeRateHost            string   `toml:"feeRateHost"`
+	FeeLimit               int64    `toml:"feeLimit"`
+	NotifcationBlackedHost []string `toml:"notifcationBlackedHost"`
 }
 type protocols struct {
 	Key     string          `toml:"key"`
@@ -119,6 +121,7 @@ func InitConfig(filePath string) {
 	defer configMutex.Unlock()
 	BlockedData = map[string]struct{}{}
 	RecommendedAuthor = map[string]struct{}{}
+	NotifcationBlackedHost = map[string]bool{}
 	flagConfig, configFile := GetFlagConfig()
 	//filePath := "./config.toml"
 	flag.StringVar(&Cmd, "cmd", "", "count-pins/count-pages/count-blocks")
@@ -200,6 +203,10 @@ func InitConfig(filePath string) {
 		Config.MetaSo.Pubkey = ecdhConfig.Pubkey
 		Config.MetaSo.Prikey = ecdhConfig.Prikey
 	}
+	for _, item := range Config.MetaSo.NotifcationBlackedHost {
+		NotifcationBlackedHost[item] = true
+	}
+
 }
 func GetFlagConfig() (flagConfig map[string]*string, configFile string) {
 	chain := flag.String("chain", "btc", "Which chain to perform indexing")

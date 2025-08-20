@@ -6,6 +6,7 @@ import (
 	"log"
 	"manindexer/common"
 	"manindexer/database/mongodb"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +15,230 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// GetRecommendedPostsNew
+func (metaso *MetaSo) GetRecommendedPostsNew(ctx context.Context, lastId string, userAddress string, size int64) (listData []*TweetWithLike, total int64, err error) {
+	if userAddress == "" {
+		return
+	}
+	// 新贴比例：20%
+	// 推荐用户：20%
+	// 热帖比例：10%
+	// 关注用户：50%
+	//获取address所有已经看过的帖子
+	var readedList []string
+	readedLog, _ := GetUserOperationData("readed_log", userAddress)
+	if readedLog == nil {
+		readedLog = []byte{}
+	}
+	for _, item := range strings.Split(string(readedLog), ",") {
+		if item != "" {
+			arr := strings.Split(item, "_")
+			if len(arr) == 2 {
+				readedList = append(readedList, arr[0])
+			}
+		}
+	}
+	if len(readedList) > 1000 {
+		go CleanOldUserOperationData("readed_log", userAddress)
+	}
+	var list []*Tweet
+	// 关注用户
+	r1, _ := metaso.getFollowedPosts(ctx, userAddress, 5, readedList)
+	if r1 != nil {
+		list = append(list, r1...)
+	}
+	// 推荐用户
+	r2, _ := metaso.getRecommendedPosts(ctx, 2, readedList)
+	if r2 != nil {
+		list = append(list, r2...)
+	}
+	// 热帖比例
+	r3, _ := metaso.getHotPosts(ctx, 1, readedList)
+	if r3 != nil {
+		list = append(list, r3...)
+	}
+	// 新贴比例
+	r4, _ := metaso.getNewPosts(ctx, 1, readedList)
+	if r4 != nil {
+		list = append(list, r4...)
+	}
+	// 如果没有数据，返回空
+	if len(list) <= 0 {
+		return
+	}
+	var pinIdList []string
+	for _, item := range list {
+		item.Content = string(item.ContentBody)
+		item.ContentBody = nil
+		pinIdList = append(pinIdList, item.Id)
+	}
+
+	mempoolList, err := getBuzzMempoolCount(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			for _, data := range mempoolList {
+				if item.Id == data.Target && data.Path == "/protocols/paylike" {
+					item.LikeCount += 1
+				}
+				if item.Id == data.Target && data.Path == "/protocols/paycomment" {
+					item.CommentCount += 1
+				}
+				if item.Id == data.Target && data.Path == "/protocols/simpledonate" {
+					item.DonateCount += 1
+				}
+			}
+		}
+	}
+	checkMap := make(map[string]*TweetWithLike, len(list))
+	for _, item := range list {
+		checkMap[item.Id] = &TweetWithLike{Tweet: *item, Like: []string{}, Donate: []string{}}
+	}
+	likeMap, err := batchGetPayLike(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			if v, ok := likeMap[item.Id]; ok {
+				checkMap[item.Id].Like = v
+			}
+		}
+	}
+	donateMap, err := batchGetSimpleDonat(pinIdList)
+	if err == nil {
+		for _, item := range list {
+			if v, ok := donateMap[item.Id]; ok {
+				checkMap[item.Id].Donate = v
+			}
+		}
+	}
+	for _, item := range list {
+		if v, ok := checkMap[item.Id]; ok {
+			listData = append(listData, v)
+		}
+	}
+	//设置为已读
+	v := []string{}
+	n := time.Now().Unix()
+	for _, pinId := range pinIdList {
+		item := fmt.Sprintf("%s_%d", pinId, n)
+		v = append(v, item)
+	}
+	go MergeUserOperationData("readed_log", userAddress, fmt.Sprintf("%s,", strings.Join(v, ",")))
+	return
+}
+
+// 获取某地址的关注用户帖子
+func (metaso *MetaSo) getFollowedPosts(ctx context.Context, userAddress string, size int64, excludeList []string) (result []*Tweet, err error) {
+	userMetaId := common.GetMetaIdByAddress(userAddress)
+	// First, get the list of followed users
+	followedUsers, err := metaso.getFollowedUsers(ctx, userMetaId)
+	if err != nil {
+		return
+	}
+	if len(followedUsers) <= 0 {
+		return
+	}
+	// Build match conditions
+	matchConditions := bson.D{{"metaid", bson.D{{"$in", followedUsers}}}}
+	if len(excludeList) > 0 {
+		matchConditions = append(matchConditions, bson.E{Key: "id", Value: bson.D{{"$nin", excludeList}}})
+	}
+	// Build find options
+	findOptions := options.Find().
+		SetSort(bson.D{{"_id", -1}}).
+		SetLimit(size)
+
+	// Execute query
+	cursor, err := mongoClient.Collection(BuzzView).Find(ctx, matchConditions, findOptions)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(ctx)
+
+	// Parse results
+	err = cursor.All(context.TODO(), &result)
+	return
+}
+
+// 获取推荐用户的帖子
+func (metaso *MetaSo) getRecommendedPosts(ctx context.Context, size int64, excludeList []string) (result []*Tweet, err error) {
+	// Build match conditions
+	matchConditions := bson.D{{"isrecommended", true}}
+	if len(excludeList) > 0 {
+		matchConditions = append(matchConditions, bson.E{Key: "id", Value: bson.D{{"$nin", excludeList}}})
+	}
+	// Build find options
+	findOptions := options.Find().
+		SetSort(bson.D{{"_id", -1}}).
+		SetLimit(size)
+
+	// Execute query
+	cursor, err := mongoClient.Collection(BuzzView).Find(ctx, matchConditions, findOptions)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(ctx)
+
+	// Parse results
+	err = cursor.All(context.TODO(), &result)
+	return
+}
+
+// 获取新贴
+func (metaso *MetaSo) getNewPosts(ctx context.Context, size int64, excludeList []string) (result []*Tweet, err error) {
+	// Build match conditions
+	matchConditions := bson.D{{Key: "blocked", Value: false}}
+	if len(excludeList) > 0 {
+		matchConditions = append(matchConditions, bson.E{Key: "id", Value: bson.D{{"$nin", excludeList}}})
+	}
+	// Build find options
+	findOptions := options.Find().
+		SetSort(bson.D{{"_id", -1}}).
+		SetLimit(size)
+
+	// Execute query
+	cursor, err := mongoClient.Collection(BuzzView).Find(ctx, matchConditions, findOptions)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(ctx)
+
+	// Parse results
+	err = cursor.All(context.TODO(), &result)
+	return
+}
+
+// 获取热帖
+func (metaso *MetaSo) getHotPosts(ctx context.Context, size int64, excludeList []string) (result []*Tweet, err error) {
+	// Build match conditions
+	now := time.Now()
+	twentyFourHoursAgo := now.Add(-48 * time.Hour)
+	matchConditions := bson.D{}
+	if len(excludeList) > 0 {
+		matchConditions = append(matchConditions, bson.E{Key: "id", Value: bson.D{{"$nin", excludeList}}})
+	}
+	matchConditions = append(matchConditions, bson.E{
+		Key: "timestamp",
+		Value: bson.D{
+			{Key: "$gt", Value: twentyFourHoursAgo.Unix()},
+			{Key: "$lt", Value: now.Unix()},
+		},
+	})
+	// Build find options
+	findOptions := options.Find().
+		SetSort(bson.D{{"hot", -1}, {"_id", -1}}).
+		SetLimit(size)
+
+	// Execute query
+	cursor, err := mongoClient.Collection(BuzzView).Find(ctx, matchConditions, findOptions)
+	if err != nil {
+		return
+	}
+	defer cursor.Close(ctx)
+
+	// Parse results
+	err = cursor.All(context.TODO(), &result)
+	return
+}
 
 // GetRecommendedPosts retrieves a list of recommended posts
 // Including: 1. Posts marked as recommended 2. Posts from followed users
@@ -28,7 +253,6 @@ func (metaso *MetaSo) GetRecommendedPosts(ctx context.Context, lastId string, us
 			return
 		}
 	}
-
 	// Build match conditions
 	matchConditions := bson.D{{"isrecommended", true}}
 	totalFilter := bson.D{{"isrecommended", true}}
