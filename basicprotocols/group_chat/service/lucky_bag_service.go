@@ -621,16 +621,16 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		}
 
 		// Save timestamp index (save to which collection based on user state)
-		err = chatDB.SaveChatTimestampWithState(chat)
-		if err != nil {
-			return err
-		}
+		// err = chatDB.SaveChatTimestampWithState(chat)
+		// if err != nil {
+		// 	return err
+		// }
 
-		// Add message to queue to asynchronously update group list
-		err = chatDB.EnqueueChatMessage(chat)
-		if err != nil {
-			return err
-		}
+		// // Add message to queue to asynchronously update group list
+		// err = chatDB.EnqueueChatMessage(chat)
+		// if err != nil {
+		// 	return err
+		// }
 
 		hasSuccess = true
 		break // Only process one lucky bag
@@ -687,7 +687,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		return errors.New("failed to generate wif or hex")
 	}
 
-	value, err := strconv.ParseUint(grabEntity.Amount, 10, 64)
+	// Handle scientific notation in amount
+	normalizedAmount := normalizeScientificNotation(grabEntity.Amount)
+	value, err := strconv.ParseUint(normalizedAmount, 10, 64)
 	if err != nil {
 		return fmt.Errorf("failed to parse amount: %v", err)
 	}
@@ -1077,7 +1079,9 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 	// Calculate total amount (all unused UTXOs)
 	totalAmount := uint64(0)
 	for _, used := range reclaimEntity.UsedList {
-		amount, err := strconv.ParseUint(used.Amount, 10, 64)
+		// Handle scientific notation in amount
+		normalizedAmount := normalizeScientificNotation(used.Amount)
+		amount, err := strconv.ParseUint(normalizedAmount, 10, 64)
 		if err != nil {
 			continue
 		}
@@ -1093,7 +1097,9 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 	// Build inputs
 	inputs := make([]*common.TxInputUtxo, 0)
 	for _, used := range reclaimEntity.UsedList {
-		amount, err := strconv.ParseUint(used.Amount, 10, 64)
+		// Handle scientific notation in amount
+		normalizedAmount := normalizeScientificNotation(used.Amount)
+		amount, err := strconv.ParseUint(normalizedAmount, 10, 64)
 		if err != nil {
 			continue
 		}

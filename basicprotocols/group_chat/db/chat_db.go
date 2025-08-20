@@ -294,7 +294,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 		}
 
 		pinId := valueParts[0]
-		fmt.Printf("[CHAT_DB]timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+		// fmt.Printf("[CHAT_DB]timestampStr: %s, pinId: %s\n", timestampStr, pinId)
 
 		// Get complete chat message
 		chat, err := cdb.GetChatByPinId(pinId)
