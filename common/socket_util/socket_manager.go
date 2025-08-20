@@ -531,7 +531,7 @@ func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData
 	// Use sendMessage method to send message
 	sm.sendMessage(targetSocket, socketData)
 
-	log.Printf("Sent message to user: metaid=%s, method=%s", metaid, socketData.M)
+	// log.Printf("Sent message to user: metaid=%s, method=%s", metaid, socketData.M)
 	return nil
 }
 
