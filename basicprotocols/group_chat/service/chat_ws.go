@@ -92,7 +92,69 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	}
 
 	// 6. Call wsPost to send message
-	socket_service.SendMessageToUser(chat.MetaId, groupChatItem)
+	for _, metaId := range metaIdList {
+		socket_service.SendGroupMessageToUser(metaId, groupChatItem)
+	}
 	common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
 
+}
+
+func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
+	metaIdList := make([]string, 0)
+	metaIdList = append(metaIdList, chat.From)
+	metaIdList = append(metaIdList, chat.To)
+
+	// 4. Build reply information
+	var replyInfo *respond.ReplyInfo
+	replyMetaId := ""
+	if chat.ReplyPin != "" {
+		// Get the replied message
+		replyChat, err := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
+		if err == nil && replyChat != nil {
+			replyMetaId = replyChat.From
+			replyInfo = &respond.ReplyInfo{
+				PinId:       replyChat.PinId,
+				MetaId:      replyChat.From,
+				Address:     replyChat.FromAddress,
+				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.FromAddress),
+				NickName:    "", // Private chat message doesn't have NickName field
+				Protocol:    replyChat.Protocol,
+				Content:     replyChat.Content,
+				ContentType: replyChat.ContentType,
+				Encryption:  replyChat.Encryption,
+				ChatType:    replyChat.ChatType,
+				Timestamp:   replyChat.Timestamp,
+				Chain:       replyChat.Chain,
+				BlockHeight: replyChat.BlockHeight,
+			}
+		}
+	}
+
+	// 5. Build PrivateChatItem
+	privateChatItem := &respond.PrivateChatItem{
+		From:        chat.From,
+		To:          chat.To,
+		TxId:        chat.TxId,
+		PinId:       chat.PinId,
+		MetaId:      chat.From,
+		Address:     chat.FromAddress,
+		UserInfo:    common_service.FetchMetaIDUserInfo(chat.FromAddress),
+		NickName:    "",
+		Protocol:    chat.Protocol,
+		Content:     chat.Content,
+		ContentType: chat.ContentType,
+		Encryption:  chat.Encryption,
+		ChatType:    int64(chat.ChatType),
+		ReplyPin:    chat.ReplyPin,
+		ReplyInfo:   replyInfo,
+		RedMetaId:   replyMetaId,
+		Timestamp:   chat.Timestamp,
+		Chain:       chat.Chain,
+		BlockHeight: chat.BlockHeight,
+	}
+
+	// 6. Call wsPost to send message
+	socket_service.SendPrivateMessageToUser(chat.From, privateChatItem)
+	socket_service.SendPrivateMessageToUser(chat.To, privateChatItem)
+	// common_service.WsPost(chat.PinId, privateChatItem, metaIdList)
 }

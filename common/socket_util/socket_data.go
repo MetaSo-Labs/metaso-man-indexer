@@ -42,8 +42,9 @@ func (w *SocketData) ToString() (string, error) {
 // Generic WebSocket method constants
 const (
 	// Heartbeat
-	HEART_BEAT            = "HEART_BEAT"
-	WS_SERVER_NOTIFY_CHAT = "WS_SERVER_NOTIFY_CHAT"
+	HEART_BEAT                    = "HEART_BEAT"
+	WS_SERVER_NOTIFY_PRIVATE_CHAT = "WS_SERVER_NOTIFY_PRIVATE_CHAT"
+	WS_SERVER_NOTIFY_GROUP_CHAT   = "WS_SERVER_NOTIFY_GROUP_CHAT"
 
 	// Generic response
 	WS_RESPONSE_SUCCESS = "WS_RESPONSE_SUCCESS"

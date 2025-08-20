@@ -75,8 +75,8 @@ func InitGroupChatSocketService() error {
 	return nil
 }
 
-// SendMessageToUser Send message to specified user (based on metaid)
-func SendMessageToUser(metaid string, message interface{}) error {
+// SendGroupMessageToUser Send message to specified user (based on metaid)
+func SendGroupMessageToUser(metaid string, message interface{}) error {
 	socketManager := socket_util.GetSocketManager()
 	if socketManager == nil {
 		log.Printf("Socket manager not initialized")
@@ -85,7 +85,7 @@ func SendMessageToUser(metaid string, message interface{}) error {
 
 	// Create message
 	socketData := &socket_util.SocketData{
-		M: socket_util.WS_SERVER_NOTIFY_CHAT,
+		M: socket_util.WS_SERVER_NOTIFY_GROUP_CHAT,
 		C: socket_util.WS_CODE_SERVER,
 		D: message,
 	}
@@ -98,6 +98,32 @@ func SendMessageToUser(metaid string, message interface{}) error {
 	}
 
 	log.Printf("Message sent successfully: metaid=%s", metaid)
+	return nil
+}
+
+// SendPrivateMessageToUser Send private message to specified user (based on metaid)
+func SendPrivateMessageToUser(metaid string, message interface{}) error {
+	socketManager := socket_util.GetSocketManager()
+	if socketManager == nil {
+		log.Printf("Socket manager not initialized")
+		return nil
+	}
+
+	// Create message
+	socketData := &socket_util.SocketData{
+		M: socket_util.WS_SERVER_NOTIFY_PRIVATE_CHAT,
+		C: socket_util.WS_CODE_SERVER,
+		D: message,
+	}
+
+	// Send message to specified user
+	err := socketManager.SendMessageToUser(metaid, socketData)
+	if err != nil {
+		log.Printf("Failed to send private message to user: metaid=%s, error=%v", metaid, err)
+		return err
+	}
+
+	log.Printf("Private message sent successfully: metaid=%s", metaid)
 	return nil
 }
 

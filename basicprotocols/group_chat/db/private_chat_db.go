@@ -62,7 +62,13 @@ func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChat
 
 	// Save to_from_timestamp index (reverse index for easy querying)
 	toFromKey := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
-	return Pb[TalkPrivateChatTimestampCollection].Set(toFromKey, []byte(value), pebble.Sync)
+	err = Pb[TalkPrivateChatTimestampCollection].Set(toFromKey, []byte(value), pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	go dealPrivateChatItem(chat)
+	return nil
 }
 
 // Get private chat message by PinId

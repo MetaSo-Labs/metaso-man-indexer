@@ -47,6 +47,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	StartResidueLuckyBagQueueProcessor()
 
 	db.SetHandleGroupChatItem(wsForGroupChatItem)
+	db.SetHandlePrivateChatItem(wsForPrivateChatItem)
 
 	// Initialize cache service for lucky bag
 	cache_service.InitCacheService("", "", 0)
@@ -882,5 +883,10 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 
 func wsForGroupChatItem(chat *models.TalkGroupChatV3) error {
 	wsPostGroupMsg(chat)
+	return nil
+}
+
+func wsForPrivateChatItem(chat *models.TalkPrivateChatV3) error {
+	wsPostPrivateMsg(chat)
 	return nil
 }

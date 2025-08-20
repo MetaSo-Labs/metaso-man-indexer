@@ -510,7 +510,8 @@ func (sm *SocketManager) GetServer() *socket.Server {
 func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData) error {
 	connInfo, exists := sm.GetUserConnection(metaid)
 	if !exists || !connInfo.IsActive {
-		return fmt.Errorf("user not connected: %s", metaid)
+		// return fmt.Errorf("user not connected: %s", metaid)
+		return nil
 	}
 
 	// Find corresponding socket connection through socketID

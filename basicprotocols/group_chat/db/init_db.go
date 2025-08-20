@@ -276,7 +276,8 @@ func (pb *Pebble) CloseAll() {
 }
 
 var (
-	handleGroupChatItem func(chat *models.TalkGroupChatV3) error
+	handleGroupChatItem   func(chat *models.TalkGroupChatV3) error
+	handlePrivateChatItem func(chat *models.TalkPrivateChatV3) error
 )
 
 func SetHandleGroupChatItem(handle func(chat *models.TalkGroupChatV3) error) {
@@ -286,6 +287,17 @@ func SetHandleGroupChatItem(handle func(chat *models.TalkGroupChatV3) error) {
 func dealGroupChatItem(chat *models.TalkGroupChatV3) error {
 	if handleGroupChatItem != nil {
 		return handleGroupChatItem(chat)
+	}
+	return nil
+}
+
+func SetHandlePrivateChatItem(handle func(chat *models.TalkPrivateChatV3) error) {
+	handlePrivateChatItem = handle
+}
+
+func dealPrivateChatItem(chat *models.TalkPrivateChatV3) error {
+	if handlePrivateChatItem != nil {
+		return handlePrivateChatItem(chat)
 	}
 	return nil
 }
