@@ -52,6 +52,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	// Initialize cache service for lucky bag
 	cache_service.InitCacheService("", "", 0)
 
+	// Start user info polling
+	common_service.StartUserInfoPolling()
+
 	return nil
 }
 
@@ -477,6 +480,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 	var chats []*models.TalkGroupChatV3
 	var err error
 
+	t := time.Now().UnixMilli()
 	var nextTimestamp int64 = 0
 	if req.Timestamp > 0 {
 		// Get chat records by timestamp range using new collection
@@ -489,6 +493,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		currentTimestamp = currentTimestamp * 1000000
 		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
 	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] get chat time: %d\n", time.Now().UnixMilli()-t)
 
 	if err != nil {
 		return nil, err
@@ -497,14 +502,15 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 	// Convert to response format
 	var chatItems []*respond.GroupChatItem
 
+	t1 := time.Now().UnixMilli()
 	for _, chat := range chats {
 		chatItem := &respond.GroupChatItem{
-			GroupId:     chat.GroupId,
-			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
-			TxId:        chat.TxId,
-			PinId:       chat.PinId,
-			Address:     chat.Address,
-			UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
+			GroupId:   chat.GroupId,
+			MetanetId: chat.GroupId, // Use GroupId as MetanetId
+			TxId:      chat.TxId,
+			PinId:     chat.PinId,
+			Address:   chat.Address,
+			// UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
 			MetaId:      chat.MetaId,
 			NickName:    "", // Need to get from user info
 			Protocol:    chat.Protocol,
@@ -536,10 +542,10 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 				replyChat = nil
 			}
 			chatItem.ReplyInfo = &respond.ReplyInfo{
-				PinId:       replyChat.PinId,
-				MetaId:      replyChat.MetaId,
-				Address:     replyChat.Address,
-				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
+				PinId:   replyChat.PinId,
+				MetaId:  replyChat.MetaId,
+				Address: replyChat.Address,
+				// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
 				NickName:    replyChat.NickName,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
@@ -560,6 +566,17 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		// 	nextTimestamp = chat.Timestamp
 		// }
 	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for chat item info time: %d\n", time.Now().UnixMilli()-t1)
+
+	//get user info
+	t2 := time.Now().UnixMilli()
+	for _, chatItem := range chatItems {
+		if chatItem.ReplyInfo != nil {
+			chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.ReplyInfo.Address)
+		}
+		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for user info time: %d\n", time.Now().UnixMilli()-t2)
 
 	return &respond.GroupChatResponse{
 		Total:         int64(len(chatItems)),

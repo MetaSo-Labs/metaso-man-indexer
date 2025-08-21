@@ -25,7 +25,7 @@ import (
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/version [get]
 func GetCommunityVersionInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	communityId := ctx.Query("communityId")
 	pinId := ctx.Query("pinId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -72,7 +72,7 @@ func GetCommunityVersionInfo(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/info [get]
 func GetCommunityInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	communityId := ctx.Query("communityId")
 	if communityId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("communityId parameter cannot be empty"), t, 1))
@@ -101,7 +101,7 @@ func GetCommunityInfo(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/join [get]
 func GetCommunityJoin(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	communityId := ctx.Query("communityId")
 	pinId := ctx.Query("pinId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -149,7 +149,7 @@ func GetCommunityJoin(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/community/person [get]
 func GetCommunityPerson(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	communityId := ctx.Query("communityId")
 	metaId := ctx.Query("metaId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -195,7 +195,7 @@ func GetCommunityPerson(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/info [get]
 func GetDbGroupInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
@@ -224,7 +224,7 @@ func GetDbGroupInfo(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version [get]
 func GetGroupVersionInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	groupId := ctx.Query("groupId")
 	pinId := ctx.Query("pinId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -272,7 +272,7 @@ func GetGroupVersionInfo(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/join [get]
 func GetGroupJoin(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	groupId := ctx.Query("groupId")
 	pinId := ctx.Query("pinId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -320,7 +320,7 @@ func GetGroupJoin(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/person [get]
 func GetDbGroupPerson(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	groupId := ctx.Query("groupId")
 	metaId := ctx.Query("metaId")
 	limitStr := ctx.DefaultQuery("limit", "10")
@@ -367,7 +367,7 @@ func GetDbGroupPerson(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/queue [get]
 func GetChatQueue(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	timestamp := ctx.Query("timestamp")
 	limitStr := ctx.DefaultQuery("limit", "10")
 
@@ -409,7 +409,7 @@ func GetChatQueue(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin [get]
 func GetChatPin(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	pinId := ctx.Query("pinId")
 	if pinId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter cannot be empty"), t, 1))
@@ -437,7 +437,7 @@ func GetChatPin(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/timestamp [get]
 func GetChatTimestamp(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	groupId := ctx.Query("groupId")
 	if groupId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
@@ -474,7 +474,7 @@ func GetChatTimestamp(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/user/context [get]
 func GetUserContext(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	metaId := ctx.Query("metaId")
 	if metaId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId parameter cannot be empty"), t, 1))
@@ -499,7 +499,7 @@ func GetUserContext(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/stats [get]
 func GetDatabaseStats(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	stats, err := service.GetDatabaseStats()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
@@ -517,7 +517,7 @@ func GetDatabaseStats(ctx *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Collection list"
 // @Router /api/db/collections [get]
 func GetCollections(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	collections := service.GetAvailableCollections()
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
@@ -538,7 +538,7 @@ func GetCollections(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/group/version/all [get]
 func GetAllGroupVersionInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	pageStr := ctx.DefaultQuery("page", "1")
 	sizeStr := ctx.DefaultQuery("size", "20")
 
@@ -609,7 +609,7 @@ func GetAllGroupVersionInfo(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/chat/pin/all [get]
 func GetAllChatPin(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 	pageStr := ctx.DefaultQuery("page", "1")
 	sizeStr := ctx.DefaultQuery("size", "20")
 
@@ -677,7 +677,7 @@ func GetAllChatPin(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /api/db/migration/info [get]
 func GetMigrationInfo(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 
 	info, err := db.GetMigrationInfo()
 	if err != nil {

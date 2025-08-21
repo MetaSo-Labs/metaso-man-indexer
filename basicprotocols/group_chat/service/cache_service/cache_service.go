@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"manindexer/basicprotocols/group_chat/api/respond"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -163,6 +165,13 @@ type cacheItem struct {
 	expireTime time.Time
 }
 
+// userInfoCacheItem 用户信息缓存项
+type userInfoCacheItem struct {
+	UserInfo   *respond.UserInfo `json:"userInfo"`
+	UpdateTime time.Time         `json:"updateTime"`
+	ExpireTime time.Time         `json:"expireTime"`
+}
+
 // CleanExpiredMemoryCache Clean expired memory cache
 func CleanExpiredMemoryCache() {
 	cacheMutex.Lock()
@@ -170,8 +179,15 @@ func CleanExpiredMemoryCache() {
 
 	now := time.Now()
 	memoryCache.Range(func(key, value interface{}) bool {
+		// clear gift info cache
 		if cacheItem, ok := value.(*cacheItem); ok {
 			if now.After(cacheItem.expireTime) {
+				memoryCache.Delete(key)
+			}
+		}
+		// clear user info cache
+		if userInfoCacheItem, ok := value.(*userInfoCacheItem); ok {
+			if now.After(userInfoCacheItem.ExpireTime) {
 				memoryCache.Delete(key)
 			}
 		}

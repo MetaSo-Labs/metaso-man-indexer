@@ -25,7 +25,7 @@ import (
 // @Router /group-chat/group-list [get]
 func GetGroupList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
@@ -64,7 +64,7 @@ func GetGroupList(c *gin.Context) {
 // @Router /group-chat/user/latest-group-list [get]
 func GetLatestChatGroupList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchLatestChatGroupListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
@@ -106,7 +106,7 @@ func GetLatestChatGroupList(c *gin.Context) {
 // @Router /group-chat/group-info [get]
 func GetGroupInfo(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupInfoRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 		}
@@ -145,7 +145,7 @@ func GetGroupInfo(c *gin.Context) {
 // @Router /group-chat/group-chat-list [get]
 func GetGroupChatList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupChatListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			MetaId:  c.DefaultQuery("metaId", ""),
@@ -193,7 +193,7 @@ func GetGroupChatList(c *gin.Context) {
 // @Router /group-chat/group-member-list [get]
 func GetGroupMemberList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupMemberListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			Cursor: func() int64 {
@@ -238,7 +238,7 @@ func GetGroupMemberList(c *gin.Context) {
 // @Router /group-chat/group-person [get]
 func GetGroupPerson(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupPersonRequest{
 			MetaId:  c.DefaultQuery("metaId", ""),
 			GroupId: c.DefaultQuery("groupId", ""),
@@ -277,7 +277,7 @@ func GetGroupPerson(c *gin.Context) {
 // @Router /group-chat/user/latest-chat-info-list [get]
 func GetLatestChatInfoList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchLatestChatInfoListRequest{
 			MetaId: c.DefaultQuery("metaId", ""),
 			Cursor: func() int64 {
@@ -323,7 +323,7 @@ func GetLatestChatInfoList(c *gin.Context) {
 // @Router /group-chat/private-chat-list [get]
 func GetPrivateChatList(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchPrivateChatListRequest{
 			MetaId:      c.DefaultQuery("metaId", ""),
 			OtherMetaId: c.DefaultQuery("otherMetaId", ""),
@@ -372,7 +372,7 @@ func GetPrivateChatList(c *gin.Context) {
 // @Router /group-chat/lucky-bag-info [get]
 func GetLuckyBagInfo(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchLuckyBagInfoRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			PinId:   c.DefaultQuery("pinId", ""),
@@ -409,7 +409,7 @@ func GetLuckyBagInfo(c *gin.Context) {
 // @Router /group-chat/grab-lucky-bag [post]
 func GrabLuckyBag(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.GrabLuckyBagRequest{}
 	)
 
@@ -458,7 +458,7 @@ func GrabLuckyBag(c *gin.Context) {
 // @Router /group-chat/reclaim-lucky-bag [post]
 func ReclaimLuckyBag(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.ReclaimLuckyBagRequest{}
 	)
 	if err := c.ShouldBindJSON(req); err != nil {
@@ -506,7 +506,7 @@ func ReclaimLuckyBag(c *gin.Context) {
 // @Router /group-chat/lucky-bag-unused-info [get]
 func GetLuckyBagUnusedInfo(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchLuckyBagInfoRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			PinId:   c.DefaultQuery("pinId", ""),
@@ -546,7 +546,7 @@ func GetLuckyBagUnusedInfo(c *gin.Context) {
 // @Router /group-chat/group-chat-list-v2 [get]
 func GetGroupChatListV2(c *gin.Context) {
 	var (
-		t   = time.Now().Unix()
+		t   = time.Now().UnixMilli()
 		req = &request.FetchGroupChatListRequest{
 			GroupId: c.DefaultQuery("groupId", ""),
 			MetaId:  c.DefaultQuery("metaId", ""),

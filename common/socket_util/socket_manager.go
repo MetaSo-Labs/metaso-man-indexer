@@ -14,13 +14,12 @@ import (
 // SocketManager Generic WebSocket connection manager
 type SocketManager struct {
 	server      *socket.Server
-	connections sync.Map // 存储连接信息，key: metaid, value: *ConnectionInfo
+	connections sync.Map // store connection info, key: metaid, value: *ConnectionInfo
 	mutex       sync.RWMutex
 
 	// Memory limit configuration
 	maxConnections int
 	maxMemoryMB    int
-	currentMemory  int64
 
 	// Cleanup configuration
 	cleanupInterval time.Duration
@@ -45,11 +44,17 @@ type ConnectionInfo struct {
 
 // ConnectionStats Connection statistics
 type ConnectionStats struct {
-	TotalConnections    int64
-	ActiveConnections   int64
-	TotalMessagesSent   int64
-	TotalMessagesFailed int64
-	mutex               sync.RWMutex
+	TotalConnections     int64
+	ActiveConnections    int64
+	TotalMessagesSent    int64
+	TotalMessagesFailed  int64
+	TotalMemoryUsage     int64   // Total memory usage in bytes
+	AverageMemoryPerConn int64   // Average memory per connection in bytes
+	TotalMemoryMB        float64 // Total memory usage in MB
+	AverageMemoryKB      float64 // Average memory per connection in KB
+	MemoryUsagePercent   float64 // Memory usage percentage
+	MemoryLimitMB        int     // Memory limit in MB
+	mutex                sync.RWMutex
 }
 
 // SocketConfig Socket configuration
@@ -168,8 +173,10 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 	}
 
 	// Check memory limit
-	if sm.currentMemory >= int64(sm.maxMemoryMB*1024*1024) {
-		log.Printf("Connection failed: memory limit reached, socket: %s", client.Id())
+	stats := sm.GetStats()
+	if stats.TotalMemoryUsage >= int64(sm.maxMemoryMB*1024*1024) {
+		log.Printf("Connection failed: memory limit reached (%.2f MB / %d MB), socket: %s",
+			float64(stats.TotalMemoryUsage)/(1024*1024), sm.maxMemoryMB, client.Id())
 		client.Disconnect(true)
 		return
 	}
@@ -371,7 +378,9 @@ func (sm *SocketManager) cleanupInactiveConnections() {
 		return true
 	})
 
+	// Update memory statistics after cleanup
 	if removedCount > 0 {
+		sm.updateMemoryStats()
 		log.Printf("Cleaned up %d inactive connections", removedCount)
 	}
 }
@@ -412,11 +421,27 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 	sm.stats.mutex.RLock()
 	defer sm.stats.mutex.RUnlock()
 
+	// Calculate formatted memory values
+	totalMemoryMB := float64(sm.stats.TotalMemoryUsage) / (1024 * 1024)
+	averageMemoryKB := float64(sm.stats.AverageMemoryPerConn) / 1024
+	memoryUsagePercent := float64(sm.stats.TotalMemoryUsage) / float64(sm.maxMemoryMB*1024*1024) * 100
+
+	// Round to 6 decimal places
+	totalMemoryMB = float64(int64(totalMemoryMB*1000000)) / 1000000
+	averageMemoryKB = float64(int64(averageMemoryKB*1000000)) / 1000000
+	memoryUsagePercent = float64(int64(memoryUsagePercent*1000000)) / 1000000
+
 	return &ConnectionStats{
-		TotalConnections:    sm.stats.TotalConnections,
-		ActiveConnections:   sm.stats.ActiveConnections,
-		TotalMessagesSent:   sm.stats.TotalMessagesSent,
-		TotalMessagesFailed: sm.stats.TotalMessagesFailed,
+		TotalConnections:     sm.stats.TotalConnections,
+		ActiveConnections:    sm.stats.ActiveConnections,
+		TotalMessagesSent:    sm.stats.TotalMessagesSent,
+		TotalMessagesFailed:  sm.stats.TotalMessagesFailed,
+		TotalMemoryUsage:     sm.stats.TotalMemoryUsage,
+		AverageMemoryPerConn: sm.stats.AverageMemoryPerConn,
+		TotalMemoryMB:        totalMemoryMB,
+		AverageMemoryKB:      averageMemoryKB,
+		MemoryUsagePercent:   memoryUsagePercent,
+		MemoryLimitMB:        sm.maxMemoryMB,
 	}
 }
 
@@ -462,6 +487,9 @@ func (sm *SocketManager) addConnection(socketID, metaid string) {
 	sm.stats.ActiveConnections++
 	sm.stats.mutex.Unlock()
 
+	// Update memory statistics
+	sm.updateMemoryStats()
+
 	log.Printf("Added connection: socketID=%s, metaid=%s", socketID, metaid)
 }
 
@@ -480,6 +508,9 @@ func (sm *SocketManager) removeConnection(socketID string) {
 			sm.stats.mutex.Lock()
 			sm.stats.ActiveConnections--
 			sm.stats.mutex.Unlock()
+
+			// Update memory statistics
+			sm.updateMemoryStats()
 
 			log.Printf("Removed connection: socketID=%s, metaid=%s", socketID, connInfo.MetaID)
 			return false
@@ -500,9 +531,67 @@ func (sm *SocketManager) updateConnectionActivity(socketID string) {
 	})
 }
 
+// calculateConnectionMemory Calculate memory usage for a single connection
+func (sm *SocketManager) calculateConnectionMemory(connInfo *ConnectionInfo) int64 {
+	// Estimate memory usage for connection info
+	// This is a rough estimation based on typical Go struct sizes
+	memoryUsage := int64(0)
+
+	// String fields: SocketID, MetaID
+	memoryUsage += int64(len(connInfo.SocketID))
+	memoryUsage += int64(len(connInfo.MetaID))
+
+	// Time fields: ConnectTime, LastActive (typically 24 bytes each)
+	memoryUsage += 48
+
+	// Boolean field: IsActive (1 byte)
+	memoryUsage += 1
+
+	// Struct overhead and alignment (rough estimate)
+	memoryUsage += 32
+
+	// Additional overhead for sync.Map storage
+	memoryUsage += 64
+
+	return memoryUsage
+}
+
+// updateMemoryStats Update memory statistics
+func (sm *SocketManager) updateMemoryStats() {
+	sm.stats.mutex.Lock()
+	defer sm.stats.mutex.Unlock()
+
+	totalMemory := int64(0)
+	activeConnections := int64(0)
+
+	sm.connections.Range(func(key, value interface{}) bool {
+		connInfo := value.(*ConnectionInfo)
+		if connInfo.IsActive {
+			totalMemory += sm.calculateConnectionMemory(connInfo)
+			activeConnections++
+		}
+		return true
+	})
+
+	sm.stats.TotalMemoryUsage = totalMemory
+	if activeConnections > 0 {
+		sm.stats.AverageMemoryPerConn = totalMemory / activeConnections
+	} else {
+		sm.stats.AverageMemoryPerConn = 0
+	}
+}
+
 // GetServer Get Socket.IO server instance
 func (sm *SocketManager) GetServer() *socket.Server {
 	return sm.server
+}
+
+// RefreshMemoryStats Force refresh memory statistics
+func (sm *SocketManager) RefreshMemoryStats() {
+	sm.updateMemoryStats()
+	stats := sm.GetStats()
+	log.Printf("Memory statistics refreshed: TotalMemory=%.6f MB, AveragePerConn=%.6f KB, Usage=%.6f%%",
+		stats.TotalMemoryMB, stats.AverageMemoryKB, stats.MemoryUsagePercent)
 }
 
 // SendMessageToUser Server actively pushes message to specified user
@@ -531,7 +620,7 @@ func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData
 	// Use sendMessage method to send message
 	sm.sendMessage(targetSocket, socketData)
 
-	// log.Printf("Sent message to user: metaid=%s, method=%s", metaid, socketData.M)
+	log.Printf("Sent message to user: metaid=%s, method=%s", metaid, socketData.M)
 	return nil
 }
 

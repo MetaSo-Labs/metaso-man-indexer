@@ -19,7 +19,7 @@ import (
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /group-chat/socket/stats [get]
 func GetConnectionStats(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 
 	stats := socket_service.GetConnectionStats()
 	if stats == nil {
@@ -28,10 +28,16 @@ func GetConnectionStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
-		"totalConnections":    stats.TotalConnections,
-		"activeConnections":   stats.ActiveConnections,
-		"totalMessagesSent":   stats.TotalMessagesSent,
-		"totalMessagesFailed": stats.TotalMessagesFailed,
+		"totalConnections":     stats.TotalConnections,
+		"activeConnections":    stats.ActiveConnections,
+		"totalMessagesSent":    stats.TotalMessagesSent,
+		"totalMessagesFailed":  stats.TotalMessagesFailed,
+		"totalMemoryUsage":     stats.TotalMemoryUsage,
+		"averageMemoryPerConn": stats.AverageMemoryPerConn,
+		"totalMemoryMB":        stats.TotalMemoryMB,
+		"averageMemoryKB":      stats.AverageMemoryKB,
+		"memoryUsagePercent":   stats.MemoryUsagePercent,
+		"memoryLimitMB":        stats.MemoryLimitMB,
 	}, t))
 }
 
@@ -46,7 +52,7 @@ func GetConnectionStats(ctx *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "Server error"
 // @Router /group-chat/socket/user-online [get]
 func IsUserOnline(ctx *gin.Context) {
-	var t = time.Now().Unix()
+	var t = time.Now().UnixMilli()
 
 	metaId := ctx.Query("metaId")
 	if metaId == "" {

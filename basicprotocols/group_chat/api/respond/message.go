@@ -25,7 +25,7 @@ func RespSuccess(data interface{}, timestamp int64) Message {
 	return Message{
 		Code:           HttpsCodeSuccess,
 		Message:        RespMessageSuccess,
-		ProcessingTime: timestamp - time.Now().Unix(),
+		ProcessingTime: time.Now().UnixMilli() - timestamp,
 		Data:           data,
 	}
 }
@@ -37,7 +37,7 @@ func RespErr(err error, timestamp int64, code int) Message {
 	return Message{
 		Code:           code,
 		Message:        err.Error(),
-		ProcessingTime: timestamp - time.Now().Unix(),
+		ProcessingTime: time.Now().UnixMilli() - timestamp,
 		Data:           nil,
 	}
 }
