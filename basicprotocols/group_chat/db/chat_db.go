@@ -1236,11 +1236,11 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 }
 
 // Check if user is in group
-func (cdb *ChatDB) isUserInGroup(metaId, groupId string) (bool, error) {
-	// Use TalkGroupMetaIdJoinCollection to check if user is in group
-	// key: metaId_groupId
-	key := []byte(metaId + "_" + groupId)
-	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
+func (cdb *ChatDB) IsUserInGroup(metaId, groupId string) (bool, error) {
+	// Use TalkGroupPersonCollection to check if user is in group
+	// key: groupId_metaId
+	key := []byte(groupId + "_" + metaId)
+	value, closer, err := Pb[TalkGroupPersonCollection].Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
 			return false, nil
@@ -1249,20 +1249,14 @@ func (cdb *ChatDB) isUserInGroup(metaId, groupId string) (bool, error) {
 	}
 	defer closer.Close()
 
-	var joinList GroupMetaIdJoinList
-	err = json.Unmarshal(value, &joinList)
+	var person models.TalkGroupPerson
+	err = json.Unmarshal(value, &person)
 	if err != nil {
 		return false, err
 	}
 
-	// If list is empty, user is not in group
-	if len(joinList.Items) == 0 {
-		return false, nil
-	}
-
-	// Get latest join record (reverse order by timestamp, first is latest)
-	latestItem := joinList.Items[0]
-	return latestItem.GroupState == models.RoomStateIn, nil
+	// Check if user is in the group based on GroupState
+	return person.GroupState == models.RoomStateIn, nil
 }
 
 // Get user's state in group

@@ -295,6 +295,15 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		return "", errors.New("lucky bag not match")
 	}
 
+	// Check if user is in group
+	isInGroup, err := chatDB.IsUserInGroup(metaId, groupId)
+	if err != nil {
+		return "", err
+	}
+	if !isInGroup {
+		return "", errors.New("user not in group")
+	}
+
 	// Get claimed lucky bag list
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {
@@ -777,6 +786,11 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		log.Printf("Failure broadcast tx: %s", err.Error())
 		grabEntity.GrabState = models.GrabStateOpenAndSendErr
 		grabEntity.GrabMsg = err.Error()
+
+		// Check if error contains broadcast-related issues, if not, return the error
+		if !isBroadcastError(err) {
+			return fmt.Errorf("broadcast transaction failed: %v", err)
+		}
 	}
 
 	// Update grab lucky bag record in database
@@ -1192,6 +1206,11 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		log.Printf("Failure broadcast tx: %s", err.Error())
 		reclaimEntity.ReclaimState = models.GrabStateOpenAndSendErr
 		reclaimEntity.ReclaimMsg = err.Error()
+
+		// Check if error contains broadcast-related issues, if not, return the error
+		if !isBroadcastError(err) {
+			return fmt.Errorf("broadcast transaction failed: %v", err)
+		}
 	}
 
 	// Update reclaim lucky bag record in database
@@ -1217,4 +1236,30 @@ func StartResidueLuckyBagQueueProcessor() {
 			}
 		}
 	}()
+}
+
+// isBroadcastError checks if the error contains broadcast-related issues that should be handled gracefully
+func isBroadcastError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Check for common broadcast-related error messages
+	broadcastErrors := []string{
+		"missing inputs",
+		"missing input",
+		"missing-input",
+		"txn-mempool-conflict",
+		"txn mempool conflict",
+	}
+
+	for _, broadcastErr := range broadcastErrors {
+		if strings.Contains(errMsg, broadcastErr) {
+			return true
+		}
+	}
+
+	return false
 }
