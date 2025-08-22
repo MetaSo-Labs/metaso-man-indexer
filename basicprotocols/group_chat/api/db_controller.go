@@ -668,6 +668,62 @@ func GetAllChatPin(ctx *gin.Context) {
 	}, t))
 }
 
+// @Summary Get lucky bag statistics by group and time range
+// @Description Get comprehensive lucky bag statistics for a specific group or all groups within a time range
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param groupId query string false "Group ID (leave empty to get statistics for all groups)"
+// @Param startTime query int64 true "Start timestamp (Unix timestamp)"
+// @Param endTime query int64 true "End timestamp (Unix timestamp)"
+// @Success 200 {object} map[string]interface{} "Lucky bag statistics"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/statistics [get]
+func GetLuckyBagStatistics(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	groupId := ctx.Query("groupId")
+	// groupId can be empty to get statistics for all groups
+
+	startTimeStr := ctx.Query("startTime")
+	if startTimeStr == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("startTime parameter cannot be empty"), t, 1))
+		return
+	}
+
+	endTimeStr := ctx.Query("endTime")
+	if endTimeStr == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("endTime parameter cannot be empty"), t, 1))
+		return
+	}
+
+	startTime, err := strconv.ParseInt(startTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("startTime parameter must be a valid timestamp"), t, 1))
+		return
+	}
+
+	endTime, err := strconv.ParseInt(endTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("endTime parameter must be a valid timestamp"), t, 1))
+		return
+	}
+
+	if startTime >= endTime {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("startTime must be less than endTime"), t, 1))
+		return
+	}
+
+	stats, err := service.GetLuckyBagStatisticsByGroupAndTimeRange(groupId, startTime, endTime)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(stats, t))
+}
+
 // @Summary Get database migration information
 // @Description Get comprehensive database migration information including current status, supported migrations, and migration history
 // @Tags Database Query

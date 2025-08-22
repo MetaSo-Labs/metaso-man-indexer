@@ -566,6 +566,24 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/api/db/luckybag/statistics": {
+            "get": {
+                "description": "Get comprehensive lucky bag statistics for a specific group or all groups within a time range",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag statistics by group and time range",
+                "parameters": [
+                    {"type": "string", "description": "Group ID (leave empty to get statistics for all groups)", "name": "groupId", "in": "query", "required": false},
+                    {"type": "integer", "description": "Start timestamp (Unix timestamp)", "name": "startTime", "in": "query", "required": true},
+                    {"type": "integer", "description": "End timestamp (Unix timestamp)", "name": "endTime", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Lucky bag statistics", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/api/db/group/version/all": {
             "get": {
                 "description": "Get all data of TalkGroupVersionInfoCollection, support pagination",

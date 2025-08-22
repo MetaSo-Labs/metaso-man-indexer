@@ -654,8 +654,16 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 
 // Process records in grab lucky bag queue
 func ProcessOpenLuckyBagQueue() {
+	// Get total count of TalkGroupOpenLuckyBagQueueCollection
+	totalCount, err := chatDB.GetOpenLuckyBagQueueCount()
+	if err != nil {
+		log.Printf("GetOpenLuckyBagQueueCount err: %v", err)
+	} else {
+		log.Printf("TalkGroupOpenLuckyBagQueueCollection total count: %d", totalCount)
+	}
+
 	// Get pending grab lucky bag messages
-	messages, err := chatDB.GetPendingOpenLuckyBagMessages(10) // Process 10 items each time
+	messages, err := chatDB.GetPendingOpenLuckyBagMessages(100) // Process 100 items each time
 	if err != nil {
 		log.Printf("GetPendingOpenLuckyBagMessages err: %v", err)
 		return
@@ -663,7 +671,7 @@ func ProcessOpenLuckyBagQueue() {
 
 	for _, message := range messages {
 		// Process grab lucky bag record
-		err := disposingGrabLuckyBag(message.OpenLuckyBag)
+		err := disposingGrabLuckyBag(message.OpenLuckyBag, totalCount)
 		if err != nil {
 			log.Printf("disposingGrabLuckyBag err: %v", err)
 			continue
@@ -678,7 +686,7 @@ func ProcessOpenLuckyBagQueue() {
 }
 
 // Process grab lucky bag logic
-func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
+func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCount int64) error {
 	if chainAdapter == nil || chainAdapter[grabEntity.Chain] == nil {
 		return fmt.Errorf("chain adapter not found")
 	}
@@ -781,9 +789,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3) error {
 		grabEntity.GrabState = models.GrabStateOpenAndSend
 		grabEntity.GrabTxId = resultTxId
 		grabEntity.GrabMsg = "success"
-		log.Printf("Success broadcast tx: %s", resultTxId)
+		log.Printf("Success broadcast tx: %s, totalCount: %d", resultTxId, totalCount)
 	} else {
-		log.Printf("Failure broadcast tx: %s", err.Error())
+		log.Printf("Failure broadcast tx: %s, totalCount: %d", err.Error(), totalCount)
 		grabEntity.GrabState = models.GrabStateOpenAndSendErr
 		grabEntity.GrabMsg = err.Error()
 
@@ -808,11 +816,30 @@ func StartOpenLuckyBagQueueProcessor() {
 		ticker := time.NewTicker(10 * time.Second) // Process every 10 seconds
 		defer ticker.Stop()
 
+		// Flag to track if the previous processing is still running
+		isProcessing := false
+
 		for {
 			select {
 			case <-ticker.C:
-				// Process grab lucky bag queue
-				ProcessOpenLuckyBagQueue()
+				// Skip if previous processing is still running
+				if isProcessing {
+					log.Printf("Previous ProcessOpenLuckyBagQueue is still running, skipping this cycle")
+					continue
+				}
+
+				// Set processing flag
+				isProcessing = true
+
+				// Process grab lucky bag queue in a goroutine
+				go func() {
+					defer func() {
+						// Reset processing flag when done
+						isProcessing = false
+					}()
+
+					ProcessOpenLuckyBagQueue()
+				}()
 			}
 		}
 	}()
@@ -1228,11 +1255,30 @@ func StartResidueLuckyBagQueueProcessor() {
 		ticker := time.NewTicker(10 * time.Second) // Process every 10 seconds
 		defer ticker.Stop()
 
+		// Flag to track if the previous processing is still running
+		isProcessing := false
+
 		for {
 			select {
 			case <-ticker.C:
-				// Process reclaim lucky bag queue
-				ProcessResidueLuckyBagQueue()
+				// Skip if previous processing is still running
+				if isProcessing {
+					log.Printf("Previous ProcessResidueLuckyBagQueue is still running, skipping this cycle")
+					continue
+				}
+
+				// Set processing flag
+				isProcessing = true
+
+				// Process reclaim lucky bag queue in a goroutine
+				go func() {
+					defer func() {
+						// Reset processing flag when done
+						isProcessing = false
+					}()
+
+					ProcessResidueLuckyBagQueue()
+				}()
 			}
 		}
 	}()

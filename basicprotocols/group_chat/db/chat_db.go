@@ -949,6 +949,22 @@ func (cdb *ChatDB) GetPendingOpenLuckyBagMessages(limit int) ([]*QueueOpenLuckyB
 	return messages, nil
 }
 
+// Get total count of grab lucky bag queue collection
+func (cdb *ChatDB) GetOpenLuckyBagQueueCount() (int64, error) {
+	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+
+	return int64(count), nil
+}
+
 // Delete grab lucky bag queue message data
 func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)

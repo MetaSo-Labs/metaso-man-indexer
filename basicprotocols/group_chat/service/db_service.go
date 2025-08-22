@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"manindexer/basicprotocols/group_chat/db"
+	"strconv"
 
 	"github.com/cockroachdb/pebble"
 )
@@ -319,4 +320,335 @@ func GetAvailableCollections() []string {
 		collections = append(collections, collectionName)
 	}
 	return collections
+}
+
+// LuckyBagStatistics represents statistics for lucky bag data
+type LuckyBagStatistics struct {
+	GroupId             string  `json:"groupId"`
+	StartTime           int64   `json:"startTime"`
+	EndTime             int64   `json:"endTime"`
+	LuckyBagCount       int     `json:"luckyBagCount"`       // Number of lucky bags sent
+	OpenLuckyBagCount   int     `json:"openLuckyBagCount"`   // Number of opened lucky bags
+	TotalAmount         float64 `json:"totalAmount"`         // Total amount of all lucky bags
+	TotalOpenedAmount   float64 `json:"totalOpenedAmount"`   // Total amount of opened lucky bags
+	UniqueOpeners       int     `json:"uniqueOpeners"`       // Number of unique users who opened lucky bags
+	OpenRate            float64 `json:"openRate"`            // Open rate (opened/total)
+	AverageAmount       float64 `json:"averageAmount"`       // Average amount per lucky bag
+	AverageOpenedAmount float64 `json:"averageOpenedAmount"` // Average amount per opened lucky bag
+}
+
+// LuckyBagStatisticsByGroup represents statistics for lucky bag data grouped by group
+type LuckyBagStatisticsByGroup struct {
+	StartTime          int64                          `json:"startTime"`
+	EndTime            int64                          `json:"endTime"`
+	TotalLuckyBagCount int                            `json:"totalLuckyBagCount"` // Total number of lucky bags sent across all groups
+	TotalOpenCount     int                            `json:"totalOpenCount"`     // Total number of opened lucky bags across all groups
+	TotalAmount        float64                        `json:"totalAmount"`        // Total amount of all lucky bags across all groups
+	TotalOpenedAmount  float64                        `json:"totalOpenedAmount"`  // Total amount of opened lucky bags across all groups
+	TotalUniqueOpeners int                            `json:"totalUniqueOpeners"` // Total number of unique users who opened lucky bags across all groups
+	GroupStats         map[string]*LuckyBagStatistics `json:"groupStats"`         // Statistics by group ID
+}
+
+// GetLuckyBagStatisticsByGroupAndTimeRange Get lucky bag statistics for a specific group or all groups within a time range
+func GetLuckyBagStatisticsByGroupAndTimeRange(groupId string, startTime, endTime int64) (interface{}, error) {
+	// If groupId is empty, return statistics for all groups
+	if groupId == "" {
+		return getLuckyBagStatisticsForAllGroups(startTime, endTime)
+	}
+
+	// Return statistics for specific group
+	return getLuckyBagStatisticsForSpecificGroup(groupId, startTime, endTime)
+}
+
+// getLuckyBagStatisticsForSpecificGroup Get lucky bag statistics for a specific group within a time range
+func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime int64) (*LuckyBagStatistics, error) {
+	stats := &LuckyBagStatistics{
+		GroupId:   groupId,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+
+	// Get lucky bag database instance
+	luckyBagDB, exists := db.Pb[db.TalkGroupLuckyBagPinCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupLuckyBagPinCollection)
+	}
+
+	// Get open lucky bag database instance
+	openLuckyBagDB, exists := db.Pb[db.TalkGroupOpenLuckyBagPinCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupOpenLuckyBagPinCollection)
+	}
+
+	// Count lucky bags in time range
+	luckyBagIter, err := luckyBagDB.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create lucky bag iterator: %v", err)
+	}
+	defer luckyBagIter.Close()
+
+	// Count open lucky bags in time range
+	openLuckyBagIter, err := openLuckyBagDB.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create open lucky bag iterator: %v", err)
+	}
+	defer openLuckyBagIter.Close()
+
+	// Track unique openers
+	uniqueOpeners := make(map[string]bool)
+	totalAmount := 0.0
+	totalOpenedAmount := 0.0
+
+	// Iterate through lucky bags
+	for luckyBagIter.First(); luckyBagIter.Valid(); luckyBagIter.Next() {
+		var luckyBag map[string]interface{}
+		if err := json.Unmarshal(luckyBagIter.Value(), &luckyBag); err != nil {
+			continue
+		}
+
+		// Check if it belongs to the specified group
+		if luckyBag["groupId"] != groupId {
+			continue
+		}
+
+		// Check timestamp range
+		timestamp, ok := luckyBag["timestamp"].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(timestamp) < startTime || int64(timestamp) > endTime {
+			continue
+		}
+
+		// Count this lucky bag
+		stats.LuckyBagCount++
+
+		// Calculate total amount
+		if amount, ok := luckyBag["amount"].(string); ok {
+			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
+				totalAmount += amountFloat
+			}
+		}
+	}
+
+	// Iterate through open lucky bags
+	for openLuckyBagIter.First(); openLuckyBagIter.Valid(); openLuckyBagIter.Next() {
+		var openLuckyBag map[string]interface{}
+		if err := json.Unmarshal(openLuckyBagIter.Value(), &openLuckyBag); err != nil {
+			continue
+		}
+
+		// Check if it belongs to the specified group
+		if openLuckyBag["groupId"] != groupId {
+			continue
+		}
+
+		// Check timestamp range
+		timestamp, ok := openLuckyBag["timestamp"].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(timestamp) < startTime || int64(timestamp) > endTime {
+			continue
+		}
+
+		// Count this open lucky bag
+		stats.OpenLuckyBagCount++
+
+		// Track unique openers
+		if metaId, ok := openLuckyBag["metaId"].(string); ok {
+			uniqueOpeners[metaId] = true
+		}
+
+		// Calculate total opened amount
+		if amount, ok := openLuckyBag["amount"].(string); ok {
+			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
+				totalOpenedAmount += amountFloat
+			}
+		}
+	}
+
+	// Set calculated values
+	stats.TotalAmount = totalAmount
+	stats.TotalOpenedAmount = totalOpenedAmount
+	stats.UniqueOpeners = len(uniqueOpeners)
+
+	// Calculate derived statistics
+	if stats.LuckyBagCount > 0 {
+		stats.OpenRate = float64(stats.OpenLuckyBagCount) / float64(stats.LuckyBagCount)
+		stats.AverageAmount = totalAmount / float64(stats.LuckyBagCount)
+	}
+
+	if stats.OpenLuckyBagCount > 0 {
+		stats.AverageOpenedAmount = totalOpenedAmount / float64(stats.OpenLuckyBagCount)
+	}
+
+	return stats, nil
+}
+
+// getLuckyBagStatisticsForAllGroups Get lucky bag statistics for all groups within a time range
+func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStatisticsByGroup, error) {
+	stats := &LuckyBagStatisticsByGroup{
+		StartTime:  startTime,
+		EndTime:    endTime,
+		GroupStats: make(map[string]*LuckyBagStatistics),
+	}
+
+	// Get lucky bag database instance
+	luckyBagDB, exists := db.Pb[db.TalkGroupLuckyBagPinCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupLuckyBagPinCollection)
+	}
+
+	// Get open lucky bag database instance
+	openLuckyBagDB, exists := db.Pb[db.TalkGroupOpenLuckyBagPinCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupOpenLuckyBagPinCollection)
+	}
+
+	// Count lucky bags in time range
+	luckyBagIter, err := luckyBagDB.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create lucky bag iterator: %v", err)
+	}
+	defer luckyBagIter.Close()
+
+	// Count open lucky bags in time range
+	openLuckyBagIter, err := openLuckyBagDB.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create open lucky bag iterator: %v", err)
+	}
+	defer openLuckyBagIter.Close()
+
+	// Track unique openers across all groups
+	allUniqueOpeners := make(map[string]bool)
+	totalAmount := 0.0
+	totalOpenedAmount := 0.0
+
+	// Group statistics tracking
+	groupStats := make(map[string]*LuckyBagStatistics)
+	groupUniqueOpeners := make(map[string]map[string]bool)
+
+	// Iterate through lucky bags
+	for luckyBagIter.First(); luckyBagIter.Valid(); luckyBagIter.Next() {
+		var luckyBag map[string]interface{}
+		if err := json.Unmarshal(luckyBagIter.Value(), &luckyBag); err != nil {
+			continue
+		}
+
+		// Check timestamp range
+		timestamp, ok := luckyBag["timestamp"].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(timestamp) < startTime || int64(timestamp) > endTime {
+			continue
+		}
+
+		// Get group ID
+		groupId, ok := luckyBag["groupId"].(string)
+		if !ok || groupId == "" {
+			continue
+		}
+
+		// Initialize group stats if not exists
+		if groupStats[groupId] == nil {
+			groupStats[groupId] = &LuckyBagStatistics{
+				GroupId:   groupId,
+				StartTime: startTime,
+				EndTime:   endTime,
+			}
+			groupUniqueOpeners[groupId] = make(map[string]bool)
+		}
+
+		// Count this lucky bag
+		groupStats[groupId].LuckyBagCount++
+		stats.TotalLuckyBagCount++
+
+		// Calculate total amount
+		if amount, ok := luckyBag["amount"].(string); ok {
+			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
+				groupStats[groupId].TotalAmount += amountFloat
+				totalAmount += amountFloat
+			}
+		}
+	}
+
+	// Iterate through open lucky bags
+	for openLuckyBagIter.First(); openLuckyBagIter.Valid(); openLuckyBagIter.Next() {
+		var openLuckyBag map[string]interface{}
+		if err := json.Unmarshal(openLuckyBagIter.Value(), &openLuckyBag); err != nil {
+			continue
+		}
+
+		// Check timestamp range
+		timestamp, ok := openLuckyBag["timestamp"].(float64)
+		if !ok {
+			continue
+		}
+
+		if int64(timestamp) < startTime || int64(timestamp) > endTime {
+			continue
+		}
+
+		// Get group ID
+		groupId, ok := openLuckyBag["groupId"].(string)
+		if !ok || groupId == "" {
+			continue
+		}
+
+		// Initialize group stats if not exists
+		if groupStats[groupId] == nil {
+			groupStats[groupId] = &LuckyBagStatistics{
+				GroupId:   groupId,
+				StartTime: startTime,
+				EndTime:   endTime,
+			}
+			groupUniqueOpeners[groupId] = make(map[string]bool)
+		}
+
+		// Count this open lucky bag
+		groupStats[groupId].OpenLuckyBagCount++
+		stats.TotalOpenCount++
+
+		// Track unique openers
+		if metaId, ok := openLuckyBag["metaId"].(string); ok {
+			groupUniqueOpeners[groupId][metaId] = true
+			allUniqueOpeners[metaId] = true
+		}
+
+		// Calculate total opened amount
+		if amount, ok := openLuckyBag["amount"].(string); ok {
+			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
+				groupStats[groupId].TotalOpenedAmount += amountFloat
+				totalOpenedAmount += amountFloat
+			}
+		}
+	}
+
+	// Set calculated values for each group
+	for groupId, groupStat := range groupStats {
+		groupStat.UniqueOpeners = len(groupUniqueOpeners[groupId])
+
+		// Calculate derived statistics for each group
+		if groupStat.LuckyBagCount > 0 {
+			groupStat.OpenRate = float64(groupStat.OpenLuckyBagCount) / float64(groupStat.LuckyBagCount)
+			groupStat.AverageAmount = groupStat.TotalAmount / float64(groupStat.LuckyBagCount)
+		}
+
+		if groupStat.OpenLuckyBagCount > 0 {
+			groupStat.AverageOpenedAmount = groupStat.TotalOpenedAmount / float64(groupStat.OpenLuckyBagCount)
+		}
+	}
+
+	// Set overall calculated values
+	stats.TotalAmount = totalAmount
+	stats.TotalOpenedAmount = totalOpenedAmount
+	stats.TotalUniqueOpeners = len(allUniqueOpeners)
+	stats.GroupStats = groupStats
+
+	return stats, nil
 }
