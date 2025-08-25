@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
@@ -30,11 +31,140 @@ type QueueChatMessage struct {
 
 // Chat database operations
 type ChatDB struct {
-	pb *Pebble
+	pb                   *Pebble
+	luckyBagListMutexMap sync.Map
+}
+
+// luckyBagMutexItem lock item
+type luckyBagMutexItem struct {
+	mutex       *sync.Mutex
+	lastUsed    time.Time
+	accessCount int64
 }
 
 func NewChatDB(pb *Pebble) *ChatDB {
-	return &ChatDB{pb: pb}
+	cdb := &ChatDB{pb: pb}
+
+	go cdb.startCleanupGoroutine()
+
+	return cdb
+}
+
+// getLuckyBagMutex get or create lucky bag mutex
+func (cdb *ChatDB) getLuckyBagMutex(luckyBagPinId string) *sync.Mutex {
+	// try to get existing lock from sync.Map
+	if value, exists := cdb.luckyBagListMutexMap.Load(luckyBagPinId); exists {
+		if item, ok := value.(*luckyBagMutexItem); ok {
+			// update access statistics
+			item.lastUsed = time.Now()
+			item.accessCount++
+			return item.mutex
+		}
+	}
+
+	// if not exists, create new lock item
+	newItem := &luckyBagMutexItem{
+		mutex:       &sync.Mutex{},
+		lastUsed:    time.Now(),
+		accessCount: 1,
+	}
+
+	// use LoadOrStore to ensure atomicity, avoid duplicate creation
+	if value, loaded := cdb.luckyBagListMutexMap.LoadOrStore(luckyBagPinId, newItem); loaded {
+		// if already exists, return existing lock and update statistics
+		if item, ok := value.(*luckyBagMutexItem); ok {
+			item.lastUsed = time.Now()
+			item.accessCount++
+			return item.mutex
+		}
+	}
+
+	// return new created lock
+	return newItem.mutex
+}
+
+// startCleanupGoroutine start cleanup goroutine
+func (cdb *ChatDB) startCleanupGoroutine() {
+	ticker := time.NewTicker(5 * time.Minute) // every 5 minutes
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			cdb.cleanupUnusedLocks()
+		}
+	}
+}
+
+// cleanupUnusedLocks cleanup unused locks
+func (cdb *ChatDB) cleanupUnusedLocks() {
+	now := time.Now()
+	cleanupThreshold := 30 * time.Minute // 30 minutes not used to clean up
+
+	var keysToDelete []string
+
+	// traverse all locks, find locks to clean up
+	cdb.luckyBagListMutexMap.Range(func(key, value interface{}) bool {
+		if item, ok := value.(*luckyBagMutexItem); ok {
+			// check if it exceeds the cleanup threshold
+			if now.Sub(item.lastUsed) > cleanupThreshold {
+				keysToDelete = append(keysToDelete, key.(string))
+			}
+		}
+		return true
+	})
+
+	// delete unused locks
+	for _, key := range keysToDelete {
+		cdb.luckyBagListMutexMap.Delete(key)
+	}
+
+	if len(keysToDelete) > 0 {
+		log.Printf("Cleaned up %d unused lucky bag locks", len(keysToDelete))
+	}
+}
+
+// CleanupLuckyBagLock manually clean up specific lucky bag locks
+func (cdb *ChatDB) CleanupLuckyBagLock(luckyBagPinId string) bool {
+	// check if the lock is being used
+	if value, exists := cdb.luckyBagListMutexMap.Load(luckyBagPinId); exists {
+		if item, ok := value.(*luckyBagMutexItem); ok {
+			// if the lock is being used (a goroutine holds the lock), it cannot be deleted
+			// here we use a simple heuristic: if there has been access in the last 5 minutes, it will not be deleted
+			if time.Since(item.lastUsed) < 5*time.Minute {
+				return false // the lock is still being used
+			}
+		}
+	}
+
+	// delete lock
+	cdb.luckyBagListMutexMap.Delete(luckyBagPinId)
+	return true
+}
+
+// GetLuckyBagLockStats get lock statistics
+func (cdb *ChatDB) GetLuckyBagLockStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	totalLocks := 0
+	activeLocks := 0
+	now := time.Now()
+
+	cdb.luckyBagListMutexMap.Range(func(key, value interface{}) bool {
+		totalLocks++
+		if item, ok := value.(*luckyBagMutexItem); ok {
+			// if there has been access in the last 5 minutes, it is considered active
+			if now.Sub(item.lastUsed) < 5*time.Minute {
+				activeLocks++
+			}
+		}
+		return true
+	})
+
+	stats["totalLocks"] = totalLocks
+	stats["activeLocks"] = activeLocks
+	stats["inactiveLocks"] = totalLocks - activeLocks
+
+	return stats
 }
 
 // Save chat message
@@ -478,6 +608,7 @@ func (cdb *ChatDB) GetResidueLuckyBagByLuckyBagPinId(redEnvelopePinId string) (*
 }
 
 // Save grab lucky bag list record
+// note: this method has concurrency issues, it is recommended to use SaveOpenLuckyBagListAtomic
 func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndex int64) error {
 	// Get existing list
 	list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
@@ -518,6 +649,103 @@ func (cdb *ChatDB) SaveOpenLuckyBagList(luckyBagPinId string, openPinId string, 
 	return Pb[TalkGroupOpenLuckyBagListCollection].Set(key, data, pebble.Sync)
 }
 
+// SaveOpenLuckyBagListAtomic save grab lucky bag list record atomically
+// use mutex + optimistic lock mechanism to avoid concurrency problems
+func (cdb *ChatDB) SaveOpenLuckyBagListAtomic(luckyBagPinId string, openPinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndex int64) error {
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// use specific lucky bag mutex to ensure only one goroutine operates on the same lucky bag list at the same time
+		cdb.getLuckyBagMutex(luckyBagPinId).Lock()
+		t := time.Now().UnixMilli()
+		fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [Lock] %d\n", luckyBagPinId, createAddress, luckyBagOutIndex, t)
+
+		// Get existing list
+		list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [UnLock]FindError: %v [%d]\n", luckyBagPinId, createAddress, luckyBagOutIndex, err, time.Now().UnixMilli()-t)
+			return err
+		}
+
+		// Check if already exists
+		found := false
+		for _, item := range list.Items {
+			if item.OpenPinId == openPinId {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			// Already exists, no need to save
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [UnLock]Found [%d]\n", luckyBagPinId, createAddress, luckyBagOutIndex, time.Now().UnixMilli()-t)
+			return nil
+		}
+
+		// Add new record
+		newItem := &models.OpenLuckyBagListItem{
+			OpenPinId:        openPinId,
+			GroupId:          groupId,
+			Timestamp:        timestamp,
+			CreateAddress:    createAddress,
+			CreateMetaId:     createMetaId,
+			LuckyBagOutIndex: luckyBagOutIndex,
+		}
+
+		list.Items = append(list.Items, newItem)
+
+		// Save updated list
+		data, err := json.Marshal(list)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [UnLock]JsonError: %v [%d]\n", luckyBagPinId, createAddress, luckyBagOutIndex, err, time.Now().UnixMilli()-t)
+			return err
+		}
+
+		key := []byte(luckyBagPinId)
+		err = Pb[TalkGroupOpenLuckyBagListCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [UnLock]SaveError: %v [%d]\n", luckyBagPinId, createAddress, luckyBagOutIndex, err, time.Now().UnixMilli()-t)
+			return err
+		}
+
+		// release lock, allow other goroutines to operate
+		cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+		fmt.Printf("[SaveOpenLuckyBagListAtomic]: %s, address: %s, index: %d [UnLock]Save [%d]\n", luckyBagPinId, createAddress, luckyBagOutIndex, time.Now().UnixMilli()-t)
+
+		// optimistic lock verification: re-read and verify that our record is properly saved
+		verifyList, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
+		if err != nil {
+			return err
+		}
+
+		// check if our record exists
+		verified := false
+		for _, item := range verifyList.Items {
+			if item.OpenPinId == openPinId {
+				verified = true
+				break
+			}
+		}
+
+		if verified {
+			// save successfully
+			return nil
+		}
+
+		// save failed, possibly due to concurrency conflicts, retry
+		if attempt < maxRetries-1 {
+			// wait briefly and retry
+			time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+			continue
+		}
+	}
+
+	return fmt.Errorf("failed to save open lucky bag list after %d attempts", maxRetries)
+}
+
 // Get grab lucky bag list
 func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyBagList, error) {
 	key := []byte(luckyBagPinId)
@@ -540,6 +768,7 @@ func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyB
 }
 
 // Save reclaim lucky bag list record
+// note: this method has concurrency issues, it is recommended to use SaveResidueLuckyBagListAtomic
 func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndexList []int64) error {
 	// Get existing list
 	list, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
@@ -578,6 +807,96 @@ func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId st
 
 	key := []byte(luckyBagPinId)
 	return Pb[TalkGroupResidueLuckyBagListCollection].Set(key, data, pebble.Sync)
+}
+
+// SaveResidueLuckyBagListAtomic save reclaim lucky bag list record atomically
+// use mutex + optimistic lock mechanism to avoid concurrency problems
+func (cdb *ChatDB) SaveResidueLuckyBagListAtomic(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndexList []int64) error {
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// use specific lucky bag mutex to ensure only one goroutine operates on the same lucky bag list at the same time
+		cdb.getLuckyBagMutex(luckyBagPinId).Lock()
+
+		// Get existing list
+		list, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			return err
+		}
+
+		// Check if already exists
+		found := false
+		for _, item := range list.Items {
+			if item.ResiduePinId == residuePinId {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			// Already exists, no need to save
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			return nil
+		}
+
+		// Add new record
+		newItem := &models.ResidueLuckyBagListItem{
+			ResiduePinId:         residuePinId,
+			GroupId:              groupId,
+			Timestamp:            timestamp,
+			CreateMetaId:         createMetaId,
+			CreateAddress:        createAddress,
+			LuckyBagOutIndexList: luckyBagOutIndexList,
+		}
+
+		list.Items = append(list.Items, newItem)
+
+		// Save updated list
+		data, err := json.Marshal(list)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			return err
+		}
+
+		key := []byte(luckyBagPinId)
+		err = Pb[TalkGroupResidueLuckyBagListCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+			return err
+		}
+
+		// release lock, allow other goroutines to operate
+		cdb.getLuckyBagMutex(luckyBagPinId).Unlock()
+
+		// optimistic lock verification: re-read and verify that our record is properly saved
+		verifyList, err := cdb.GetResidueLuckyBagList(luckyBagPinId)
+		if err != nil {
+			return err
+		}
+
+		// check if our record exists
+		verified := false
+		for _, item := range verifyList.Items {
+			if item.ResiduePinId == residuePinId {
+				verified = true
+				break
+			}
+		}
+
+		if verified {
+			// save successfully
+			return nil
+		}
+
+		// save failed, possibly due to concurrency conflicts, retry
+		if attempt < maxRetries-1 {
+			// wait briefly and retry
+			time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+			continue
+		}
+	}
+
+	return fmt.Errorf("failed to save residue lucky bag list after %d attempts", maxRetries)
 }
 
 // Get reclaim lucky bag list
@@ -1662,7 +1981,7 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 	}
 
 	// Save grab lucky bag list record
-	err = cdb.SaveOpenLuckyBagList(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, int64(index))
+	err = cdb.SaveOpenLuckyBagListAtomic(simpleOpenLuckyBag.LuckyBagPinId, pin.Id, simpleOpenLuckyBag.GroupId, pin.Timestamp, pin.CreateMetaId, pin.CreateAddress, int64(index))
 	if err != nil {
 		log.Printf("SaveOpenLuckyBagList err: %v", err)
 		// Don't return error because main flow has succeeded

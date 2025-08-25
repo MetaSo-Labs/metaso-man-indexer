@@ -652,3 +652,10 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 
 	return stats, nil
 }
+
+// GetLuckyBagLockStats Get comprehensive statistics about lucky bag locks
+func GetLuckyBagLockStats() (map[string]interface{}, error) {
+	// Get lock statistics from ChatDB
+	stats := chatDB.GetLuckyBagLockStats()
+	return stats, nil
+}

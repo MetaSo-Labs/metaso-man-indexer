@@ -439,46 +439,6 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	has := false
 
 	for _, unused := range unusedList {
-		// //redis
-		//         // usedMetaId, _ := redis.GetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, unused.Index)
-		//         // if usedMetaId != "" {
-		//         //  if usedMetaId != metaId {
-		//         //      continue
-		//         //  }else {
-		//         //      has = true
-		//         //      grabEntityList = append(grabEntityList, &grabEntity{
-		//         //          unusedIndex:   unused.Index,
-		//         //          unusedAmount:  unused.Amount,
-		//         //          unusedAddress: unused.Address,
-		//         //          tokenIndex:    "",
-		//         //      })
-		//         //      break
-		//         //  }
-		//         // }else {
-		//         //  _, err := redis.SetRedisGiftInfo(giftEntity.GroupId, giftEntity.TxId, metaId, unused.Index)
-		//         //  if err != nil {
-		//         //      major.Println(fmt.Sprintf("[REDIS] Set userinfo err:%s", err.Error()))
-		//         //      continue
-		//         //  }else {
-		//         //      has = true
-		//         //      grabEntityList = append(grabEntityList, &grabEntity{
-		//         //          unusedIndex:   unused.Index,
-		//         //          unusedAmount:  unused.Amount,
-		//         //          unusedAddress: unused.Address,
-		//         //          tokenIndex:    "",
-		//         //      })
-		//         //      break
-		//         //  }
-		//         // }
-		//         has = true
-		//         grabEntityList = append(grabEntityList, &grabEntity{
-		//             unusedIndex:   unused.Index,
-		//             unusedAmount:  unused.Amount,
-		//             unusedAddress: unused.Address,
-		//             tokenIndex:    "",
-		//         })
-		//         break // Only grab one lucky bag
-
 		// Use cache service to check if lucky bag has been grabbed
 		usedMetaId, err := cache_service.GetCacheGiftInfo(luckyBag.GroupId, luckyBag.PinId, unused.Index)
 		if err != nil {
@@ -591,7 +551,8 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		}
 
 		// Save grab lucky bag list record to TalkGroupOpenLuckyBagListCollection
-		err = chatDB.SaveOpenLuckyBagList(luckyBag.PinId, openLuckyBag.PinId, luckyBag.GroupId, openLuckyBag.Timestamp, metaId, address, v.unusedIndex)
+		// use optimistic lock mechanism to ensure atomicity, no distributed lock
+		err = chatDB.SaveOpenLuckyBagListAtomic(luckyBag.PinId, openLuckyBag.PinId, luckyBag.GroupId, openLuckyBag.Timestamp, metaId, address, v.unusedIndex)
 		if err != nil {
 			log.Printf("SaveOpenLuckyBagList err: %v", err)
 			continue
@@ -813,7 +774,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 // Start grab lucky bag queue processor
 func StartOpenLuckyBagQueueProcessor() {
 	go func() {
-		ticker := time.NewTicker(10 * time.Second) // Process every 10 seconds
+		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
 		defer ticker.Stop()
 
 		// Flag to track if the previous processing is still running
@@ -1050,7 +1011,7 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 		}
 
 		// Save reclaim lucky bag list record to TalkGroupResidueLuckyBagListCollection
-		err = chatDB.SaveResidueLuckyBagList(luckyBag.PinId, residueLuckyBag.PinId, luckyBag.GroupId, residueLuckyBag.Timestamp, metaId, address, []int64{v.unusedIndex})
+		err = chatDB.SaveResidueLuckyBagListAtomic(luckyBag.PinId, residueLuckyBag.PinId, luckyBag.GroupId, residueLuckyBag.Timestamp, metaId, address, []int64{v.unusedIndex})
 		if err != nil {
 			log.Printf("SaveResidueLuckyBagList err: %v", err)
 			continue

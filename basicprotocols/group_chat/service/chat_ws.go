@@ -95,7 +95,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	for _, metaId := range metaIdList {
 		socket_service.SendGroupMessageToUser(metaId, groupChatItem)
 	}
-	common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
+	// common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
 
 }
 

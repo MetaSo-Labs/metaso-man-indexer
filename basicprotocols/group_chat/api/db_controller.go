@@ -743,3 +743,23 @@ func GetMigrationInfo(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(info, t))
 }
+
+// @Summary Get lucky bag lock statistics
+// @Description Get comprehensive statistics about lucky bag locks including total locks, active locks, and inactive locks
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Lucky bag lock statistics"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/lock-stats [get]
+func GetLuckyBagLockStats(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	stats, err := service.GetLuckyBagLockStats()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(stats, t))
+}

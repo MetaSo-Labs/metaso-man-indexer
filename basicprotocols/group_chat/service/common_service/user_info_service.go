@@ -54,6 +54,9 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 	// Cache doesn't exist, expired, or older than 5 minutes, get latest info from API
 	userInfo, err := fetchMetaIDUserInfoInfo(address)
 	if err != nil {
+		if cachedUserInfo != nil {
+			return cachedUserInfo
+		}
 		return nil
 	}
 

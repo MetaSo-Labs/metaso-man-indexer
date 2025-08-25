@@ -584,6 +584,18 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/api/db/luckybag/lock-stats": {
+            "get": {
+                "description": "Get comprehensive statistics about lucky bag locks including total locks, active locks, and inactive locks",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag lock statistics",
+                "responses": {
+                    "200": {"description": "Lucky bag lock statistics", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/api/db/group/version/all": {
             "get": {
                 "description": "Get all data of TalkGroupVersionInfoCollection, support pagination",

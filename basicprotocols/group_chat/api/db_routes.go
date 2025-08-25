@@ -51,6 +51,7 @@ func RegisterDbRoutes(router *gin.Engine) {
 		luckyBagGroup := dbGroup.Group("/luckybag")
 		{
 			luckyBagGroup.GET("/statistics", GetLuckyBagStatistics)
+			luckyBagGroup.GET("/lock-stats", GetLuckyBagLockStats)
 		}
 
 		// Migration-related APIs
