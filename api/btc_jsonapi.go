@@ -40,6 +40,8 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/node/list", nodeList)
 	btcGroup.GET("/reindex/:chain/:from/:to", reindex)
 	btcGroup.GET("/notifcation/list", notifcationList)
+	btcGroup.GET("/dict/set", dictSet)
+	btcGroup.GET("/dict/get", dictGet)
 
 	btcGroup.GET("/pin/:numberOrId", getPinById)
 	btcGroup.GET("/address/pin/utxo/count/:address", getPinUtxoCountByAddress)
@@ -773,4 +775,35 @@ func notifcationList(ctx *gin.Context) {
 		return lastList[i].NotifcationId > lastList[j].NotifcationId
 	})
 	ctx.JSON(http.StatusOK, gin.H{"code": 200, "message": "ok", "data": lastList, "total": total})
+}
+func dictSet(ctx *gin.Context) {
+	dictKey := ctx.Query("key")
+	if dictKey == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	dictValue := ctx.Query("value")
+	if dictValue == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	err := common.SaveToDictDB(dictKey, []byte(dictValue))
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", nil))
+}
+func dictGet(ctx *gin.Context) {
+	dictKey := ctx.Query("key")
+	if dictKey == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	value, err := common.LoadFromDictDB(dictKey)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", string(value)))
 }

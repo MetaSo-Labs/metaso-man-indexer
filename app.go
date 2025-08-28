@@ -11,6 +11,7 @@ import (
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
+	blockcheck "manindexer/man/block_check"
 	"time"
 )
 
@@ -32,6 +33,7 @@ func main() {
  `
 	fmt.Println(banner)
 	common.InitConfig("./config.toml")
+	common.InitSyncDB()
 	cmd := common.Cmd
 	fmt.Println("cmd:", cmd)
 	// api.Start(f)
@@ -43,6 +45,7 @@ func main() {
 	if common.Server == "1" {
 		go api.Start(f)
 	}
+	common.SyncIdCoins()
 	ms := metaso.MetaSo{}
 	if common.ModuleExist("metaso") || common.ModuleExist("metaso_pev") {
 		metaso.ConnectMongoDb()
@@ -68,6 +71,7 @@ func main() {
 		go mrc721.Synchronization()
 	}
 	go mongodb.FixNullMetaIdPinId()
+	go blockcheck.CheckRun()
 	for {
 		man.IndexerRun(common.TestNet)
 		man.CheckNewBlock()

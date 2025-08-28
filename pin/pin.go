@@ -124,6 +124,7 @@ type MetaIdInfo struct {
 	Pdv           int64  `json:"pdv"`
 	Fdv           int64  `json:"fdv"`
 	Background    string `json:"background"`
+	ChatPubKey    string `json:"chatpubkey"`
 }
 type MetaIdDataValue struct {
 	ChainName string `json:"chainName"`

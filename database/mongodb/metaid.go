@@ -70,6 +70,10 @@ func (mg *Mongodb) GetMetaIdInfo(address string, mempool bool, metaid string) (i
 			info.Background = mempoolInfo.Background
 			unconfirmedList = append(unconfirmedList, "background")
 		}
+		if mempoolInfo.ChatPubKey != "" {
+			info.ChatPubKey = mempoolInfo.ChatPubKey
+			unconfirmedList = append(unconfirmedList, "chatpubkey")
+		}
 	}
 	if len(unconfirmedList) > 0 {
 		unconfirmed = strings.Join(unconfirmedList, ",")
@@ -160,6 +164,9 @@ func (mg *Mongodb) BatchUpsertMetaIdInfo(infoList map[string]*pin.MetaIdInfo) (e
 		}
 		if info.Background != "" {
 			updateInfo = append(updateInfo, bson.E{Key: "background", Value: info.Background})
+		}
+		if info.ChatPubKey != "" {
+			updateInfo = append(updateInfo, bson.E{Key: "chatpubkey", Value: info.ChatPubKey})
 		}
 		updateInfo = append(updateInfo, bson.E{Key: "lastupdate", Value: time.Now().Unix()})
 		update := bson.D{{Key: "$set", Value: updateInfo}}

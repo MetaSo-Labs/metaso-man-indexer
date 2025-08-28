@@ -11,7 +11,7 @@ import (
 
 var IDCOINS map[string]string
 
-func init() {
+func SyncIdCoins() {
 	IDCOINS = make(map[string]string)
 	// 启动定时任务，每10分钟执行一次
 	GetIcCoinListFromNet()

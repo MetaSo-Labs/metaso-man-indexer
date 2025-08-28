@@ -7,6 +7,7 @@ import (
 	"manindexer/adapter/bitcoin"
 	"manindexer/adapter/microvisionchain"
 	"manindexer/common"
+
 	"net/http"
 
 	"manindexer/database"
@@ -84,6 +85,7 @@ func InitAdapter(chainType, dbType, test, server string) {
 	// log.Println(">>>GetAllCreator:", allCreatorCount)
 	//log.Println(">>>GetAllMrc:", allMrcCount)
 	//}
+	common.Chain = chainType
 	ChainAdapter = make(map[string]adapter.Chain)
 	ChainParams = make(map[string]*chaincfg.Params)
 	IndexerAdapter = make(map[string]adapter.Indexer)
@@ -220,15 +222,22 @@ func findModifyPath(pinNode *pin.PinInscription) (string, error) {
 }
 
 func handleUserInfo(pinNode *pin.PinInscription) {
-	path := pinNode.Path
 	if pinNode.Operation == "modify" {
-		path, _ = findModifyPath(pinNode)
+		//path, _ = findModifyPath(pinNode)
+		path := GetModifyPath(pinNode.Path)
 		log.Println("modify pin path:", path, "content:", string(pinNode.ContentBody))
+		if path != "" {
+			pinNode.Path = path
+		}
 	}
 	// if path != "/info/name" && path != "/info/avatar" && path != "/info/bio" && path != "/info/background" {
 	// 	return
 	// }
-	switch path {
+	SetCache(pinNode)
+
+}
+func SetCache(pinNode *pin.PinInscription) {
+	switch pinNode.Path {
 	case "/info/name":
 		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?nickname=" + string(pinNode.ContentBody)
 		log.Println("modify pin url:", url)
@@ -243,15 +252,20 @@ func handleUserInfo(pinNode *pin.PinInscription) {
 	case "/info/background":
 		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?background=" + string(pinNode.Id)
 		http.Get(url)
+	case "/info/chatpubkey":
+		url := common.Config.CacheUrl + "/v1/users/set/" + pinNode.Address + "?chatpubkey=" + string(pinNode.ContentBody)
+		http.Get(url)
 	}
 }
 func handleMempoolPin(pinNode *pin.PinInscription) {
 	if pinNode.Operation == "modify" || pinNode.Operation == "revoke" {
+		pinNode.OriginalPath = GetModifyPath(pinNode.Path)
 		pinNode.OriginalId = strings.Replace(pinNode.Path, "@", "", -1)
-		originalPins, err := DbAdapter.GetPinListByIdList([]string{pinNode.OriginalId})
-		if err == nil && len(originalPins) > 0 {
-			pinNode.OriginalPath = originalPins[0].OriginalPath
-		}
+		// originalPins, err := DbAdapter.GetPinListByIdList([]string{pinNode.OriginalId})
+		// if err == nil && len(originalPins) > 0 {
+		// 	pinNode.OriginalPath = originalPins[0].OriginalPath
+		// }
+
 	}
 	pinNode.Timestamp = time.Now().Unix()
 	pinNode.Number = -1
@@ -733,7 +747,7 @@ func handlePathAndOperation(
 		if pinNode.OriginalId == "" {
 			pinNode.OriginalId = pinNode.Id
 		}
-		if pinNode.Operation == "modify" || pinNode.Operation == "revoke" {
+		if pinNode.Operation == "" || pinNode.Operation == "revoke" {
 			if v, ok := statusMap[pinNode.Id]; ok {
 				pinNode.Status = v
 			}
@@ -742,7 +756,8 @@ func handlePathAndOperation(
 			}
 			_, check := originalPinMap[pinNode.OriginalId]
 			if check {
-				pinNode.OriginalPath = originalPinMap[pinNode.OriginalId].OriginalPath
+				pinNode.OriginalPath = GetModifyPath(pinNode.Path)
+				//pinNode.OriginalPath = originalPinMap[pinNode.OriginalId].OriginalPath
 			}
 			if pinNode.Operation == "modify" && pinNode.Status >= 0 && check {
 				if len(originalPinMap[pinNode.OriginalId].OriginalPath) > 5 && originalPinMap[pinNode.OriginalId].OriginalPath[0:5] == "/info" {
@@ -905,6 +920,8 @@ func metaIdInfoParse(pinNode *pin.PinInscription, path string, metaIdData *map[s
 		metaIdInfo.BioId = pinNode.Id
 	case "/info/background":
 		metaIdInfo.Background = fmt.Sprintf("/content/%s", pinNode.Id)
+	case "/info/chatpubkey":
+		metaIdInfo.ChatPubKey = string(pinNode.ContentBody)
 	}
 	(*metaIdData)[pinNode.Address] = metaIdInfo
 }

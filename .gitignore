@@ -7,3 +7,4 @@ manindexer
 .DS_Store
 pev_data_pebble/
 user_operation_data/
+sync_data.db

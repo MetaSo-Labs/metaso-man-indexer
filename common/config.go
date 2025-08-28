@@ -32,6 +32,7 @@ type AllConfig struct {
 	SyncHost    []string `toml:"syncHost"`
 	BlockedHost []string `toml:"blockedHost"`
 	CacheUrl    string   `toml:"cacheUrl"`
+	SyncDB      string   `toml:"syncDB"` //bbolt,用于存储一些k,v数据
 	Btc         btcConfig
 	Mvc         mvcConfig
 	MongoDb     mongoConfig

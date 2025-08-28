@@ -5,3 +5,8 @@ build-linux:
 	CGO_LDFLAGS="-L/usr/local/x86_64-linux/lib -lzmq" \
 	CGO_ENABLED=1 \
 	go build
+
+build-dev:
+	GOOS=linux GOARCH=amd64 \
+	CGO_ENABLED=1 \
+	go build

@@ -14,6 +14,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/swaggo/swag v1.16.4
 	github.com/yanyiwu/gojieba v1.4.5
+	go.etcd.io/bbolt v1.4.3
 )
 
 require (
@@ -68,7 +69,7 @@ require (
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -107,5 +108,5 @@ require (
 	go.mongodb.org/mongo-driver v1.13.1
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	
+
 )

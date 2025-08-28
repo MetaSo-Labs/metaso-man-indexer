@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"manindexer/common"
 	"manindexer/database"
 	"manindexer/mrc20"
@@ -123,6 +124,7 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 	st := time.Now()
 	blockMsg, err := chain.GetBlock2(blockHeight)
 	if err != nil {
+		log.Println("GetBlock2 Error:", err)
 		return
 	}
 	fmt.Println("GetBlock Data from Node:", time.Since(st))
@@ -135,10 +137,10 @@ func (indexer *Indexer) CatchPins(blockHeight int64) (pinInscriptions []*pin.Pin
 	creatorMap = make(map[string]string)
 	st = time.Now()
 	for i, tx := range blockMsg.Transactions {
-		if i%10000 == 0 {
-			fmt.Println("Catch Block Pins By Tx:", i, "/", len(blockMsg.Transactions), "Time:", time.Since(st))
-			st = time.Now()
-		}
+		// if i%10000 == 0 {
+		// 	fmt.Println("Catch Block Pins By Tx:", i, "/", len(blockMsg.Transactions), "Time:", time.Since(st))
+		// 	st = time.Now()
+		// }
 		for _, in := range tx.TxIn {
 			//id := fmt.Sprintf("%s:%d", in.PreviousOutPoint.Hash.String(), in.PreviousOutPoint.Index)
 			id := common.ConcatBytesOptimized([]string{in.PreviousOutPoint.Hash.String(), ":", strconv.FormatUint(uint64(in.PreviousOutPoint.Index), 10)}, "")
