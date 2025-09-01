@@ -62,6 +62,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 				Timestamp:   replyChat.Timestamp,
 				Chain:       replyChat.Chain,
 				BlockHeight: replyChat.BlockHeight,
+				Index:       replyChat.Index,
 			}
 		}
 	}
@@ -89,6 +90,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		Params:      "",
 		Chain:       chat.Chain,
 		BlockHeight: chat.BlockHeight,
+		Index:       chat.Index,
 	}
 
 	// 6. Call wsPost to send message
@@ -126,31 +128,35 @@ func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 				Timestamp:   replyChat.Timestamp,
 				Chain:       replyChat.Chain,
 				BlockHeight: replyChat.BlockHeight,
+				Index:       replyChat.Index,
 			}
 		}
 	}
 
 	// 5. Build PrivateChatItem
 	privateChatItem := &respond.PrivateChatItem{
-		From:        chat.From,
-		To:          chat.To,
-		TxId:        chat.TxId,
-		PinId:       chat.PinId,
-		MetaId:      chat.From,
-		Address:     chat.FromAddress,
-		UserInfo:    common_service.FetchMetaIDUserInfo(chat.FromAddress),
-		NickName:    "",
-		Protocol:    chat.Protocol,
-		Content:     chat.Content,
-		ContentType: chat.ContentType,
-		Encryption:  chat.Encryption,
-		ChatType:    int64(chat.ChatType),
-		ReplyPin:    chat.ReplyPin,
-		ReplyInfo:   replyInfo,
-		RedMetaId:   replyMetaId,
-		Timestamp:   chat.Timestamp,
-		Chain:       chat.Chain,
-		BlockHeight: chat.BlockHeight,
+		From:         chat.From,
+		FromUserInfo: common_service.FetchMetaIDUserInfoInfoByMetaId(chat.From),
+		To:           chat.To,
+		ToUserInfo:   common_service.FetchMetaIDUserInfoInfoByMetaId(chat.To),
+		TxId:         chat.TxId,
+		PinId:        chat.PinId,
+		MetaId:       chat.From,
+		Address:      chat.FromAddress,
+		UserInfo:     common_service.FetchMetaIDUserInfoInfoByMetaId(chat.From),
+		NickName:     "",
+		Protocol:     chat.Protocol,
+		Content:      chat.Content,
+		ContentType:  chat.ContentType,
+		Encryption:   chat.Encryption,
+		ChatType:     int64(chat.ChatType),
+		ReplyPin:     chat.ReplyPin,
+		ReplyInfo:    replyInfo,
+		RedMetaId:    replyMetaId,
+		Timestamp:    chat.Timestamp,
+		Chain:        chat.Chain,
+		BlockHeight:  chat.BlockHeight,
+		Index:        chat.Index,
 	}
 
 	// 6. Call wsPost to send message

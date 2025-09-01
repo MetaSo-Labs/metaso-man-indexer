@@ -192,11 +192,11 @@ func (chain *MicroVisionChain) GetTxSizeAndFees(txHash string) (fee int64, size 
 }
 
 func (chain *MicroVisionChain) BroadcastTx(txRaw string) (txId string, err error) {
-	log.Printf("[MVC]BroadcastTx broadcasting : %s", txRaw)
+	// log.Printf("[MVC]BroadcastTx broadcasting : %s", txRaw)
 	rpcClient := rpc_client.NewClientController(common.Config.Mvc.RpcUser, common.Config.Mvc.RpcPass, "http://"+common.Config.Mvc.RpcHost)
 	txId, err = rpcClient.BroadcastTx("mvc", txRaw)
 	if err != nil {
-		log.Printf("[MVC]BroadcastTx broadcasting failed: %s", err)
+		// log.Printf("[MVC]BroadcastTx broadcasting failed: %s", err)
 		return "", err
 	}
 	return txId, nil

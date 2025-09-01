@@ -2,13 +2,18 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/pin"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"crypto/sha256"
+	"encoding/hex"
 
 	"github.com/cockroachdb/pebble"
 )
@@ -26,7 +31,9 @@ type PrivateQueueChatMessage struct {
 
 // Private chat database operations
 type PrivateChatDB struct {
-	pb *Pebble
+	pb              *Pebble
+	isProcessing    bool
+	processingMutex sync.Mutex
 }
 
 func NewPrivateChatDB(pb *Pebble) *PrivateChatDB {
@@ -130,34 +137,62 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIds(selfMetaId, otherMetaId stri
 }
 
 // Get private chat message list by two MetaIds and timestamp range (reverse order, pagination based on timestamp)
-func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId string, startTimestamp int64, size int64) ([]*models.TalkPrivateChatV3, error) {
+// This function handles the key format: from_to_timestamp+number(6) and to_from_timestamp+number(6)
+// Example: from_to_1755500889000001 (timestamp 1755500889 + random 000001)
+func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId, otherMetaId string, startTimestamp int64, size int64) ([]*models.TalkPrivateChatV3, int64, error) {
 	var chats []*models.TalkPrivateChatV3
-	iter, err := Pb[TalkPrivateChatTimestampCollection].NewIter(nil)
+
+	// Check if startTimestamp is 16 digits, if not, pad with zeros
+	startTimestampStr := strconv.FormatInt(startTimestamp, 10)
+	if len(startTimestampStr) < 16 {
+		// Pad with zeros to make it 16 digits
+		startTimestampStr = startTimestampStr + strings.Repeat("0", 16-len(startTimestampStr))
+	}
+
+	// Create iter options to limit the range to only keys for these two users
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(selfMetaId + "_" + otherMetaId + "_"),
+		UpperBound: []byte(selfMetaId + "_" + otherMetaId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkPrivateChatTimestampCollection].NewIter(iterOptions)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer iter.Close()
 
-	// Construct query start keys: from_to_startTimestamp and to_from_startTimestamp
-	fromToStartKey := []byte(selfMetaId + "_" + otherMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
-	toFromStartKey := []byte(otherMetaId + "_" + selfMetaId + "_" + strconv.FormatInt(startTimestamp, 10))
+	nextTimestamp := int64(0)
 
 	// Start reverse iteration from specified timestamp (latest messages first)
-	for iter.SeekLT(fromToStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
+	startKey := []byte(selfMetaId + "_" + otherMetaId + "_" + startTimestampStr)
+	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
 		key := string(iter.Key())
+		fmt.Printf("[PrivateChatDB] GetPrivateChatsByMetaIdsAndTimestampRange key: %s\n", key)
 
-		// Check if it belongs to chat between these two users
-		if !strings.HasPrefix(key, selfMetaId+"_"+otherMetaId+"_") &&
-			!strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
+		// Parse key to extract timestamp
+		// Key format: from_to_timestamp+number(6)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 3 {
 			continue
 		}
 
-		// Parse index value to get PinId
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
+		timestampStr := keyParts[2]
+		timestampKey := timestampStr
+		timestampKeyInt, _ := strconv.ParseInt(timestampKey, 10, 64)
+
+		// Skip messages after our start timestamp (since we're going backwards)
+		if timestampKeyInt > startTimestamp {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_number
 		value := string(iter.Value())
 		valueParts := strings.Split(value, "_")
 		if len(valueParts) < 1 {
 			continue
 		}
+
 		pinId := valueParts[0]
 
 		// Get complete private chat message
@@ -166,52 +201,24 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 			continue
 		}
 
-		// Reach pagination size limit
+		if nextTimestamp == 0 || timestampKeyInt < nextTimestamp {
+			nextTimestamp = timestampKeyInt
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
 		if int64(len(chats)) >= size {
 			break
 		}
-
-		chats = append(chats, chat)
 	}
 
-	// If not enough messages found from from_to direction, continue searching from to_from direction
-	if int64(len(chats)) < size {
-		for iter.SeekLT(toFromStartKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
-			key := string(iter.Key())
-
-			// Check if it belongs to chat between these two users
-			if !strings.HasPrefix(key, otherMetaId+"_"+selfMetaId+"_") {
-				continue
-			}
-
-			// Parse index value to get PinId
-			value := string(iter.Value())
-			valueParts := strings.Split(value, "_")
-			if len(valueParts) < 1 {
-				continue
-			}
-			pinId := valueParts[0]
-
-			// Get complete private chat message
-			chat, err := pcdb.GetPrivateChatByPinId(pinId)
-			if err != nil || chat == nil {
-				continue
-			}
-
-			// Reach pagination size limit
-			if int64(len(chats)) >= size {
-				break
-			}
-
-			chats = append(chats, chat)
-		}
-	}
-
-	return chats, nil
+	return chats, nextTimestamp, nil
 }
 
 // Get latest private chat messages between two users (reverse order based on timestamp)
-func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, error) {
+func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, int64, error) {
 	// Use current time as start timestamp
 	currentTimestamp := time.Now().Unix()
 	currentTimestamp = currentTimestamp * 1000000
@@ -334,16 +341,16 @@ func (pcdb *PrivateChatDB) SaveMetaIdContextList(contextList *models.MetaIdConte
 	return Pb[TalkMetaIdContextListCollection].Set(key, data, pebble.Sync)
 }
 
-// Update private chat contact list
-func (pcdb *PrivateChatDB) UpdatePrivateContactList(chat *models.TalkPrivateChatV3) error {
-	// Update sender's contact list
-	err := pcdb.updateSingleUserPrivateContactList(chat.From, chat.To, chat)
+// Update private chat context list
+func (pcdb *PrivateChatDB) UpdatePrivateContextList(chat *models.TalkPrivateChatV3) error {
+	// Update sender's context list
+	err := pcdb.updateSingleUserPrivateContextList(chat.From, chat.To, chat)
 	if err != nil {
 		return err
 	}
 
-	// Update receiver's contact list
-	err = pcdb.updateSingleUserPrivateContactList(chat.To, chat.From, chat)
+	// Update receiver's context list
+	err = pcdb.updateSingleUserPrivateContextList(chat.To, chat.From, chat)
 	if err != nil {
 		return err
 	}
@@ -352,7 +359,12 @@ func (pcdb *PrivateChatDB) UpdatePrivateContactList(chat *models.TalkPrivateChat
 }
 
 // Update single user's private chat contact list
-func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherMetaId string, chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) updateSingleUserPrivateContextList(selfMetaId, otherMetaId string, chat *models.TalkPrivateChatV3) error {
+	// Get mutex for this MetaId to prevent concurrent updates
+	mutex := GetMetaIdMutex(selfMetaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// Get user's context list
 	contextList, err := pcdb.GetMetaIdContextList(selfMetaId)
 	if err != nil {
@@ -379,15 +391,16 @@ func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherM
 	shouldUpdate := false
 	for i, item := range contextList.Items {
 		// For private chat, identify by GroupId and Type
-		if item.GroupId == otherMetaId && item.Type == "2" {
+		if item.MetaId == otherMetaId && item.Type == "2" {
+			contextList.Items[i] = newItem
+			found = true
 			// Check if update is needed
 			if item.LastMessagePinId != newItem.LastMessagePinId ||
 				item.BlockHeight != newItem.BlockHeight {
 				// Update existing item
-				contextList.Items[i] = newItem
 				shouldUpdate = true
 			}
-			found = true
+
 			break
 		}
 	}
@@ -406,6 +419,9 @@ func (pcdb *PrivateChatDB) updateSingleUserPrivateContactList(selfMetaId, otherM
 	// Sort context list by timestamp in reverse order
 	pcdb.sortContextListByTimestamp(contextList)
 
+	// Remove duplicates for private chat items (Type == "2")
+	pcdb.removeDuplicatePrivateChatItems(contextList)
+
 	// Save updated context list
 	return pcdb.SaveMetaIdContextList(contextList)
 }
@@ -422,6 +438,36 @@ func (pcdb *PrivateChatDB) sortContextListByTimestamp(contextList *models.MetaId
 	}
 }
 
+// Remove duplicate private chat items (Type == "2") based on MetaId
+func (pcdb *PrivateChatDB) removeDuplicatePrivateChatItems(contextList *models.MetaIdContextList) {
+	metaIdMap := make(map[string]*models.MetaIdContextItem)
+	var uniqueItems []*models.MetaIdContextItem
+
+	for _, item := range contextList.Items {
+		if item.Type == "2" {
+			// For private chat items, check for duplicate MetaId
+			if existingItem, exists := metaIdMap[item.MetaId]; exists {
+				// If current item has larger timestamp, replace the existing one
+				if item.Timestamp >= existingItem.Timestamp {
+					metaIdMap[item.MetaId] = item
+				}
+				// Skip adding to uniqueItems for now
+				continue
+			}
+			metaIdMap[item.MetaId] = item
+		} else {
+			uniqueItems = append(uniqueItems, item)
+		}
+	}
+
+	// Add the unique private chat items (with largest timestamps) back to the list
+	for _, item := range metaIdMap {
+		uniqueItems = append(uniqueItems, item)
+	}
+
+	contextList.Items = uniqueItems
+}
+
 // Batch process private chat queue messages
 func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
 	// Get pending messages
@@ -432,21 +478,31 @@ func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
 
 	// Batch process messages
 	for _, message := range messages {
+		hasError := false
+
 		// Update private chat contact list
-		err = pcdb.UpdatePrivateContactList(message.Chat)
+		err = pcdb.UpdatePrivateContextList(message.Chat)
 		if err != nil {
-			// Processing failed, log error but don't delete queue message, can retry later
 			log.Printf("Failed to update private contact list for pinId %s: %v", message.PinId, err)
-			continue
+			hasError = true
 		}
 
-		log.Printf("Processing private chat message for pinId %s", message.PinId)
-
-		// Processing successful, delete queue message
-		err = pcdb.deletePrivateQueueMessage(message.PinId)
+		// Update private chat index
+		err = pcdb.UpdatePrivateChatIndex(message.Chat)
 		if err != nil {
-			// Log error but don't affect main flow
-			log.Printf("Failed to delete private queue message for pinId %s: %v", message.PinId, err)
+			log.Printf("Failed to update private chat index for pinId %s: %v", message.PinId, err)
+			hasError = true
+		}
+
+		// Only delete queue message if both operations succeeded
+		if !hasError {
+			log.Printf("Processing private chat message for pinId %s", message.PinId)
+
+			err = pcdb.deletePrivateQueueMessage(message.PinId)
+			if err != nil {
+				// Log error but don't affect main flow
+				log.Printf("Failed to delete private queue message for pinId %s: %v", message.PinId, err)
+			}
 		}
 	}
 
@@ -456,18 +512,32 @@ func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
 // Start private chat queue processing goroutine (needs to be called when application starts)
 func (pcdb *PrivateChatDB) StartPrivateQueueProcessor() {
 	go func() {
-		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
+		ticker := time.NewTicker(2 * time.Second) // Process every 2 seconds
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
+				// Check if already processing
+				pcdb.processingMutex.Lock()
+				if pcdb.isProcessing {
+					pcdb.processingMutex.Unlock()
+					log.Printf("[PrivateChatDB] Queue processor is already running, skipping this cycle")
+					continue
+				}
+				pcdb.isProcessing = true
+				pcdb.processingMutex.Unlock()
+
 				// Batch process queue messages
 				err := pcdb.ProcessPrivateQueueMessages(100) // Process 100 messages each time
 				if err != nil {
-					// Log error
-					continue
+					log.Printf("[PrivateChatDB] Error processing queue messages: %v", err)
 				}
+
+				// Mark processing as complete
+				pcdb.processingMutex.Lock()
+				pcdb.isProcessing = false
+				pcdb.processingMutex.Unlock()
 			}
 		}
 	}()
@@ -495,6 +565,13 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 	// Check if this PinId has already been saved
 	existingChat, err := pcdb.GetPrivateChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
+		if existingChat.BlockHeight != pin.GenesisHeight {
+			existingChat.BlockHeight = pin.GenesisHeight
+			err = pcdb.SavePrivateChat(existingChat)
+			if err != nil {
+				return err
+			}
+		}
 		// Already exists, skip processing
 		return nil
 	}
@@ -506,11 +583,14 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Convert To field to MetaId format if needed
+	toMetaId := pcdb.convertToMetaId(simpleMsg.To)
+
 	// Create private chat message model
 	chat := &models.TalkPrivateChatV3{
 		From:        pin.CreateMetaId,  // Sender MetaId
 		FromAddress: pin.CreateAddress, // Sender address
-		To:          simpleMsg.To,      // Receiver MetaId
+		To:          toMetaId,          // Receiver MetaId (converted if needed)
 		ToAddress:   "",                // Receiver address
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
@@ -569,10 +649,13 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 		return err
 	}
 
+	// Convert To field to MetaId format if needed
+	toMetaId := pcdb.convertToMetaId(simpleFileMsg.To)
+
 	// Create private chat message model
 	chat := &models.TalkPrivateChatV3{
 		From:        pin.CreateMetaId, // Sender MetaId
-		To:          simpleFileMsg.To, // Receiver MetaId
+		To:          toMetaId,         // Receiver MetaId (converted if needed)
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		Protocol:    pin.Path,
@@ -604,4 +687,138 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 	}
 
 	return nil
+}
+
+// UpdatePrivateChatIndex updates the chat index for a private chat message
+func (pcdb *PrivateChatDB) UpdatePrivateChatIndex(chat *models.TalkPrivateChatV3) error {
+	// Get the next index for this conversation (from_to)
+	nextIndex, err := pcdb.getNextPrivateChatIndex(chat.From, chat.To)
+	if err != nil {
+		return err
+	}
+
+	// Update the chat message with the new index
+	chat.Index = nextIndex
+
+	// Save the updated chat message
+	err = pcdb.SavePrivateChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// Save the index mapping with zero-padded index for proper sorting
+	indexKey1 := chat.From + "_" + chat.To + "_" + fmt.Sprintf("%040d", nextIndex)
+	indexValue := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_1"
+
+	indexKey2 := chat.To + "_" + chat.From + "_" + fmt.Sprintf("%040d", nextIndex)
+	indexValue2 := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_1"
+
+	err = Pb[TalkPrivateChatIndexCollection].Set([]byte(indexKey1), []byte(indexValue), pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	err = Pb[TalkPrivateChatIndexCollection].Set([]byte(indexKey2), []byte(indexValue2), pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getNextPrivateChatIndex gets the next available index for a private conversation
+func (pcdb *PrivateChatDB) getNextPrivateChatIndex(fromMetaId, toMetaId string) (int64, error) {
+	iter, err := Pb[TalkPrivateChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(fromMetaId + "_" + toMetaId + "_"),
+		UpperBound: []byte(fromMetaId + "_" + toMetaId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this conversation (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this conversation, start with index 1
+	if lastKey == nil {
+		return 1, nil
+	}
+
+	// Extract index from the last key (fromMetaId_toMetaId_index with zero-padding)
+	keyStr := string(lastKey)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 3 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[2], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index + 1, nil
+		}
+	}
+
+	// Fallback: if parsing fails, start with index 1
+	return 1, nil
+}
+
+// GetCurrentMaxPrivateChatIndex gets the current maximum index for a private conversation
+func (pcdb *PrivateChatDB) GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId string) (int64, error) {
+	iter, err := Pb[TalkPrivateChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(fromMetaId + "_" + toMetaId + "_"),
+		UpperBound: []byte(fromMetaId + "_" + toMetaId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this conversation (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this conversation, return 0
+	if lastKey == nil {
+		return 0, nil
+	}
+
+	// Extract index from the last key (fromMetaId_toMetaId_index with zero-padding)
+	keyStr := string(lastKey)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 3 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[2], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index, nil
+		}
+	}
+
+	// Fallback: if parsing fails, return 0
+	return 0, nil
+}
+
+// convertToMetaId converts a string to MetaId format
+// If the string is not 64 characters long, it's treated as an address and converted to MetaId using SHA256
+func (pcdb *PrivateChatDB) convertToMetaId(input string) string {
+	// If input is already 64 characters long, assume it's already a MetaId
+	if len(input) == 64 {
+		return input
+	}
+
+	// Otherwise, treat it as an address and convert to MetaId using SHA256
+	hash := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(hash[:])
 }

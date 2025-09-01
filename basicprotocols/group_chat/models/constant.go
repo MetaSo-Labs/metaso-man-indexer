@@ -18,4 +18,5 @@ const (
 	ChatTypeFile            ChatType = 3  // Group chat - File type
 	ChatTypeJoin            ChatType = 4  // Group chat - Join type
 	ChatTypeLeave           ChatType = 5  // Group chat - Leave type
+	ChatTypeRemove          ChatType = 7  // Group chat - Remove user type
 )

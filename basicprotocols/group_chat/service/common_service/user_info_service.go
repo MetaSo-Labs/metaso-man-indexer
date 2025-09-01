@@ -28,10 +28,12 @@ type ManResp struct {
 }
 
 type MetaIDUserInfo struct {
-	Metaid  string `json:"metaid"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Avatar  string `json:"avatar"`
+	Metaid     string `json:"metaid"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	Avatar     string `json:"avatar"`
+	AvatarId   string `json:"avatarId"`
+	Chatpubkey string `json:"chatpubkey"`
 }
 
 func FetchMetaIDUserInfo(address string) *respond.UserInfo {
@@ -67,14 +69,69 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 	}
 
 	userInfoResponse := &respond.UserInfo{
-		Metaid:      userInfo.Metaid,
-		AvatarImage: avatarImage,
-		Avatar:      userInfo.Avatar,
-		Name:        userInfo.Name,
+		Address:       address,
+		Metaid:        userInfo.Metaid,
+		AvatarImage:   avatarImage,
+		Avatar:        userInfo.Avatar,
+		Name:          userInfo.Name,
+		ChatPublicKey: userInfo.Chatpubkey,
 	}
 
 	// Update cache
 	_, cacheErr := cache_service.SetCacheUserInfo(address, userInfoResponse)
+	if cacheErr != nil {
+		// Cache update failed, log error but don't affect return result
+		fmt.Printf("Failed to set user info to cache: %v\n", cacheErr)
+	}
+
+	return userInfoResponse
+}
+
+func FetchMetaIDUserInfoInfoByMetaId(metaId string) *respond.UserInfo {
+	// First try to get user info and update time from cache
+	cachedUserInfo, updateTime, err := cache_service.GetCacheUserInfoByMetaIdWithTime(metaId)
+	if err != nil {
+		// Cache retrieval failed, log error but continue execution
+		fmt.Printf("Failed to get user info from cache: %v\n", err)
+	}
+
+	// Check if cache is valid (exists and update time is within 5 minutes)
+	if cachedUserInfo != nil && !updateTime.IsZero() {
+		// Check if more than 5 minutes have passed
+		if time.Since(updateTime) <= 5*time.Minute {
+			// Cache exists and is within 5 minutes, return directly
+			return cachedUserInfo
+		}
+	}
+
+	// Cache doesn't exist, expired, or older than 5 minutes, get latest info from API
+	userInfo, err := fetchMetaIDUserInfoInfoByMetaId(metaId)
+	if err != nil {
+		if cachedUserInfo != nil {
+			return cachedUserInfo
+		}
+		return nil
+	}
+
+	// Build user info
+	avatarImage := ""
+	if userInfo.Avatar != "" {
+		avatarImage = common.Config.GroupChat.ManHost + "/content/" + userInfo.AvatarId
+	}
+
+	userInfoResponse := &respond.UserInfo{
+		Metaid:      metaId,
+		Address:     userInfo.Address,
+		AvatarImage: avatarImage,
+		// Avatar:        userInfo.Avatar,
+		Avatar:        "/content/" + userInfo.AvatarId,
+		Name:          userInfo.Name,
+		ChatPublicKey: userInfo.Chatpubkey,
+		// ChatPublicKeyId: userInfo.Chatpubkeyid,
+	}
+
+	// Update cache
+	_, cacheErr := cache_service.SetCacheUserInfoByMetaId(metaId, userInfoResponse)
 	if cacheErr != nil {
 		// Cache update failed, log error but don't affect return result
 		fmt.Printf("Failed to set user info to cache: %v\n", cacheErr)
@@ -96,6 +153,37 @@ func fetchMetaIDUserInfoInfo(address string) (*MetaIDUserInfo, error) {
 		return nil, fmt.Errorf("manHost is empty")
 	}
 	url = fmt.Sprintf("%s/api/info/address/%s", common.Config.GroupChat.ManHost, address)
+
+	result, err = common.GetUrl(url, query, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err = common.JsonToObject(result, &resp); err != nil {
+		return nil, fmt.Errorf("get request err:%s", err.Error())
+	}
+	if resp.Code != ManCodeSuccess {
+		return nil, fmt.Errorf("msg:%s", resp.Message)
+	}
+
+	if err = common.JsonToAny(resp.Data, &data); err != nil {
+		return nil, fmt.Errorf("get request err:%s", err.Error())
+	}
+	return data, nil
+}
+
+func fetchMetaIDUserInfoInfoByMetaId(metaId string) (*MetaIDUserInfo, error) {
+	var (
+		url    string
+		result string
+		resp   *ManResp
+		data   *MetaIDUserInfo
+		err    error
+	)
+	query := map[string]string{}
+	if common.Config.GroupChat.ManHost == "" {
+		return nil, fmt.Errorf("manHost is empty")
+	}
+	url = fmt.Sprintf("%s/api/info/metaid/%s", common.Config.GroupChat.ManHost, metaId)
 
 	result, err = common.GetUrl(url, query, nil)
 	if err != nil {
@@ -202,12 +290,30 @@ func updateExpiredUserInfo() {
 		}
 	}
 
-	log.Printf("[CACHE_SERVICE]User info update cycle completed. Updated %d addresses", updateCount)
+	// Get all cached user info metaIds
+	metaIds := getAllCachedUserInfoMetaIds()
+	log.Printf("[CACHE_SERVICE]Found %d cached user info metaIds to check", len(metaIds))
+
+	metaIdUpdateCount := 0
+	for _, metaId := range metaIds {
+		// Check if this user info needs updating
+		if shouldUpdateUserInfoByMetaId(metaId) {
+			updateSingleUserInfoByMetaId(metaId)
+			metaIdUpdateCount++
+		}
+	}
+
+	log.Printf("[CACHE_SERVICE]User info update cycle completed. Updated %d addresses and %d metaIds", updateCount, metaIdUpdateCount)
 }
 
 // getAllCachedUserInfoAddresses Get all addresses from cached user info
 func getAllCachedUserInfoAddresses() []string {
 	return cache_service.GetAllCachedUserInfoAddresses()
+}
+
+// getAllCachedUserInfoMetaIds Get all metaIds from cached user info
+func getAllCachedUserInfoMetaIds() []string {
+	return cache_service.GetAllCachedUserInfoMetaIds()
 }
 
 // shouldUpdateUserInfo Check if user info for the given address should be updated
@@ -246,10 +352,12 @@ func updateSingleUserInfo(address string) {
 	}
 
 	userInfoResponse := &respond.UserInfo{
-		Metaid:      userInfo.Metaid,
-		AvatarImage: avatarImage,
-		Avatar:      userInfo.Avatar,
-		Name:        userInfo.Name,
+		Metaid:        userInfo.Metaid,
+		Address:       address,
+		AvatarImage:   avatarImage,
+		Avatar:        userInfo.Avatar,
+		Name:          userInfo.Name,
+		ChatPublicKey: userInfo.Chatpubkey,
 	}
 
 	// Update cache
@@ -258,5 +366,59 @@ func updateSingleUserInfo(address string) {
 		log.Printf("[CACHE_SERVICE]Failed to update cache for address %s: %v", address, cacheErr)
 	} else {
 		log.Printf("[CACHE_SERVICE]Successfully updated user info cache for address: %s", address)
+	}
+}
+
+// shouldUpdateUserInfoByMetaId Check if user info for the given metaId should be updated
+func shouldUpdateUserInfoByMetaId(metaId string) bool {
+	// Get cached user info with update time
+	cachedUserInfo, updateTime, err := cache_service.GetCacheUserInfoByMetaIdWithTime(metaId)
+	if err != nil {
+		log.Printf("[CACHE_SERVICE]Failed to get user info for metaId %s: %v", metaId, err)
+		return false
+	}
+
+	// If no cached data, no need to update
+	if cachedUserInfo == nil || updateTime.IsZero() {
+		return false
+	}
+
+	// Check if update time is older than 4 minutes (update before 5-minute expiry)
+	return time.Since(updateTime) > 4*time.Minute
+}
+
+// updateSingleUserInfoByMetaId Update user info for a single metaId
+func updateSingleUserInfoByMetaId(metaId string) {
+	log.Printf("[CACHE_SERVICE]Updating user info for metaId: %s", metaId)
+
+	// Fetch latest user info from API
+	userInfo, err := fetchMetaIDUserInfoInfoByMetaId(metaId)
+	if err != nil {
+		log.Printf("[CACHE_SERVICE]Failed to fetch user info for metaId %s: %v", metaId, err)
+		return
+	}
+
+	// Build user info response
+	avatarImage := ""
+	if userInfo.Avatar != "" {
+		avatarImage = common.Config.GroupChat.ManHost + "/content/" + userInfo.AvatarId
+	}
+
+	userInfoResponse := &respond.UserInfo{
+		Metaid:      metaId,
+		Address:     userInfo.Address,
+		AvatarImage: avatarImage,
+		// Avatar:        userInfo.Avatar,
+		Avatar:        "/content/" + userInfo.AvatarId,
+		Name:          userInfo.Name,
+		ChatPublicKey: userInfo.Chatpubkey,
+	}
+
+	// Update cache
+	_, cacheErr := cache_service.SetCacheUserInfoByMetaId(metaId, userInfoResponse)
+	if cacheErr != nil {
+		log.Printf("[CACHE_SERVICE]Failed to update cache for metaId %s: %v", metaId, cacheErr)
+	} else {
+		log.Printf("[CACHE_SERVICE]Successfully updated user info cache for metaId: %s", metaId)
 	}
 }

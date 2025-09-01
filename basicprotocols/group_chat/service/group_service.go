@@ -21,6 +21,7 @@ var (
 	groupDB      *db.GroupDB
 	chatDB       *db.ChatDB
 	privateDB    *db.PrivateChatDB
+	userInfoDB   *db.UserInfoDB
 	pebbleDB     *db.Pebble
 	chainAdapter map[string]adapter.Chain
 )
@@ -35,6 +36,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	groupDB = indexer.GetGroupDB()
 	chatDB = indexer.GetChatDB()
 	privateDB = indexer.GetPrivateDB()
+	userInfoDB = indexer.GetUserInfoDB()
 	chainAdapter = adapter
 
 	// Start chat queue processor
@@ -45,6 +47,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 
 	StartOpenLuckyBagQueueProcessor()
 	StartResidueLuckyBagQueueProcessor()
+	StartExpiredLuckyBagProcessor()
 
 	db.SetHandleGroupChatItem(wsForGroupChatItem)
 	db.SetHandlePrivateChatItem(wsForPrivateChatItem)
@@ -54,6 +57,8 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 
 	// Start user info polling
 	common_service.StartUserInfoPolling()
+
+	startLuckyBagGrabCleanupGoroutine()
 
 	return nil
 }
@@ -207,6 +212,14 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			userCount = 0
 		}
 
+		// Get group chat index
+		groupChatIndex := int64(-1)
+
+		chatInfo, _ := chatDB.GetChatByPinId(latestChat.PinId)
+		if chatInfo != nil {
+			groupChatIndex = chatInfo.Index
+		}
+
 		groupItem := &respond.GroupItem{
 			CommunityId:  group.CommunityId,
 			GroupId:      group.GroupId,
@@ -269,6 +282,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			Timestamp:         group.Timestamp,
 			Chain:             group.Chain,
 			BlockHeight:       group.BlockHeight,
+			Index:             groupChatIndex,
 		}
 		groupItems = append(groupItems, groupItem)
 	}
@@ -470,6 +484,118 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	}, nil
 }
 
+// FetchGroupChatListV3 Get group chat list using GetChatsByGroupIdAndTimestampRange3 (test version with IterOptions)
+func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	var chats []*models.TalkGroupChatV3
+	var err error
+
+	t := time.Now().UnixMilli()
+	var nextTimestamp int64 = 0
+	if req.Timestamp > 0 {
+		// Get chat records by timestamp range using new method with IterOptions
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange3(req.GroupId, req.Timestamp, req.Size)
+	} else {
+		// Get latest chat records using new method with IterOptions
+		// For latest messages, we can use a very large timestamp as start point
+		currentTimestamp := time.Now().Unix()
+		//add 6 number 0
+		currentTimestamp = currentTimestamp * 1000000
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange3(req.GroupId, currentTimestamp, req.Size)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] get chat time: %d\n", time.Now().UnixMilli()-t)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:   chat.GroupId,
+			MetanetId: chat.GroupId, // Use GroupId as MetanetId
+			TxId:      chat.TxId,
+			PinId:     chat.PinId,
+			Address:   chat.Address,
+			// UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			RedMetaId:   "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
+			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
+			if openLuckyBag != nil {
+				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
+					chatItem.TxId = openLuckyBag.GrabTxId
+				} else {
+					chatItem.TxId = ""
+				}
+			}
+		}
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err != nil {
+				replyChat = nil
+			}
+			chatItem.ReplyInfo = &respond.ReplyInfo{
+				PinId:   replyChat.PinId,
+				MetaId:  replyChat.MetaId,
+				Address: replyChat.Address,
+				// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
+				NickName:    replyChat.NickName,
+				Protocol:    replyChat.Protocol,
+				Content:     replyChat.Content,
+				ContentType: replyChat.ContentType,
+				Encryption:  replyChat.Encryption,
+				ChatType:    replyChat.ChatType,
+				Timestamp:   replyChat.Timestamp,
+				Chain:       replyChat.Chain,
+				Index:       replyChat.Index,
+			}
+			chatItem.RedMetaId = replyChat.MetaId
+			chatItem.BlockHeight = replyChat.BlockHeight
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+
+	//get user info
+	t2 := time.Now().UnixMilli()
+	for _, chatItem := range chatItems {
+		if chatItem.ReplyInfo != nil {
+			chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.ReplyInfo.Address)
+		}
+		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for user info time: %d\n", time.Now().UnixMilli()-t2)
+
+	return &respond.GroupChatResponse{
+		Total:         int64(len(chatItems)),
+		NextTimestamp: nextTimestamp,
+		List:          chatItems,
+	}, nil
+}
+
 // FetchGroupChatListV2 Get group chat list using TalkGroupChatTimestamp2Collection
 func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.GroupChatResponse, error) {
 	// Set default pagination parameters
@@ -524,6 +650,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
 		}
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
@@ -554,6 +681,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 				ChatType:    replyChat.ChatType,
 				Timestamp:   replyChat.Timestamp,
 				Chain:       replyChat.Chain,
+				Index:       replyChat.Index,
 			}
 			chatItem.RedMetaId = replyChat.MetaId
 			chatItem.BlockHeight = replyChat.BlockHeight
@@ -751,6 +879,13 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				latestChat = nil
 			}
 
+			// Get group member count
+			userCount, err := groupDB.GetGroupMemberCount(item.GroupId)
+			if err != nil {
+				// If failed to get, use default value
+				userCount = 0
+			}
+
 			// Fill group chat specific fields
 			chatInfoItem.CommunityId = group.CommunityId
 			chatInfoItem.RoomName = group.RoomName
@@ -762,7 +897,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.CreateUserMetaId = group.CreateUserMetaId
 			chatInfoItem.CreateUserAddress = group.CreateUserAddress
 			chatInfoItem.CreateUserInfo = common_service.FetchMetaIDUserInfo(group.CreateUserAddress)
-			chatInfoItem.UserCount = 0 // Need to calculate
+			chatInfoItem.UserCount = userCount
 			chatInfoItem.ChatSettingType = group.ChatSettingType
 			chatInfoItem.DeleteStatus = group.DeleteStatus
 			chatInfoItem.Chain = group.Chain
@@ -776,8 +911,16 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.CreateMetaId = latestChat.MetaId
 				chatInfoItem.CreateAddress = latestChat.CreateAddress
 				chatInfoItem.BlockHeight = latestChat.BlockHeight
+
+				// Get group chat index
+				chatInfoItem.Index = -1
+				chatInfo, _ := chatDB.GetChatByPinId(latestChat.LastMessagePinId)
+				if chatInfo != nil {
+					chatInfoItem.Index = chatInfo.Index
+				}
 			}
 		} else if item.Type == "2" {
+			fmt.Printf("Private chat type, item: %+v\n", item)
 			// Private chat type, get latest private chat message
 			latestPrivateChat, err := privateDB.GetPrivateChatByPinId(item.LastMessagePinId)
 			if err != nil {
@@ -795,7 +938,18 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.CreateAddress = latestPrivateChat.FromAddress
 				chatInfoItem.BlockHeight = latestPrivateChat.BlockHeight
 				chatInfoItem.Chain = latestPrivateChat.Chain
-				chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfo(latestPrivateChat.FromAddress)
+				if item.Address != "" {
+					chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfo(item.Address)
+				} else if item.MetaId != "" {
+					chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfoInfoByMetaId(item.MetaId)
+					if chatInfoItem.UserInfo != nil {
+						chatInfoItem.Address = chatInfoItem.UserInfo.Address
+					}
+				} else {
+					chatInfoItem.UserInfo = nil
+				}
+				// Get private chat index
+				chatInfoItem.Index = latestPrivateChat.Index
 			}
 		}
 
@@ -816,14 +970,15 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	}
 
 	var chats []*models.TalkPrivateChatV3
+	var nextTimestamp int64
 	var err error
 
 	if req.Timestamp > 0 {
 		// Get private chat records by timestamp range
-		chats, err = privateDB.GetPrivateChatsByMetaIdsAndTimestampRange(req.MetaId, req.OtherMetaId, req.Timestamp, req.Size)
+		chats, nextTimestamp, err = privateDB.GetPrivateChatsByMetaIdsAndTimestampRange(req.MetaId, req.OtherMetaId, req.Timestamp, req.Size)
 	} else {
 		// Get latest private chat records
-		chats, err = privateDB.GetLatestPrivateChatsByMetaIds(req.MetaId, req.OtherMetaId, req.Size)
+		chats, nextTimestamp, err = privateDB.GetLatestPrivateChatsByMetaIds(req.MetaId, req.OtherMetaId, req.Size)
 	}
 
 	if err != nil {
@@ -833,29 +988,31 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 
 	// Convert to response format
 	var chatItems []*respond.PrivateChatItem
-	var nextTimestamp int64 = 0
 
-	for i, chat := range chats {
+	for _, chat := range chats {
 		chatItem := &respond.PrivateChatItem{
-			From:        chat.From,
-			To:          chat.To,
-			TxId:        chat.TxId,
-			PinId:       chat.PinId,
-			MetaId:      chat.From, // Message creator MetaId
-			Address:     chat.FromAddress,
-			UserInfo:    common_service.FetchMetaIDUserInfo(chat.FromAddress),
-			NickName:    "", // Need to get from user info
-			Protocol:    chat.Protocol,
-			Content:     chat.Content,
-			ContentType: chat.ContentType,
-			Encryption:  chat.Encryption,
-			ChatType:    int64(chat.ChatType),
-			ReplyPin:    chat.ReplyPin,
-			ReplyInfo:   nil,
-			RedMetaId:   "",
-			Timestamp:   chat.Timestamp,
-			Chain:       chat.Chain,
-			BlockHeight: chat.BlockHeight,
+			From:         chat.From,
+			FromUserInfo: common_service.FetchMetaIDUserInfoInfoByMetaId(chat.From),
+			To:           chat.To,
+			ToUserInfo:   common_service.FetchMetaIDUserInfoInfoByMetaId(chat.To),
+			TxId:         chat.TxId,
+			PinId:        chat.PinId,
+			MetaId:       chat.From, // Message creator MetaId
+			Address:      chat.FromAddress,
+			UserInfo:     common_service.FetchMetaIDUserInfo(chat.FromAddress),
+			NickName:     "", // Need to get from user info
+			Protocol:     chat.Protocol,
+			Content:      chat.Content,
+			ContentType:  chat.ContentType,
+			Encryption:   chat.Encryption,
+			ChatType:     int64(chat.ChatType),
+			ReplyPin:     chat.ReplyPin,
+			ReplyInfo:    nil,
+			RedMetaId:    "",
+			Timestamp:    chat.Timestamp,
+			Chain:        chat.Chain,
+			BlockHeight:  chat.BlockHeight,
+			Index:        chat.Index,
 		}
 
 		// Handle reply message
@@ -878,6 +1035,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 					ChatType:    replyChat.ChatType,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,
+					Index:       replyChat.Index,
 				}
 				chatItem.RedMetaId = replyChat.From
 			}
@@ -885,10 +1043,10 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 
 		chatItems = append(chatItems, chatItem)
 
-		// Record next message timestamp (for pagination)
-		if i == len(chats)-1 && len(chats) > 0 {
-			nextTimestamp = chat.Timestamp
-		}
+		// // Record next message timestamp (for pagination)
+		// if i == len(chats)-1 && len(chats) > 0 {
+		// 	nextTimestamp = chat.Timestamp
+		// }
 	}
 
 	return &respond.PrivateChatResponse{
@@ -906,4 +1064,94 @@ func wsForGroupChatItem(chat *models.TalkGroupChatV3) error {
 func wsForPrivateChatItem(chat *models.TalkPrivateChatV3) error {
 	wsPostPrivateMsg(chat)
 	return nil
+}
+
+// GetUserInfoByAddress Get user information by address
+func GetUserInfoByAddress(address string) (*respond.UserInfoResponse, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address is empty")
+	}
+
+	userInfo := common_service.FetchMetaIDUserInfo(address)
+	if userInfo == nil {
+		return nil, fmt.Errorf("user info not found for address: %s", address)
+	}
+
+	if userInfo.ChatPublicKey == "" {
+		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
+		if chatPublicKeyInfo != nil {
+			userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+		}
+	}
+
+	return &respond.UserInfoResponse{
+		Address:  address,
+		MetaId:   userInfo.Metaid,
+		UserInfo: userInfo,
+	}, nil
+}
+
+// GetUserInfoByMetaId Get user information by metaId
+func GetUserInfoByMetaId(metaId string) (*respond.UserInfoResponse, error) {
+	if metaId == "" {
+		return nil, fmt.Errorf("metaId is empty")
+	}
+
+	userInfo := common_service.FetchMetaIDUserInfoInfoByMetaId(metaId)
+	if userInfo == nil {
+		return nil, fmt.Errorf("user info not found for metaId: %s", metaId)
+	}
+
+	if userInfo.ChatPublicKey == "" {
+		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
+		if chatPublicKeyInfo != nil {
+			userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+		}
+	}
+
+	return &respond.UserInfoResponse{
+		MetaId:   metaId,
+		Address:  userInfo.Address,
+		UserInfo: userInfo,
+	}, nil
+}
+
+// GetCurrentMaxGroupChatIndex Get current maximum index for a group
+func GetCurrentMaxGroupChatIndex(groupId string) (*respond.MaxIndexResponse, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId is empty")
+	}
+
+	maxIndex, err := chatDB.GetCurrentMaxGroupChatIndex(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &respond.MaxIndexResponse{
+		GroupId:  groupId,
+		MaxIndex: maxIndex,
+	}, nil
+}
+
+// GetCurrentMaxPrivateChatIndex Get current maximum index for a private conversation
+func GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId string) (*respond.MaxIndexResponse, error) {
+	if fromMetaId == "" {
+		return nil, fmt.Errorf("fromMetaId is empty")
+	}
+	if toMetaId == "" {
+		return nil, fmt.Errorf("toMetaId is empty")
+	}
+
+	maxIndex, err := privateDB.GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &respond.MaxIndexResponse{
+		FromMetaId: fromMetaId,
+		ToMetaId:   toMetaId,
+		MaxIndex:   maxIndex,
+	}, nil
 }

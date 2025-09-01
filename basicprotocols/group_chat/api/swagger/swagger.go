@@ -146,6 +146,25 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/group-chat-list-v3": {
+            "get": {
+                "description": "Get chat records of a group using GetChatsByGroupIdAndTimestampRange3 (test version with IterOptions for improved performance)",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group chat records (test version with IterOptions)",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": false},
+                    {"type": "integer", "description": "Cursor, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "integer", "description": "Timestamp for pagination", "name": "timestamp", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return group chat records", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/private-chat-list": {
             "get": {
                 "description": "Get private chat records between two users, support timestamp pagination",
@@ -198,6 +217,56 @@ func SetupSwagger(router *gin.Engine) {
                 ],
                 "responses": {
                     "200": {"description": "Successfully return group member information", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/user-info": {
+            "get": {
+                "description": "Get user information by address or metaId. If address is provided, it will be used; if address is empty but metaId is provided, metaId will be used; if both are empty, an error will be returned.",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get user info by address or metaId",
+                "parameters": [
+                    {"type": "string", "description": "User address", "name": "address", "in": "query", "required": false},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return user information", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/max-group-chat-index": {
+            "get": {
+                "description": "Get the current maximum index for a group's chat records",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get current maximum group chat index",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return maximum group chat index", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/max-private-chat-index": {
+            "get": {
+                "description": "Get the current maximum index for a private conversation between two users",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get current maximum private chat index",
+                "parameters": [
+                    {"type": "string", "description": "From user MetaId", "name": "fromMetaId", "in": "query", "required": true},
+                    {"type": "string", "description": "To user MetaId", "name": "toMetaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return maximum private chat index", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
@@ -625,6 +694,263 @@ func SetupSwagger(router *gin.Engine) {
                 ],
                 "responses": {
                     "200": {"description": "Query result", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/chat/index/group": {
+            "get": {
+                "description": "Get TalkGroupChatIndexCollection list with cursor pagination and reverse order",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group chat index list",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20},
+                    {"type": "string", "description": "Group ID for filtering (optional)", "name": "groupId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Group chat index list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/chat/index/group/keys": {
+            "get": {
+                "description": "Get TalkGroupChatIndexCollection key list with cursor pagination",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group chat index keys",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20},
+                    {"type": "string", "description": "Group ID for filtering (optional)", "name": "groupId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Group chat index keys", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/chat/index/private": {
+            "get": {
+                "description": "Get TalkPrivateChatIndexCollection list with cursor pagination and reverse order",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get private chat index list",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20},
+                    {"type": "string", "description": "From MetaId to To MetaId for filtering (format: fromMetaId_toMetaId, optional)", "name": "fromTo", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Private chat index list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/chat/timestamp2/out": {
+            "get": {
+                "description": "Get TalkGroupChatTimestamp2OutCollection list with cursor pagination and reverse order",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group chat timestamp2 out list",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20},
+                    {"type": "string", "description": "Group ID for filtering (optional)", "name": "groupId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Group chat timestamp2 out list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/open/list": {
+            "get": {
+                "description": "Get detailed open lucky bag list with grab state, user info, and lucky bag details",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get detailed open lucky bag list by lucky bag PinId",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag PinId", "name": "luckyBagPinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Detailed query result with grab state, user info, and lucky bag details", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/update-validation": {
+            "get": {
+                "description": "Update lucky bag validation counts and lists by lucky bag PinId",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Update lucky bag validation",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag PinId", "name": "luckyBagPinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Update result with validation counts and lists", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/process-expired": {
+            "get": {
+                "description": "Process a specific lucky bag by pinId as if it were expired, simulating the expired lucky bag processing logic",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Process expired lucky bag by pinId",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Process result with source collection, target collection, and new state", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/collection/list": {
+            "get": {
+                "description": "Get lucky bag collection list with pagination support for pending, completed, timeout residue, error pending, and error timeout residue collections",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag collection list with pagination",
+                "parameters": [
+                    {"type": "string", "description": "Collection name (talk_group_lucky_bag_pin_pending, talk_group_lucky_bag_pin_completed, talk_group_lucky_bag_pin_timeout_residue, talk_group_lucky_bag_pin_err_pending, talk_group_lucky_bag_pin_err_timeout_residue)", "name": "collection", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Lucky bag collection list with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/collection/pinid": {
+            "get": {
+                "description": "Get lucky bag collection data by specific pinId from any of the lucky bag collections",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag collection data by specific pinId",
+                "parameters": [
+                    {"type": "string", "description": "Collection name (talk_group_lucky_bag_pin_pending, talk_group_lucky_bag_pin_completed, talk_group_lucky_bag_pin_timeout_residue, talk_group_lucky_bag_pin_err_pending, talk_group_lucky_bag_pin_err_timeout_residue)", "name": "collection", "in": "query", "required": true},
+                    {"type": "string", "description": "Lucky bag PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Lucky bag collection data by pinId", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/queue/list": {
+            "get": {
+                "description": "Get lucky bag queue collection list with pagination support for open lucky bag queue and residue lucky bag queue collections",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag queue collection list with pagination",
+                "parameters": [
+                    {"type": "string", "description": "Collection name (talk_group_open_lucky_bag_queue, talk_group_residue_lucky_bag_queue)", "name": "collection", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Lucky bag queue collection list with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/residue-luckybag/pinid": {
+            "get": {
+                "description": "Get residue lucky bag data by specific pinId from TalkGroupResidueLuckyBagPinCollection",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get residue lucky bag data by pinId",
+                "parameters": [
+                    {"type": "string", "description": "Residue lucky bag PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Residue lucky bag data", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/residue-luckybag/list": {
+            "get": {
+                "description": "Get residue lucky bag collection list with pagination support",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get residue lucky bag list with pagination",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Residue lucky bag collection list with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/private-chat/timestamp/list": {
+            "get": {
+                "description": "Get private chat timestamp collection list with pagination support for specific from and to users",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get private chat timestamp list with pagination",
+                "parameters": [
+                    {"type": "string", "description": "From user MetaId", "name": "from", "in": "query", "required": true},
+                    {"type": "string", "description": "To user MetaId", "name": "to", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Private chat timestamp collection list with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/metaid/join": {
+            "get": {
+                "description": "Query TalkGroupMetaIdJoinCollection data by metaId",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get MetaId join list by metaId",
+                "parameters": [
+                    {"type": "string", "description": "MetaId", "name": "metaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "MetaId join list with detailed information", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/metaid/context": {
+            "get": {
+                "description": "Get TalkMetaIdContextListCollection data by metaId",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get MetaId context list by metaId",
+                "parameters": [
+                    {"type": "string", "description": "MetaId", "name": "metaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "MetaId context list data", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }

@@ -5,6 +5,7 @@ import (
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/service"
+	lucky_bag_service "manindexer/basicprotocols/group_chat/service"
 	"net/http"
 	"strconv"
 	"time"
@@ -762,4 +763,537 @@ func GetLuckyBagLockStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(stats, t))
+}
+
+// @Summary Get group chat index list
+// @Description Get TalkGroupChatIndexCollection list with cursor pagination and reverse order
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param groupId query string false "Group ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group chat index list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/index/group [get]
+func GetGroupChatIndexList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	groupId := ctx.Query("groupId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChatIndexList(cursor, size, groupId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
+// @Summary Get private chat index list
+// @Description Get TalkPrivateChatIndexCollection list with cursor pagination and reverse order
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param fromTo query string false "From MetaId to To MetaId for filtering (format: fromMetaId_toMetaId, optional)"
+// @Success 200 {object} map[string]interface{} "Private chat index list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/index/private [get]
+func GetPrivateChatIndexList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	fromTo := ctx.Query("fromTo")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetPrivateChatIndexList(cursor, size, fromTo)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
+// @Summary Get group chat index keys
+// @Description Get TalkGroupChatIndexCollection key list with cursor pagination
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param groupId query string false "Group ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group chat index keys"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/index/group/keys [get]
+func GetGroupChatIndexKeys(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	groupId := ctx.Query("groupId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChatIndexKeys(cursor, size, groupId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
+// @Summary Get group chat timestamp2 out list
+// @Description Get TalkGroupChatTimestamp2OutCollection list with cursor pagination and reverse order
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param groupId query string false "Group ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group chat timestamp2 out list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/timestamp2/out [get]
+func GetGroupChatTimestamp2OutList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	groupId := ctx.Query("groupId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChatTimestamp2OutList(cursor, size, groupId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
+// @Summary Get detailed open lucky bag list by lucky bag PinId
+// @Description Get detailed open lucky bag list with grab state, user info, and lucky bag details
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param luckyBagPinId query string true "Lucky bag PinId"
+// @Success 200 {object} map[string]interface{} "Detailed query result with grab state, user info, and lucky bag details"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/open/list [get]
+func GetOpenLuckyBagList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	luckyBagPinId := ctx.Query("luckyBagPinId")
+	if luckyBagPinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("luckyBagPinId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := service.GetDetailedOpenLuckyBagList(luckyBagPinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get MetaId join list by metaId
+// @Description Query TalkGroupMetaIdJoinCollection data by metaId
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param metaId query string true "MetaId"
+// @Success 200 {object} map[string]interface{} "MetaId join list with detailed information"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/metaid/join [get]
+func GetMetaIdJoinList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	metaId := ctx.Query("metaId")
+	if metaId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := service.QueryMetaIdJoinList(metaId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Update lucky bag validation
+// @Description Update lucky bag validation counts and lists by lucky bag PinId
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param luckyBagPinId query string true "Lucky bag PinId"
+// @Success 200 {object} map[string]interface{} "Update result with validation counts and lists"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/update-validation [get]
+func UpdateLuckyBagValidation(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	luckyBagPinId := ctx.Query("luckyBagPinId")
+	if luckyBagPinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("luckyBagPinId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := lucky_bag_service.UpdateLuckyBagValidation(luckyBagPinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Process expired lucky bag by pinId
+// @Description Process a specific lucky bag by pinId as if it were expired, simulating the expired lucky bag processing logic
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param pinId query string true "Lucky bag PinId"
+// @Success 200 {object} map[string]interface{} "Process result with source collection, target collection, and new state"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/process-expired [get]
+func ProcessExpiredLuckyBagByPinId(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	pinId := ctx.Query("pinId")
+	if pinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := lucky_bag_service.ProcessExpiredLuckyBagByPinId(pinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get lucky bag queue collection list with pagination
+// @Description Get lucky bag queue collection list with pagination support for open lucky bag queue and residue lucky bag queue collections
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param collection query string true "Collection name (talk_group_open_lucky_bag_queue, talk_group_residue_lucky_bag_queue)"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Lucky bag queue collection list with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/queue/list [get]
+func GetLuckyBagQueueList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	collection := ctx.Query("collection")
+	if collection == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("collection parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetLuckyBagQueueList(collection, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get residue lucky bag data by pinId
+// @Description Get residue lucky bag data by specific pinId from TalkGroupResidueLuckyBagPinCollection
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param pinId query string true "Residue lucky bag PinId"
+// @Success 200 {object} map[string]interface{} "Residue lucky bag data"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/residue-luckybag/pinid [get]
+func GetResidueLuckyBagByPinId(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	pinId := ctx.Query("pinId")
+	if pinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := service.GetResidueLuckyBagByPinId(pinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get residue lucky bag list with pagination
+// @Description Get residue lucky bag collection list with pagination support
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Residue lucky bag collection list with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/residue-luckybag/list [get]
+func GetResidueLuckyBagList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetResidueLuckyBagList(cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get private chat timestamp list with pagination
+// @Description Get private chat timestamp collection list with pagination support for specific from and to users
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param from query string true "From user MetaId"
+// @Param to query string true "To user MetaId"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Private chat timestamp collection list with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/private-chat/timestamp/list [get]
+func GetPrivateChatTimestampList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	from := ctx.Query("from")
+	if from == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("from parameter cannot be empty"), t, 1))
+		return
+	}
+
+	to := ctx.Query("to")
+	if to == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("to parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetPrivateChatTimestampList(from, to, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get lucky bag collection list with pagination
+// @Description Get lucky bag collection list with pagination support for pending, completed, timeout residue, error pending, and error timeout residue collections
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param collection query string true "Collection name (talk_group_lucky_bag_pin_pending, talk_group_lucky_bag_pin_completed, talk_group_lucky_bag_pin_timeout_residue, talk_group_lucky_bag_pin_err_pending, talk_group_lucky_bag_pin_err_timeout_residue)"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Lucky bag collection list with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/collection/list [get]
+func GetLuckyBagCollectionList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	collection := ctx.Query("collection")
+	if collection == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("collection parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetLuckyBagCollectionList(collection, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get lucky bag collection data by specific pinId
+// @Description Get lucky bag collection data by specific pinId from any of the lucky bag collections
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param collection query string true "Collection name (talk_group_lucky_bag_pin_pending, talk_group_lucky_bag_pin_completed, talk_group_lucky_bag_pin_timeout_residue, talk_group_lucky_bag_pin_err_pending, talk_group_lucky_bag_pin_err_timeout_residue)"
+// @Param pinId query string true "Lucky bag PinId"
+// @Success 200 {object} map[string]interface{} "Lucky bag collection data by pinId"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/luckybag/collection/pinid [get]
+func GetLuckyBagCollectionByPinId(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	collection := ctx.Query("collection")
+	if collection == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("collection parameter cannot be empty"), t, 1))
+		return
+	}
+
+	pinId := ctx.Query("pinId")
+	if pinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := service.GetLuckyBagCollectionByPinId(collection, pinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get MetaId context list by metaId
+// @Description Get TalkMetaIdContextListCollection data by metaId
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param metaId query string true "MetaId"
+// @Success 200 {object} map[string]interface{} "MetaId context list data"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/metaid/context [get]
+func GetMetaIdContextListByMetaId(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	metaId := ctx.Query("metaId")
+	if metaId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	result, err := service.GetMetaIdContextListByMetaId(metaId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }

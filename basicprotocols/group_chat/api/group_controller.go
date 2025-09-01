@@ -579,3 +579,165 @@ func GetGroupChatListV2(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary Get group chat list (test version with IterOptions)
+// @Description Get chat records of a group using GetChatsByGroupIdAndTimestampRange3 (test version with IterOptions)
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param metaId query string false "User MetaId"
+// @Param cursor query int false "Cursor, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Param timestamp query int false "Timestamp for pagination"
+// @Tags Group Management
+// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "Successfully return group chat records"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Router /group-chat/group-chat-list-v3 [get]
+func GetGroupChatListV3(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupChatListRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			MetaId:  c.DefaultQuery("metaId", ""),
+			Cursor: func() int64 {
+				cursor, _ := strconv.ParseInt(c.DefaultQuery("cursor", "0"), 10, 64)
+				return cursor
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+			Timestamp: func() int64 {
+				timestamp, _ := strconv.ParseInt(c.DefaultQuery("timestamp", "0"), 10, 64)
+				return timestamp
+			}(),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchGroupChatListV3(req)
+	if err != nil {
+		log.Printf("Failed to fetch group chat list v3 for groupId %s: %v", req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get user info by address or metaId
+// @Description Get user information by address or metaId. If address is provided, it will be used; if address is empty but metaId is provided, metaId will be used; if both are empty, an error will be returned.
+// @Produce json
+// @Param address query string false "User address"
+// @Param metaId query string false "User MetaId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.UserInfoResponse} "Successfully return user information"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/user-info [get]
+func GetUserInfoByAddress(c *gin.Context) {
+	var (
+		t       = time.Now().UnixMilli()
+		address = c.DefaultQuery("address", "")
+		metaId  = c.DefaultQuery("metaId", "")
+	)
+
+	// Check if both address and metaId are empty
+	if address == "" && metaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("either address or metaId must be provided"), t, 1))
+		return
+	}
+
+	var response *respond.UserInfoResponse
+	var err error
+
+	// If address is provided, use it; otherwise use metaId
+	if address != "" {
+		response, err = service.GetUserInfoByAddress(address)
+		if err != nil {
+			log.Printf("Failed to get user info for address %s: %v", address, err)
+			c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+			return
+		}
+	} else {
+		// Use metaId when address is empty
+		response, err = service.GetUserInfoByMetaId(metaId)
+		if err != nil {
+			log.Printf("Failed to get user info for metaId %s: %v", metaId, err)
+			c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+			return
+		}
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get current maximum group chat index
+// @Description Get the current maximum index for a group's chat records
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.MaxIndexResponse} "Successfully return maximum group chat index"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/max-group-chat-index [get]
+func GetCurrentMaxGroupChatIndex(c *gin.Context) {
+	var (
+		t       = time.Now().UnixMilli()
+		groupId = c.DefaultQuery("groupId", "")
+	)
+
+	if groupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetCurrentMaxGroupChatIndex(groupId)
+	if err != nil {
+		log.Printf("Failed to get current max group chat index for groupId %s: %v", groupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get current maximum private chat index
+// @Description Get the current maximum index for a private conversation between two users
+// @Produce json
+// @Param fromMetaId query string true "From user MetaId"
+// @Param toMetaId query string true "To user MetaId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.MaxIndexResponse} "Successfully return maximum private chat index"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/max-private-chat-index [get]
+func GetCurrentMaxPrivateChatIndex(c *gin.Context) {
+	var (
+		t          = time.Now().UnixMilli()
+		fromMetaId = c.DefaultQuery("fromMetaId", "")
+		toMetaId   = c.DefaultQuery("toMetaId", "")
+	)
+
+	if fromMetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("fromMetaId is empty"), t, 1))
+		return
+	}
+
+	if toMetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("toMetaId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId)
+	if err != nil {
+		log.Printf("Failed to get current max private chat index for fromMetaId %s and toMetaId %s: %v", fromMetaId, toMetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

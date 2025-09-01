@@ -63,4 +63,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:7777/health || exit 1
 
 # Start command
-CMD ["./manindexer", "-test=0", "-chain=mvc", "-config=/man/config_testnet.toml"] 
+CMD ["./manindexer", "-test=0", "-chain=mvc,btc", "-config=/man/config_testnet.toml"] 

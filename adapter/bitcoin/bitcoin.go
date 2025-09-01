@@ -40,6 +40,7 @@ func (chain *BitcoinChain) InitChain() {
 	if err != nil {
 		panic(err)
 	}
+	log.Println("btc rpc  connect")
 }
 func (chain *BitcoinChain) GetBlock(blockHeight int64) (block interface{}, err error) {
 	blockhash, err := client.GetBlockHash(blockHeight)

@@ -25,6 +25,8 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		group.GET("/group-chat-list", GetGroupChatList)
 		// Get group chat records (new format)
 		group.GET("/group-chat-list-v2", GetGroupChatListV2)
+		// Get group chat records (test version with IterOptions)
+		group.GET("/group-chat-list-v3", GetGroupChatListV3)
 
 		// Get private chat records
 		group.GET("/private-chat-list", GetPrivateChatList)
@@ -34,6 +36,13 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Get group member info
 		group.GET("/group-person", GetGroupPerson)
+
+		// Get user info by address
+		group.GET("/user-info", GetUserInfoByAddress)
+
+		// Get current maximum chat index
+		group.GET("/max-group-chat-index", GetCurrentMaxGroupChatIndex)
+		group.GET("/max-private-chat-index", GetCurrentMaxPrivateChatIndex)
 
 		// Lucky bag related routes
 		// Get lucky bag info

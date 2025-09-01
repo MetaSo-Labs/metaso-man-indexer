@@ -34,8 +34,9 @@ func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
 	defer q.Close()
 	err := q.Connect(common.Config.Btc.ZmqHost)
 	if err != nil {
-		log.Println("ZmqRun:", err)
+		log.Println("[ZMQ]ZmqRun:", err)
 	}
+	log.Printf("btc zmq connect success\n")
 	q.SetSubscribe("rawtx")
 	q.SetTcpKeepalive(120)
 	for {
@@ -50,6 +51,7 @@ func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
 		// }
 		// zmqTx := &pin.ZmqReciveTx{Tx: msgTx.TxHash().String(), InTime: time.Now().Unix()}
 		// (*indexer.DbAdapter).SaveZmqReciveTx(zmqTx)
+		// log.Println("[ZMQ]btc zmq tx:", msgTx.TxHash().String())
 		pinInscriptions := indexer.CatchPinsByTx(&msgTx, 0, 0, "", "", 0)
 		if len(pinInscriptions) > 0 {
 			chanMsg <- pin.MempollChanMsg{PinList: pinInscriptions, Tx: &msgTx}

@@ -25,6 +25,7 @@ const (
 	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId and pinId_groupId
 	TalkGroupCommunityCollection   string = "talk_group_community"    // key: communityId_groupId
 
+	TalkGroupRemoveUserCollection string = "talk_group_remove_user" // key: groupId_pinId and pinId_groupId
 	TalkGroupMetaIdJoinCollection string = "talk_group_metaid_join" // key: metaId_groupId, value: []{joinPinId, joinType, joinTimestamp}
 	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId and pinId_groupId
 	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId and metaId_groupId
@@ -49,15 +50,29 @@ const (
 	TalkGroupChatTimestampOutCollection    string = "talk_group_chat_timestamp_out"     // key: groupId_timestamp，value: pinId_chatType_timestamp
 	TalkGroupChatTimestamp2Collection      string = "talk_group_chat_timestamp_2"       // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkGroupChatTimestamp2OutCollection   string = "talk_group_chat_timestamp_out_2"   // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
+	TalkGroupChatIndexCollection           string = "talk_group_chat_index"             // key: groupId_index，value: pinId_chatType_timestamp_isSet
+
+	// Lucky bag residue related databases
+	TalkGroupLuckyBagPinPendingCollection        string = "talk_group_lucky_bag_pin_pending"         // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinCompletedCollection      string = "talk_group_lucky_bag_pin_completed"       // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinTimeoutResidueCollection string = "talk_group_lucky_bag_pin_timeout_residue" // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinErrPendingCollection     string = "talk_group_lucky_bag_pin_err_pending"     // key: pinId，value: luckyBagPinId
+	// TalkGroupLuckyBagPinErrCompletedCollection      string = "talk_group_lucky_bag_pin_err_completed"       // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinErrTimeoutResidueCollection string = "talk_group_lucky_bag_pin_err_timeout_residue" // key: pinId，value: luckyBagPinId
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
 	TalkPrivateChatTimestampCollection    string = "talk_private_chat_timestamp"     // key: from_to_timestamp+number(6) and to_from_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkPrivateChatTimestampOutCollection string = "talk_private_chat_timestamp_out" // key: from_to_timestamp+number(6) and to_from_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat message data
+	TalkPrivateChatIndexCollection        string = "talk_private_chat_index"         // key: from_to_index，value: pinId_chatType_timestamp_isSet
 
 	// Version info
 	TalkVersionInfoCollection string = "talk_version_info" // key: version，value: version
+
+	// User info
+	TalkUserAddressChatPublicKeyCollection string = "talk_user_address_chat_public_key" // key: address，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
+	TalkUserMetaIdChatPublicKeyCollection  string = "talk_user_metaid_chat_public_key"  // key: metaId，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 )
 
 type Pebble struct{}
@@ -118,6 +133,10 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupPersonCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupPersonCollection, err)
+	}
+	err = open(TalkGroupRemoveUserCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupRemoveUserCollection, err)
 	}
 
 	// Initialize group MetaId join database
@@ -198,6 +217,37 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatTimestamp2OutCollection, err)
 	}
+	err = open(TalkGroupChatIndexCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatIndexCollection, err)
+	}
+
+	// Initialize lucky bag residue related databases
+	err = open(TalkGroupLuckyBagPinPendingCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinPendingCollection, err)
+	}
+	err = open(TalkGroupLuckyBagPinCompletedCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinCompletedCollection, err)
+	}
+	err = open(TalkGroupLuckyBagPinTimeoutResidueCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinTimeoutResidueCollection, err)
+	}
+	err = open(TalkGroupLuckyBagPinErrPendingCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrPendingCollection, err)
+	}
+	// err = open(TalkGroupLuckyBagPinErrCompletedCollection)
+	// if err != nil {
+	// 	return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrCompletedCollection, err)
+	// }
+	err = open(TalkGroupLuckyBagPinErrTimeoutResidueCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrTimeoutResidueCollection, err)
+	}
+
 	// Initialize private chat related databases
 	err = open(TalkPrivateChatPinCollection)
 	if err != nil {
@@ -215,11 +265,25 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatQueueCollection, err)
 	}
-
+	err = open(TalkPrivateChatIndexCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatIndexCollection, err)
+	}
 	// Initialize version info database
 	err = open(TalkVersionInfoCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkVersionInfoCollection, err)
+	}
+
+	// Initialize user info database
+	err = open(TalkUserAddressChatPublicKeyCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkUserAddressChatPublicKeyCollection, err)
+	}
+
+	err = open(TalkUserMetaIdChatPublicKeyCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkUserMetaIdChatPublicKeyCollection, err)
 	}
 
 	err = CheckAndMigrateDatabase()

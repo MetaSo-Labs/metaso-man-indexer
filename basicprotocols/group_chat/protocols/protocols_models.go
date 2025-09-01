@@ -307,6 +307,25 @@ type SimpleGroupResidueLuckyBag struct {
 	Type           string      `json:"type"`
 }
 
+/*
+*
+
+	{
+	"removeMetaid": "{the metaid of user that will be removed}",
+	"groupId": "{the groupId}",
+	"reason":"{why ban user}",
+	"timestamp":0
+	}
+
+*
+*/
+type SimpleGroupRemoveUser struct {
+	RemoveMetaid string      `json:"removeMetaid"`
+	GroupId      string      `json:"groupId"`
+	Reason       string      `json:"reason"`
+	Timestamp    interface{} `json:"timestamp"`
+}
+
 //private chat
 /*
 SimpleMsg
@@ -363,7 +382,13 @@ const (
 	MonitorSimpleGroupLuckyBag        = "SimpleGroupLuckyBag"
 	MonitorSimpleGroupOpenLuckyBag    = "SimpleGroupOpenLuckyBag"
 	MonitorSimpleGroupResidueLuckyBag = "SimpleGroupResidueLuckyBag"
+	MonitorSimpleGroupRemoveUser      = "SimpleGroupRemoveUser"
 
 	MonitorSimpleMsg     = "SimpleMsg"
 	MonitorSimpleFileMsg = "SimpleFileMsg"
+)
+
+// info
+const (
+	MonitorInfoChatpubkey = "chatpubkey"
 )

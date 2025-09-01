@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"manindexer/basicprotocols/group_chat/db"
+	"manindexer/basicprotocols/group_chat/service/common_service"
 	"strconv"
+	"strings"
 
 	"github.com/cockroachdb/pebble"
 )
@@ -269,6 +271,197 @@ func QueryResidueRedEnvelopePin(pinId string) (map[string]interface{}, error) {
 // Query all remaining lucky bags
 func QueryAllResidueRedEnvelopePin(limit int) ([]map[string]interface{}, error) {
 	return QueryAll(db.TalkGroupResidueLuckyBagPinCollection, limit)
+}
+
+// Query open lucky bag list by lucky bag PinId
+func QueryOpenLuckyBagList(luckyBagPinId string) (map[string]interface{}, error) {
+	return QueryByKey(db.TalkGroupOpenLuckyBagListCollection, luckyBagPinId)
+}
+
+// GetDetailedOpenLuckyBagList gets detailed open lucky bag list with grab state, user info, and lucky bag details
+func GetDetailedOpenLuckyBagList(luckyBagPinId string) (map[string]interface{}, error) {
+	// Get lucky bag details first
+	luckyBag, err := chatDB.GetLuckyBagByPinId(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lucky bag: %v", err)
+	}
+	if luckyBag == nil {
+		return nil, fmt.Errorf("lucky bag not found: %s", luckyBagPinId)
+	}
+
+	// Get open lucky bag list
+	openList, err := chatDB.GetOpenLuckyBagList(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get open lucky bag list: %v", err)
+	}
+
+	// Get residue lucky bag list
+	residueList, err := chatDB.GetResidueLuckyBagList(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get residue lucky bag list: %v", err)
+	}
+
+	// Build detailed response
+	response := map[string]interface{}{
+		"luckyBagPinId": luckyBagPinId,
+		"luckyBagInfo": map[string]interface{}{
+			"txId":             luckyBag.TxId,
+			"metaId":           luckyBag.MetaId,
+			"address":          luckyBag.Address,
+			"amount":           luckyBag.Amount,
+			"count":            luckyBag.Count,
+			"validCount":       luckyBag.ValidCount,
+			"payListCount":     len(luckyBag.PayList),
+			"luckyBagVouts":    luckyBag.LuckyBagVouts,
+			"payList":          luckyBag.PayList,
+			"errPayList":       luckyBag.ErrPayList,
+			"errLuckyBagVouts": luckyBag.ErrLuckyBagVouts,
+			"content":          luckyBag.Content,
+			"img":              luckyBag.Img,
+			"imgType":          luckyBag.ImgType,
+			"type":             luckyBag.Type,
+			"timestamp":        luckyBag.Timestamp,
+			"chain":            luckyBag.Chain,
+			"state":            luckyBag.State,
+		},
+		"totalCount":   len(openList.Items) + len(residueList.Items),
+		"openCount":    len(openList.Items),
+		"residueCount": len(residueList.Items),
+		"items":        []map[string]interface{}{},
+	}
+
+	// Process each open lucky bag item
+	for _, item := range openList.Items {
+		// Get detailed open lucky bag info
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(item.OpenPinId)
+		if err != nil {
+			// Skip this item if we can't get details
+			continue
+		}
+
+		// Get user info
+		userInfo := common_service.FetchMetaIDUserInfo(item.CreateAddress)
+
+		// Build detailed item
+		detailedItem := map[string]interface{}{
+			"openPinId":        item.OpenPinId,
+			"groupId":          item.GroupId,
+			"timestamp":        item.Timestamp,
+			"createMetaId":     item.CreateMetaId,
+			"createAddress":    item.CreateAddress,
+			"luckyBagOutIndex": item.LuckyBagOutIndex,
+			"userInfo":         userInfo,
+		}
+
+		// Add grab state details if available
+		if openLuckyBag != nil {
+			detailedItem["grabState"] = openLuckyBag.GrabState
+			detailedItem["grabTxId"] = openLuckyBag.GrabTxId
+			detailedItem["grabMsg"] = openLuckyBag.GrabMsg
+			detailedItem["amount"] = openLuckyBag.Amount
+			detailedItem["index"] = openLuckyBag.Index
+			detailedItem["isWithdraw"] = openLuckyBag.IsWithdraw
+			detailedItem["grabTimestamp"] = openLuckyBag.Timestamp
+		}
+
+		response["items"] = append(response["items"].([]map[string]interface{}), detailedItem)
+	}
+
+	// Process each residue lucky bag item
+	for _, item := range residueList.Items {
+		// Get detailed residue lucky bag info
+		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(item.ResiduePinId)
+		if err != nil {
+			// Skip this item if we can't get details
+			continue
+		}
+
+		// Get user info
+		userInfo := common_service.FetchMetaIDUserInfo(item.CreateAddress)
+
+		// Build detailed item
+		detailedItem := map[string]interface{}{
+			"residuePinId":         item.ResiduePinId,
+			"groupId":              item.GroupId,
+			"timestamp":            item.Timestamp,
+			"createMetaId":         item.CreateMetaId,
+			"createAddress":        item.CreateAddress,
+			"luckyBagOutIndexList": item.LuckyBagOutIndexList,
+			"userInfo":             userInfo,
+			"type":                 "residue", // Mark as residue type
+		}
+
+		// Add reclaim state details if available
+		if residueLuckyBag != nil {
+			detailedItem["reclaimState"] = residueLuckyBag.ReclaimState
+			detailedItem["reclaimTxId"] = residueLuckyBag.ReclaimTxId
+			detailedItem["reclaimMsg"] = residueLuckyBag.ReclaimMsg
+			detailedItem["amount"] = residueLuckyBag.Amount
+			detailedItem["usedList"] = residueLuckyBag.UsedList
+			detailedItem["reclaimTimestamp"] = residueLuckyBag.Timestamp
+		}
+
+		response["items"] = append(response["items"].([]map[string]interface{}), detailedItem)
+	}
+
+	return response, nil
+}
+
+// QueryMetaIdJoinList gets MetaId join list by metaId
+func QueryMetaIdJoinList(metaId string) (map[string]interface{}, error) {
+	// Query database directly using prefix
+	prefix := metaId + "_"
+	results, err := QueryByPrefix(db.TalkGroupMetaIdJoinCollection, prefix, 1000) // Use large limit to get all records
+	if err != nil {
+		return nil, fmt.Errorf("failed to query MetaId join list: %v", err)
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"metaId": metaId,
+		"items":  []map[string]interface{}{},
+	}
+
+	// Process each result
+	for _, result := range results {
+		// Parse the join list data
+		if value, ok := result["value"]; ok {
+			if joinListData, ok := value.(map[string]interface{}); ok {
+				if items, ok := joinListData["items"].([]interface{}); ok {
+					for _, item := range items {
+						if joinItem, ok := item.(map[string]interface{}); ok {
+							// Get user info for the join record
+							address := ""
+							if addr, ok := joinItem["address"].(string); ok {
+								address = addr
+							}
+							userInfo := common_service.FetchMetaIDUserInfo(address)
+
+							// Build detailed item
+							detailedItem := map[string]interface{}{
+								"joinPinId":     joinItem["joinPinId"],
+								"joinType":      joinItem["joinType"],
+								"joinTimestamp": joinItem["joinTimestamp"],
+								"groupState":    joinItem["groupState"],
+								"address":       address,
+								"referrer":      joinItem["referrer"],
+								"blockHeight":   joinItem["blockHeight"],
+								"chain":         joinItem["chain"],
+								"userInfo":      userInfo,
+							}
+
+							response["items"] = append(response["items"].([]map[string]interface{}), detailedItem)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add total count
+	response["totalCount"] = len(response["items"].([]map[string]interface{}))
+
+	return response, nil
 }
 
 // Statistics related methods
@@ -658,4 +851,873 @@ func GetLuckyBagLockStats() (map[string]interface{}, error) {
 	// Get lock statistics from ChatDB
 	stats := chatDB.GetLuckyBagLockStats()
 	return stats, nil
+}
+
+// GetGroupChatIndexList Get TalkGroupChatIndexCollection list with cursor pagination and reverse order
+func GetGroupChatIndexList(cursor, size int, groupId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChatIndexCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChatIndexCollection)
+	}
+
+	var results []map[string]interface{}
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if groupId != "" {
+		prefix := groupId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if groupId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get records in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Parse key: groupId_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		parsedGroupId := ""
+		index := ""
+		if len(keyParts) >= 2 {
+			parsedGroupId = keyParts[0]
+			// Remove leading zeros and get the actual index
+			indexStr := strings.TrimLeft(keyParts[1], "0")
+			if indexStr == "" {
+				indexStr = "0" // If all zeros, treat as 0
+			}
+			index = indexStr
+		}
+
+		// Parse value: pinId_chatType_timestamp_isSet
+		valueParts := strings.Split(value, "_")
+		pinId := ""
+		chatType := ""
+		timestamp := ""
+		isSet := ""
+		if len(valueParts) >= 4 {
+			pinId = valueParts[0]
+			chatType = valueParts[1]
+			timestamp = valueParts[2]
+			isSet = valueParts[3]
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":       key,
+			"value":     value,
+			"groupId":   parsedGroupId,
+			"index":     index,
+			"pinId":     pinId,
+			"chatType":  chatType,
+			"timestamp": timestamp,
+			"isSet":     isSet,
+		})
+	}
+
+	return map[string]interface{}{
+		"total":   total,
+		"cursor":  cursor,
+		"size":    size,
+		"results": results,
+	}, nil
+}
+
+// GetPrivateChatIndexList Get TalkPrivateChatIndexCollection list with cursor pagination and reverse order
+func GetPrivateChatIndexList(cursor, size int, fromTo string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkPrivateChatIndexCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkPrivateChatIndexCollection)
+	}
+
+	var results []map[string]interface{}
+	var iter *pebble.Iterator
+	var err error
+
+	// If fromTo is provided, use prefix filtering
+	if fromTo != "" {
+		prefix := fromTo + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if fromTo != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get records in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Parse key: fromMetaId_toMetaId_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		fromMetaId := ""
+		toMetaId := ""
+		index := ""
+		if len(keyParts) >= 3 {
+			fromMetaId = keyParts[0]
+			toMetaId = keyParts[1]
+			// Remove leading zeros and get the actual index
+			indexStr := strings.TrimLeft(keyParts[2], "0")
+			if indexStr == "" {
+				indexStr = "0" // If all zeros, treat as 0
+			}
+			index = indexStr
+		}
+
+		// Parse value: pinId_chatType_timestamp_isSet
+		valueParts := strings.Split(value, "_")
+		pinId := ""
+		chatType := ""
+		timestamp := ""
+		isSet := ""
+		if len(valueParts) >= 4 {
+			pinId = valueParts[0]
+			chatType = valueParts[1]
+			timestamp = valueParts[2]
+			isSet = valueParts[3]
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":        key,
+			"value":      value,
+			"fromMetaId": fromMetaId,
+			"toMetaId":   toMetaId,
+			"index":      index,
+			"pinId":      pinId,
+			"chatType":   chatType,
+			"timestamp":  timestamp,
+			"isSet":      isSet,
+		})
+	}
+
+	return map[string]interface{}{
+		"total":   total,
+		"cursor":  cursor,
+		"size":    size,
+		"results": results,
+	}, nil
+}
+
+// GetGroupChatIndexKeys Get TalkGroupChatIndexCollection key list with cursor pagination
+func GetGroupChatIndexKeys(cursor, size int, groupId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChatIndexCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChatIndexCollection)
+	}
+
+	var results []string
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if groupId != "" {
+		prefix := groupId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if groupId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get keys in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		// Process the key to remove zero-padding for better readability
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) >= 2 {
+			// Remove leading zeros from the index part
+			indexStr := strings.TrimLeft(keyParts[1], "0")
+			if indexStr == "" {
+				indexStr = "0" // If all zeros, treat as 0
+			}
+			processedKey := keyParts[0] + "_" + indexStr
+			results = append(results, processedKey)
+		} else {
+			results = append(results, key)
+		}
+	}
+
+	return map[string]interface{}{
+		"total":  total,
+		"cursor": cursor,
+		"size":   size,
+		"keys":   results,
+	}, nil
+}
+
+// GetGroupChatTimestamp2OutList Get TalkGroupChatTimestamp2OutCollection list with cursor pagination and reverse order
+func GetGroupChatTimestamp2OutList(cursor, size int, groupId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChatTimestamp2OutCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChatTimestamp2OutCollection)
+	}
+
+	var results []map[string]interface{}
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if groupId != "" {
+		prefix := groupId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if groupId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get records in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": value,
+		})
+	}
+
+	return map[string]interface{}{
+		"total":   total,
+		"cursor":  cursor,
+		"size":    size,
+		"results": results,
+	}, nil
+}
+
+// GetLuckyBagCollectionList get lucky bag collection list with pagination
+func GetLuckyBagCollectionList(collectionName string, cursor int, size int) (map[string]interface{}, error) {
+	dbInstance, exists := db.Pb[collectionName]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
+	}
+
+	// Validate collection name
+	validCollections := []string{
+		db.TalkGroupLuckyBagPinPendingCollection,
+		db.TalkGroupLuckyBagPinCompletedCollection,
+		db.TalkGroupLuckyBagPinTimeoutResidueCollection,
+		db.TalkGroupLuckyBagPinErrPendingCollection,
+		db.TalkGroupLuckyBagPinErrTimeoutResidueCollection,
+	}
+
+	isValid := false
+	for _, validCollection := range validCollections {
+		if collectionName == validCollection {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		return nil, fmt.Errorf("invalid collection name: %s", collectionName)
+	}
+
+	// Set default values
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	var results []map[string]interface{}
+	iter, err := dbInstance.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": collectionName,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+	}
+
+	return result, nil
+}
+
+// GetLuckyBagQueueList get lucky bag queue collection list with pagination
+func GetLuckyBagQueueList(collectionName string, cursor int, size int) (map[string]interface{}, error) {
+	dbInstance, exists := db.Pb[collectionName]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
+	}
+
+	// Validate collection name
+	validCollections := []string{
+		db.TalkGroupOpenLuckyBagQueueCollection,
+		db.TalkGroupResidueLuckyBagQueueCollection,
+	}
+
+	isValid := false
+	for _, validCollection := range validCollections {
+		if collectionName == validCollection {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		return nil, fmt.Errorf("invalid collection name: %s", collectionName)
+	}
+
+	// Set default values
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	var results []map[string]interface{}
+	iter, err := dbInstance.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": collectionName,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+	}
+
+	return result, nil
+}
+
+// GetResidueLuckyBagByPinId get residue lucky bag data by specific pinId
+func GetResidueLuckyBagByPinId(pinId string) (map[string]interface{}, error) {
+	// Query by pinId from TalkGroupResidueLuckyBagPinCollection
+	value, closer, err := db.Pb[db.TalkGroupResidueLuckyBagPinCollection].Get([]byte(pinId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"pinId":   pinId,
+				"found":   false,
+				"message": "Residue lucky bag not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"pinId": pinId,
+		"found": true,
+		"value": jsonData,
+	}
+
+	return result, nil
+}
+
+// GetResidueLuckyBagList get residue lucky bag collection list with pagination
+func GetResidueLuckyBagList(cursor int, size int) (map[string]interface{}, error) {
+	// Set default values
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	var results []map[string]interface{}
+	iter, err := db.Pb[db.TalkGroupResidueLuckyBagPinCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkGroupResidueLuckyBagPinCollection,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+	}
+
+	return result, nil
+}
+
+// GetPrivateChatTimestampList get private chat timestamp collection list with pagination
+func GetPrivateChatTimestampList(from, to string, cursor int, size int) (map[string]interface{}, error) {
+	// Set default values
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	var results []map[string]interface{}
+
+	// Construct prefix for filtering
+	fromToPrefix := from + "_" + to + "_"
+
+	// Create iterator with prefix bounds for efficient querying
+	iter, err := db.Pb[db.TalkPrivateChatTimestampCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(fromToPrefix),
+		UpperBound: []byte(fromToPrefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+
+	// Iterate through keys in reverse order starting from the prefix
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		key := string(iter.Key())
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkPrivateChatTimestampCollection,
+		"from":       from,
+		"to":         to,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+	}
+
+	return result, nil
+}
+
+// GetLuckyBagCollectionByPinId get lucky bag collection data by specific pinId
+func GetLuckyBagCollectionByPinId(collectionName, pinId string) (map[string]interface{}, error) {
+	dbInstance, exists := db.Pb[collectionName]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", collectionName)
+	}
+
+	// Validate collection name
+	validCollections := []string{
+		db.TalkGroupLuckyBagPinPendingCollection,
+		db.TalkGroupLuckyBagPinCompletedCollection,
+		db.TalkGroupLuckyBagPinTimeoutResidueCollection,
+		db.TalkGroupLuckyBagPinErrPendingCollection,
+		db.TalkGroupLuckyBagPinErrTimeoutResidueCollection,
+	}
+
+	isValid := false
+	for _, validCollection := range validCollections {
+		if collectionName == validCollection {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		return nil, fmt.Errorf("invalid collection name: %s", collectionName)
+	}
+
+	// Query by pinId
+	value, closer, err := dbInstance.Get([]byte(pinId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"collection": collectionName,
+				"pinId":      pinId,
+				"found":      false,
+				"message":    "PinId not found in collection",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"collection": collectionName,
+		"pinId":      pinId,
+		"found":      true,
+		"key":        pinId,
+		"value":      jsonData,
+	}
+
+	return result, nil
+}
+
+// GetMetaIdContextListByMetaId Get TalkMetaIdContextListCollection data by metaId
+func GetMetaIdContextListByMetaId(metaId string) (map[string]interface{}, error) {
+	if metaId == "" {
+		return nil, fmt.Errorf("metaId parameter cannot be empty")
+	}
+
+	// Query by metaId from TalkMetaIdContextListCollection
+	value, closer, err := db.Pb[db.TalkMetaIdContextListCollection].Get([]byte(metaId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"metaId":  metaId,
+				"found":   false,
+				"message": "MetaId context list not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"metaId": metaId,
+		"found":  true,
+		"value":  jsonData,
+	}
+
+	return result, nil
 }

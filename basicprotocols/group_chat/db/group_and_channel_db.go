@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/pin"
@@ -14,10 +15,12 @@ import (
 // Group database operations
 type GroupDB struct {
 	pb *Pebble
+	// make reference to chatDB
+	cdb *ChatDB
 }
 
-func NewGroupDB(pb *Pebble) *GroupDB {
-	return &GroupDB{pb: pb}
+func NewGroupDB(pb *Pebble, c *ChatDB) *GroupDB {
+	return &GroupDB{pb: pb, cdb: c}
 }
 
 // Save group info
@@ -244,6 +247,8 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 			return gdb.processGroupCreate(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupJoin) {
 			return gdb.processGroupJoin(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupRemoveUser) {
+			return gdb.processGroupRemoveUser(pin)
 		}
 	case "modify":
 		// Check ParentPath
@@ -509,7 +514,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 			}
 
 			// Add join record to MetaId join list
-			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
+			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, "", "")
 			if err != nil {
 				return err
 			}
@@ -537,7 +542,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				}
 
 				// Add join record to MetaId join list
-				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer)
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, "", "")
 				if err != nil {
 					return err
 				}
@@ -555,7 +560,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 				}
 
 				// Add leave record to MetaId join list (state is out)
-				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer)
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer, "", "")
 				if err != nil {
 					return err
 				}
@@ -609,7 +614,7 @@ func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pi
 	}
 
 	// Add creator join record to MetaId join list
-	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "")
+	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "", "", "")
 	if err != nil {
 		return err
 	}
@@ -706,6 +711,11 @@ func (gdb *GroupDB) getGroupLatestChat(groupId string) (*models.TalkGroupLatestC
 
 // Initialize user's group list
 func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
+	//add lock
+	mutex := GetMetaIdMutex(metaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// First get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
@@ -819,6 +829,11 @@ func (gdb *GroupDB) initGroupMetaIdJoinList(metaId, groupId string, pin *pin.Pin
 
 // Update user's group list (add group)
 func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin.PinInscription) error {
+	//add lock
+	mutex := GetMetaIdMutex(metaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// Get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
@@ -896,6 +911,11 @@ func (gdb *GroupDB) addGroupToMetaIdContextList(metaId, groupId string, pin *pin
 
 // Remove group from user's group list
 func (gdb *GroupDB) removeGroupFromMetaIdContextList(metaId, groupId string) error {
+	//add lock
+	mutex := GetMetaIdMutex(metaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// Get existing group list
 	existingList, err := gdb.getMetaIdContextList(metaId)
 	if err != nil {
@@ -1323,6 +1343,8 @@ type GroupMetaIdJoinItem struct {
 	Referrer      string           `json:"referrer"`      // Referrer
 	BlockHeight   int64            `json:"blockHeight"`   // Block height
 	Chain         string           `json:"chain"`         // Chain type
+	ByMetaId      string           `json:"byMetaId"`      // By MetaId
+	ByAddress     string           `json:"byAddress"`     // By Address
 }
 
 // Group MetaId join list
@@ -1365,7 +1387,15 @@ func (gdb *GroupDB) saveGroupMetaIdJoinList(joinList *GroupMetaIdJoinList, group
 }
 
 // Add group join record to user's join list
-func (gdb *GroupDB) addGroupJoinToMetaIdList(metaId, groupId, pinId, joinType string, pin *pin.PinInscription, groupState models.RoomState, referrer string) error {
+func (gdb *GroupDB) addGroupJoinToMetaIdList(
+	metaId, groupId, pinId, joinType string,
+	pin *pin.PinInscription, groupState models.RoomState, referrer string,
+	byMetaId, byAddress string) error {
+	// Add lock for TalkGroupMetaIdJoinCollection operations
+	mutex := GetGroupMetaIdJoinMutex(metaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// Get existing join list
 	existingList, err := gdb.getGroupMetaIdJoinList(metaId)
 	if err != nil {
@@ -1382,6 +1412,8 @@ func (gdb *GroupDB) addGroupJoinToMetaIdList(metaId, groupId, pinId, joinType st
 		Referrer:      referrer,
 		BlockHeight:   pin.GenesisHeight,
 		Chain:         pin.ChainName,
+		ByMetaId:      byMetaId,
+		ByAddress:     byAddress,
 	}
 
 	// Check if group record already exists
@@ -1418,4 +1450,231 @@ func (gdb *GroupDB) sortGroupJoinListByTimestamp(joinList *GroupMetaIdJoinList) 
 			}
 		}
 	}
+}
+
+// Process group remove user
+func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription) error {
+	// Parse protocol data
+	var simpleGroupRemoveUser protocols.SimpleGroupRemoveUser
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupRemoveUser)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupRemoveUser.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the removal is the group creator
+	if group.CreateUserAddress != pin.CreateAddress {
+		return errors.New("only group creator can remove users")
+	}
+
+	if simpleGroupRemoveUser.RemoveMetaid == group.CreateUserMetaId {
+		return errors.New("cannot remove group creator")
+	}
+
+	// Get the address of the user being removed
+	removeUserAddress, _ := gdb.getUserAddressByMetaId(simpleGroupRemoveUser.RemoveMetaid)
+
+	// Create remove user model
+	removeUser := &models.TalkGroupRemoveUserModel{
+		GroupId:         simpleGroupRemoveUser.GroupId,
+		RemoveMetaId:    simpleGroupRemoveUser.RemoveMetaid,
+		RemoveAddress:   removeUserAddress,
+		RemoveReason:    simpleGroupRemoveUser.Reason,
+		RemoveByMetaId:  pin.CreateMetaId,
+		RemoveByAddress: pin.CreateAddress,
+		TxId:            pin.Id[:len(pin.Id)-2], // Remove last two characters
+		PinId:           pin.Id,
+		Chain:           pin.ChainName,
+		BlockHeight:     pin.GenesisHeight,
+		ConfirmState:    0,
+		Timestamp:       pin.Timestamp,
+	}
+
+	// Save remove user record
+	err = gdb.SaveGroupRemoveUser(removeUser)
+	if err != nil {
+		return err
+	}
+
+	// Remove user from group member list
+	err = gdb.DeleteGroupPerson(simpleGroupRemoveUser.GroupId, simpleGroupRemoveUser.RemoveMetaid)
+	if err != nil {
+		return err
+	}
+
+	// Remove from user's group list
+	err = gdb.removeGroupFromMetaIdContextList(simpleGroupRemoveUser.RemoveMetaid, simpleGroupRemoveUser.GroupId)
+	if err != nil {
+		return err
+	}
+
+	// Add remove record to user's join list
+	err = gdb.addGroupJoinToMetaIdList(
+		simpleGroupRemoveUser.RemoveMetaid, simpleGroupRemoveUser.GroupId, pin.Id, "remove",
+		pin, models.RoomStateOut, "",
+		pin.CreateMetaId, pin.CreateAddress,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Generate system message for user removal
+	err = gdb.generateRemoveUserSystemMessage(
+		simpleGroupRemoveUser.GroupId,
+		simpleGroupRemoveUser.RemoveMetaid,
+		removeUserAddress,
+		simpleGroupRemoveUser.Reason,
+		pin.CreateMetaId,
+		pin.CreateAddress,
+		pin,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Save group remove user record
+func (gdb *GroupDB) SaveGroupRemoveUser(removeUser *models.TalkGroupRemoveUserModel) error {
+	data, err := json.Marshal(removeUser)
+	if err != nil {
+		return err
+	}
+
+	// Use GroupId_PinId as primary key
+	key1 := []byte(removeUser.GroupId + "_" + removeUser.PinId)
+	err = Pb[TalkGroupRemoveUserCollection].Set(key1, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Use PinId_GroupId as primary key
+	key2 := []byte(removeUser.PinId + "_" + removeUser.GroupId)
+	return Pb[TalkGroupRemoveUserCollection].Set(key2, data, pebble.Sync)
+}
+
+// Get remove user record by GroupId and PinId
+func (gdb *GroupDB) GetGroupRemoveUserByGroupIdAndPinId(groupId, pinId string) (*models.TalkGroupRemoveUserModel, error) {
+	key := []byte(groupId + "_" + pinId)
+	value, closer, err := Pb[TalkGroupRemoveUserCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var removeUser models.TalkGroupRemoveUserModel
+	err = json.Unmarshal(value, &removeUser)
+	if err != nil {
+		return nil, err
+	}
+
+	return &removeUser, nil
+}
+
+// Get remove user record by PinId and GroupId
+func (gdb *GroupDB) GetGroupRemoveUserByPinIdAndGroupId(pinId, groupId string) (*models.TalkGroupRemoveUserModel, error) {
+	key := []byte(pinId + "_" + groupId)
+	value, closer, err := Pb[TalkGroupRemoveUserCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var removeUser models.TalkGroupRemoveUserModel
+	err = json.Unmarshal(value, &removeUser)
+	if err != nil {
+		return nil, err
+	}
+
+	return &removeUser, nil
+}
+
+// Get user address by MetaId (helper method)
+func (gdb *GroupDB) getUserAddressByMetaId(metaId string) (string, error) {
+	// This is a helper method to get user address by MetaId
+	// In a real implementation, you might want to query a user database
+	// For now, we'll return an empty string as placeholder
+	// You can implement this based on your user management system
+	return "", nil
+}
+
+// Generate system message for user removal
+func (gdb *GroupDB) generateRemoveUserSystemMessage(
+	groupId string,
+	removeMetaId string,
+	removeAddress string,
+	removeReason string,
+	removeByMetaId string,
+	removeByAddress string,
+	pin *pin.PinInscription) error {
+
+	// make reference to chatDB
+	cdb := gdb.cdb
+	if cdb == nil {
+		return errors.New("chatDB is nil")
+	}
+
+	// Create a unique PinId for the system message
+	systemPinId := pin.Id
+
+	// Create system message content
+	content := fmt.Sprintf("User {%s} was removed from the group", removeMetaId)
+	if removeReason != "" {
+		content += fmt.Sprintf(" (Reason: [%s])", removeReason)
+	}
+
+	// Create system chat message
+	systemChat := &models.TalkGroupChatV3{
+		GroupId:     groupId,
+		TxId:        pin.Id[:len(pin.Id)-2], // Remove last two characters
+		PinId:       systemPinId,
+		MetaId:      removeByMetaId,  // Use the remover's MetaId as sender
+		Address:     removeByAddress, // Use the remover's address as sender
+		Protocol:    pin.Path,
+		Content:     content,
+		ContentType: "text/plain",
+		Encryption:  "",
+		ChatType:    models.ChatTypeRemove,    // Use the new remove type
+		InsideIndex: models.ChatInsideIndexIn, // System message is always "in"
+		ReplyPin:    "",
+		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+		Index:       -1, // Default index
+	}
+
+	// Save system message to database
+	err := cdb.SaveChat(systemChat)
+	if err != nil {
+		return err
+	}
+
+	// Save timestamp index with state
+	err = cdb.SaveChatTimestampWithState(systemChat)
+	if err != nil {
+		return err
+	}
+
+	// Enqueue message for asynchronous processing
+	err = cdb.EnqueueChatMessage(systemChat)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

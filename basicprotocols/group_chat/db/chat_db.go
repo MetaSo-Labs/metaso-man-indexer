@@ -7,6 +7,7 @@ import (
 	"log"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
+	"manindexer/common"
 	"manindexer/pin"
 	"math"
 	"math/rand"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/cockroachdb/pebble"
 )
@@ -33,6 +36,8 @@ type QueueChatMessage struct {
 type ChatDB struct {
 	pb                   *Pebble
 	luckyBagListMutexMap sync.Map
+	processingMutex      sync.Mutex
+	isProcessing         bool
 }
 
 // luckyBagMutexItem lock item
@@ -213,7 +218,15 @@ func (cdb *ChatDB) saveChatTimestamp2WithCollection(chat *models.TalkGroupChatV3
 	// Construct value: pinId_chatType_timestamp_number
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + randomNum
 
-	return Pb[collection].Set([]byte(key), []byte(value), pebble.Sync)
+	fmt.Printf("[CHAT_DB]saveChatTimestamp2WithCollection[%s][%s]: %s, %s\n", collection, chat.Chain, key, value)
+
+	err := Pb[collection].Set([]byte(key), []byte(value), pebble.Sync)
+	if err != nil {
+		fmt.Printf("[CHAT_DB]saveChatTimestamp2WithCollection[%s][%s] key:%s, value:%s, error: %s\n", collection, chat.Chain, key, value, err)
+		return err
+	}
+
+	return nil
 }
 
 // generateRandomNumber generates a random number with specified digits
@@ -402,6 +415,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 		// Extract timestamp from key (remove the last 6 digits which is the random number)
 		timestampStr := keyParts[1]
 		timestampKey := timestampStr
+		timestampKeyInt, _ := strconv.ParseInt(timestampKey, 10, 64)
 		if len(timestampStr) > 6 {
 			timestampStr = timestampStr[:len(timestampStr)-6]
 		}
@@ -432,11 +446,91 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 			continue
 		}
 
-		if chat.Timestamp > nextTimestamp {
+		// if chat.Timestamp > nextTimestamp {
+		if nextTimestamp == 0 || timestampKeyInt < nextTimestamp {
 			// nextTimestamp = chat.Timestamp
-			nextTimestamp, _ = strconv.ParseInt(timestampKey, 10, 64)
+			nextTimestamp = timestampKeyInt
 		}
 
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, nextTimestamp, nil
+}
+
+// GetChatsByGroupIdAndTimestampRange3 is a test version that uses IterOptions to limit the range
+// This function handles the key format: groupId_timestamp+number(6)
+// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange3(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this group
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(groupId + "_"),
+		UpperBound: []byte(groupId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChatTimestamp2Collection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	nextTimestamp := int64(0)
+
+	// Construct query start key: groupId_startTimestamp
+	// Since key format is now groupId_timestamp+number(6), we can use proper range scanning
+	// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
+
+	// Start reverse iteration from specified timestamp (latest messages first)
+	// Use SeekLT to find the last key that is less than our startKey
+	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
+		key := string(iter.Key())
+		fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndTimestampRange3 key: %s\n", key)
+
+		// Parse key to extract timestamp
+		// Key format: groupId_timestamp+number(6)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
+		timestampStr := keyParts[1]
+		timestampKey := timestampStr
+		timestampKeyInt, _ := strconv.ParseInt(timestampKey, 10, 64)
+
+		// Skip messages after our start timestamp (since we're going backwards)
+		if timestampKeyInt > startTimestamp {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_number
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndTimestampRange3 timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if nextTimestamp == 0 || timestampKeyInt < nextTimestamp {
+			nextTimestamp = timestampKeyInt
+		}
 		// Add to results
 		chats = append(chats, chat)
 
@@ -767,6 +861,35 @@ func (cdb *ChatDB) GetOpenLuckyBagList(luckyBagPinId string) (*models.OpenLuckyB
 	return &list, nil
 }
 
+// RemoveOpenLuckyBagListItem removes a specific item from the open lucky bag list
+func (cdb *ChatDB) RemoveOpenLuckyBagListItem(luckyBagPinId string, openPinId string) error {
+	// Get existing list
+	list, err := cdb.GetOpenLuckyBagList(luckyBagPinId)
+	if err != nil {
+		return err
+	}
+
+	// Find and remove the specific item
+	var newItems []*models.OpenLuckyBagListItem
+	for _, item := range list.Items {
+		if item.OpenPinId != openPinId {
+			newItems = append(newItems, item)
+		}
+	}
+
+	// Update the list
+	list.Items = newItems
+
+	// Save updated list
+	data, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(luckyBagPinId)
+	return Pb[TalkGroupOpenLuckyBagListCollection].Set(key, data, pebble.Sync)
+}
+
 // Save reclaim lucky bag list record
 // note: this method has concurrency issues, it is recommended to use SaveResidueLuckyBagListAtomic
 func (cdb *ChatDB) SaveResidueLuckyBagList(luckyBagPinId string, residuePinId string, groupId string, timestamp int64, createMetaId string, createAddress string, luckyBagOutIndexList []int64) error {
@@ -1067,6 +1190,11 @@ func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestCh
 
 // Update single member's group list
 func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *models.TalkGroupChatV3) error {
+	// Get mutex for this MetaId to prevent concurrent updates
+	mutex := GetMetaIdMutex(metaId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
 	// Get user's group list
 	contextList, err := cdb.GetMetaIdContextList(metaId)
 	if err != nil {
@@ -1405,19 +1533,29 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 
 	// Batch process messages
 	for _, message := range messages {
+		hasError := false
+
 		// Update group list for all members in the group
 		err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB)
 		if err != nil {
-			// Processing failed, log error but don't delete queue message, can retry later
-			log.Printf("Failed to process queue message for pinId %s: %v", message.PinId, err)
-			continue
+			log.Printf("Failed to update group members context list for pinId %s: %v", message.PinId, err)
+			hasError = true
 		}
 
-		// Processing successful, delete queue message
-		err = cdb.deleteQueueMessage(message.PinId)
+		// Update chat index
+		err = cdb.UpdateChatIndex(message.Chat)
 		if err != nil {
-			// Log error but don't affect main flow
-			log.Printf("Failed to delete queue message for pinId %s: %v", message.PinId, err)
+			log.Printf("Failed to update chat index for pinId %s: %v", message.PinId, err)
+			hasError = true
+		}
+
+		// Only delete queue message if both operations succeeded
+		if !hasError {
+			err = cdb.deleteQueueMessage(message.PinId)
+			if err != nil {
+				// Log error but don't affect main flow
+				log.Printf("Failed to delete queue message for pinId %s: %v", message.PinId, err)
+			}
 		}
 	}
 
@@ -1427,18 +1565,32 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 // Start queue processing goroutine (needs to be called when application starts)
 func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 	go func() {
-		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
+		ticker := time.NewTicker(2 * time.Second) // Process every 2 seconds
 		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ticker.C:
+				// Check if already processing
+				cdb.processingMutex.Lock()
+				if cdb.isProcessing {
+					cdb.processingMutex.Unlock()
+					log.Printf("[ChatDB] Queue processor is already running, skipping this cycle")
+					continue
+				}
+				cdb.isProcessing = true
+				cdb.processingMutex.Unlock()
+
 				// Batch process queue messages
 				err := cdb.ProcessQueueMessages(groupDB, 100) // Process 100 messages each time
 				if err != nil {
-					// Log error
-					continue
+					log.Printf("[ChatDB] Error processing queue messages: %v", err)
 				}
+
+				// Mark processing as complete
+				cdb.processingMutex.Lock()
+				cdb.isProcessing = false
+				cdb.processingMutex.Unlock()
 			}
 		}
 	}()
@@ -1709,7 +1861,9 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 		return err
 	}
 
-	go dealGroupChatItem(chat)
+	if groupState == models.RoomStateIn {
+		go dealGroupChatItem(chat)
+	}
 	return nil
 }
 
@@ -1799,26 +1953,113 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 
 	// Convert payment list
 	var (
-		payList       []*models.ProInfoPayList
-		luckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+		payList          []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
+		errPayList       []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
+		luckyBagVouts    []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+		errLuckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
 	)
+
+	// Create a map to store PayList items by index for quick lookup
+	payListByIndex := make(map[int64]*models.ProInfoPayList)
+	luckyTxOutList := make([]*models.LuckyBagOutput, 0)
+
+	payAddressList := make([]string, 0)
+	// First, process all PayList items
 	for _, pay := range simpleLuckyBag.PayList {
-		payList = append(payList, &models.ProInfoPayList{
+		payAddressList = append(payAddressList, pay.Address)
+		payItem := &models.ProInfoPayList{
 			Amount:  toString(pay.Amount),
 			Address: pay.Address,
 			Index:   toInt64(pay.Index),
-		})
-	}
-	if txData != nil {
-		for i, vout := range txData.TxOut {
-			luckyBagVouts = append(luckyBagVouts, &models.LuckyBagOutput{
-				ScriptPubKey: hex.EncodeToString(vout.PkScript),
-				Amount:       uint64(vout.Value),
-				Address:      "",
-				Index:        int64(i),
-			})
+		}
+		if _, ok := payListByIndex[toInt64(pay.Index)]; ok {
+			errPayList = append(errPayList, payItem)
+		} else {
+			payListByIndex[toInt64(pay.Index)] = payItem
 		}
 	}
+
+	if txData != nil {
+		// First, extract all TxOut addresses and find matching UTXOs
+		for i, vout := range txData.TxOut {
+			index := int64(i)
+
+			// Extract address from vout
+			voutAddress := ""
+			// Get chain params based on chain name
+			var netParams *chaincfg.Params = &chaincfg.MainNetParams
+			if common.TestNet == "1" {
+				netParams = &chaincfg.TestNet3Params
+			} else if common.TestNet == "2" {
+				netParams = &chaincfg.RegressionNetParams
+			}
+
+			class, addresses, _, _ := txscript.ExtractPkScriptAddrs(vout.PkScript, netParams)
+			if class.String() != "nulldata" && class.String() != "nonstandard" && len(addresses) > 0 {
+				voutAddress = addresses[0].String()
+			}
+
+			// Check if this vout address is in payAddressList (belongs to this lucky bag)
+			if len(payAddressList) > 0 && contains(payAddressList, voutAddress) {
+				// This is a lucky bag UTXO, add it to the list
+				luckyBagVout := &models.LuckyBagOutput{
+					ScriptPubKey: hex.EncodeToString(vout.PkScript),
+					Amount:       uint64(vout.Value),
+					Address:      voutAddress,
+					Index:        index,
+				}
+				luckyTxOutList = append(luckyTxOutList, luckyBagVout)
+			}
+		}
+
+		// Now process only the lucky bag UTXOs
+		for _, luckyBagVout := range luckyTxOutList {
+			// Check if this index exists in PayList
+			if payItem, exists := payListByIndex[luckyBagVout.Index]; exists {
+				// Index exists in PayList, check if address matches
+				if payItem.Address == luckyBagVout.Address {
+					// Both index and address match - this is correct
+					payList = append(payList, payItem)
+					luckyBagVouts = append(luckyBagVouts, luckyBagVout)
+				} else {
+					// Index exists but address doesn't match - this is an error
+					errPayList = append(errPayList, payItem)
+					errLuckyBagVouts = append(errLuckyBagVouts, luckyBagVout)
+				}
+			} else {
+				// Index doesn't exist in PayList - this is an error
+				errLuckyBagVouts = append(errLuckyBagVouts, luckyBagVout)
+			}
+		}
+
+		// Check for PayList items that don't have corresponding TxOut
+		for index, payItem := range payListByIndex {
+			found := false
+			for _, vout := range luckyBagVouts {
+				if vout.Index == index {
+					found = true
+					break
+				}
+			}
+			for _, vout := range errLuckyBagVouts {
+				if vout.Index == index {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				// PayList item exists but no corresponding TxOut - this is an error
+				errPayList = append(errPayList, payItem)
+			}
+		}
+	} else {
+		// No txData available, all PayList items are considered errors
+		for _, payItem := range payListByIndex {
+			errPayList = append(errPayList, payItem)
+		}
+	}
+	count := toInt64(simpleLuckyBag.Count)
 
 	// Create lucky bag model
 	redEnvelope := &models.TalkGroupLuckyBagV3{
@@ -1837,8 +2078,12 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		ImgType:             simpleLuckyBag.ImgType,
 		Amount:              formatInt64(simpleLuckyBag.Amount),
 		Count:               toString(simpleLuckyBag.Count),
+		ValidCount:          toString(len(payList)),
+		ErrCount:            toString(count - int64(len(payList))),
 		PayList:             payList,
+		ErrPayList:          errPayList,
 		LuckyBagVouts:       luckyBagVouts,
+		ErrLuckyBagVouts:    errLuckyBagVouts,
 		Type:                simpleLuckyBag.Type,
 		RequireType:         toString(simpleLuckyBag.RequireType),
 		RequireTickId:       simpleLuckyBag.RequireTickId,
@@ -1849,10 +2094,20 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Chain:               pin.ChainName,
 	}
 
-	//
+	if len(errPayList) > 0 || len(errLuckyBagVouts) > 0 {
+		redEnvelope.State = 4 // err
+	} else {
+		redEnvelope.State = 1 // pending
+	}
 
 	// Save lucky bag info
 	err = cdb.SaveLuckyBag(redEnvelope)
+	if err != nil {
+		return err
+	}
+
+	// Save lucky bag to appropriate collection based on error status
+	err = cdb.SaveLuckyBagPendingToCollection(redEnvelope)
 	if err != nil {
 		return err
 	}
@@ -1895,6 +2150,15 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	}
 
 	return nil
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // Process group grab lucky bag
@@ -2266,4 +2530,133 @@ func toBool(v interface{}) bool {
 	default:
 		return false
 	}
+}
+
+// UpdateChatIndex updates the chat index for a group chat message
+func (cdb *ChatDB) UpdateChatIndex(chat *models.TalkGroupChatV3) error {
+	// Get the next index for this group
+	nextIndex, err := cdb.getNextGroupChatIndex(chat.GroupId)
+	if err != nil {
+		return err
+	}
+
+	// Update the chat message with the new index
+	chat.Index = nextIndex
+
+	log.Printf("[UpdateChatIndex]nextIndex: %d", nextIndex)
+
+	// Save the updated chat message
+	err = cdb.SaveChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// Save the index mapping with zero-padded index for proper sorting
+	indexKey := chat.GroupId + "_" + fmt.Sprintf("%040d", nextIndex)
+	indexValue := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_1"
+
+	return Pb[TalkGroupChatIndexCollection].Set([]byte(indexKey), []byte(indexValue), pebble.Sync)
+}
+
+// getNextGroupChatIndex gets the next available index for a group
+func (cdb *ChatDB) getNextGroupChatIndex(groupId string) (int64, error) {
+	iter, err := Pb[TalkGroupChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(groupId + "_"),
+		UpperBound: []byte(groupId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this group (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this group, start with index 1
+	if lastKey == nil {
+		return 1, nil
+	}
+
+	// Extract index from the last key (groupId_index with zero-padding)
+	keyStr := string(lastKey)
+
+	log.Printf("[getNextGroupChatIndex]keyStr: %s", keyStr)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 2 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index + 1, nil
+		}
+	}
+
+	// Fallback: if parsing fails, start with index 1
+	return 1, nil
+}
+
+// GetCurrentMaxGroupChatIndex gets the current maximum index for a group
+func (cdb *ChatDB) GetCurrentMaxGroupChatIndex(groupId string) (int64, error) {
+	iter, err := Pb[TalkGroupChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(groupId + "_"),
+		UpperBound: []byte(groupId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this group (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this group, return 0
+	if lastKey == nil {
+		return 0, nil
+	}
+
+	// Extract index from the last key (groupId_index with zero-padding)
+	keyStr := string(lastKey)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 2 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index, nil
+		}
+	}
+
+	// Fallback: if parsing fails, return 0
+	return 0, nil
+}
+
+// SaveLuckyBagPendingToCollection saves lucky bag to either pending or error pending collection based on error status
+func (cdb *ChatDB) SaveLuckyBagPendingToCollection(luckyBag *models.TalkGroupLuckyBagV3) error {
+	// Determine which collection to save to based on error status
+	var collection string
+	if len(luckyBag.ErrLuckyBagVouts) == 0 && len(luckyBag.ErrPayList) == 0 {
+		// No errors, save to pending collection
+		collection = TalkGroupLuckyBagPinPendingCollection
+	} else {
+		// Has errors, save to error collection
+		collection = TalkGroupLuckyBagPinErrPendingCollection
+	}
+
+	// Use PinId as primary key
+	key := []byte(luckyBag.PinId)
+	return Pb[collection].Set(key, []byte(luckyBag.PinId), pebble.Sync)
 }

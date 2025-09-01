@@ -3,10 +3,13 @@ package respond
 import "manindexer/basicprotocols/group_chat/models"
 
 type UserInfo struct {
-	Metaid      string `json:"metaid"`
-	Name        string `json:"name"`
-	Avatar      string `json:"avatar"`
-	AvatarImage string `json:"avatarImage"`
+	Metaid          string `json:"metaid"`
+	Address         string `json:"address"`
+	Name            string `json:"name"`
+	Avatar          string `json:"avatar"`
+	AvatarImage     string `json:"avatarImage"`
+	ChatPublicKey   string `json:"chatPublicKey"`
+	ChatPublicKeyId string `json:"chatPublicKeyId"`
 }
 
 type GroupResponse struct {
@@ -42,6 +45,7 @@ type GroupItem struct {
 	Timestamp           int64     `json:"timestamp"`           //Room creation timestamp
 	Chain               string    `json:"chain"`               //Chain type
 	BlockHeight         int64     `json:"blockHeight"`         //Block height
+	Index               int64     `json:"index"`               //Index default -1
 }
 
 type GroupChatResponse struct {
@@ -72,6 +76,7 @@ type GroupChatItem struct {
 	Params      string          `json:"params"`      //General field for future parameter additions
 	Chain       string          `json:"chain"`       //Chain type
 	BlockHeight int64           `json:"blockHeight"` //Block height
+	Index       int64           `json:"index"`       //Index default -1
 }
 
 type ReplyInfo struct {
@@ -88,6 +93,7 @@ type ReplyInfo struct {
 	Timestamp   int64           `json:"timestamp"`   //Chat record timestamp
 	Chain       string          `json:"chain"`       //Chain type
 	BlockHeight int64           `json:"blockHeight"` //Block height
+	Index       int64           `json:"index"`       //Index default -1
 }
 
 type GroupMemberResponse struct {
@@ -145,24 +151,25 @@ type ChatInfoItem struct {
 	LastMessagePinId string `json:"lastMessagePinId"` // Latest message's PinId
 	BlockHeight      int64  `json:"blockHeight"`      // Block height
 	Chain            string `json:"chain"`            // Chain type
+	Index            int64  `json:"index"`            // Index default -1
 
 	// Private chat specific fields
 	UserInfo *UserInfo `json:"userInfo,omitempty"`
 
 	// Group chat specific fields
-	CommunityId       string    `json:"communityId,omitempty"`     // Community ID (for group chat)
-	RoomName          string    `json:"roomName,omitempty"`        // Room name (for group chat)
-	RoomNote          string    `json:"roomNote,omitempty"`        // Room announcement (for group chat)
-	RoomType          string    `json:"roomType,omitempty"`        // Room type (for group chat)
-	RoomStatus        string    `json:"roomStatus,omitempty"`      // Room status (for group chat)
-	RoomJoinType      string    `json:"roomJoinType,omitempty"`    // Join method (for group chat)
-	RoomAvatarUrl     string    `json:"roomAvatarUrl,omitempty"`   // Room avatar (for group chat)
-	CreateUserMetaId  string    `json:"createUserMetaId"`          // Creator MetaId (for group chat)
-	CreateUserAddress string    `json:"createUserAddress"`         // Creator address (for group chat)
-	CreateUserInfo    *UserInfo `json:"createUserInfo"`            // Creator info (for group chat)
-	UserCount         int64     `json:"userCount,omitempty"`       // User count (for group chat)
-	ChatSettingType   int64     `json:"chatSettingType,omitempty"` // Chat setting type (for group chat)
-	DeleteStatus      int64     `json:"deleteStatus,omitempty"`    // Delete status (for group chat)
+	CommunityId       string    `json:"communityId,omitempty"`   // Community ID (for group chat)
+	RoomName          string    `json:"roomName,omitempty"`      // Room name (for group chat)
+	RoomNote          string    `json:"roomNote,omitempty"`      // Room announcement (for group chat)
+	RoomType          string    `json:"roomType,omitempty"`      // Room type (for group chat)
+	RoomStatus        string    `json:"roomStatus,omitempty"`    // Room status (for group chat)
+	RoomJoinType      string    `json:"roomJoinType,omitempty"`  // Join method (for group chat)
+	RoomAvatarUrl     string    `json:"roomAvatarUrl,omitempty"` // Room avatar (for group chat)
+	CreateUserMetaId  string    `json:"createUserMetaId"`        // Creator MetaId (for group chat)
+	CreateUserAddress string    `json:"createUserAddress"`       // Creator address (for group chat)
+	CreateUserInfo    *UserInfo `json:"createUserInfo"`          // Creator info (for group chat)
+	UserCount         int64     `json:"userCount"`               // User count (for group chat)
+	ChatSettingType   int64     `json:"chatSettingType"`         // Chat setting type (for group chat)
+	DeleteStatus      int64     `json:"deleteStatus"`            // Delete status (for group chat)
 }
 
 // PrivateChatResponse Private chat records response
@@ -174,27 +181,30 @@ type PrivateChatResponse struct {
 
 // PrivateChatItem Private chat record item
 type PrivateChatItem struct {
-	From        string      `json:"from"` // Sender MetaId
-	To          string      `json:"to"`   // Receiver MetaId
-	TxId        string      `json:"txId"`
-	PinId       string      `json:"pinId"`
-	MetaId      string      `json:"metaId"`   // Message creator MetaId
-	Address     string      `json:"address"`  // Message creator address
-	UserInfo    *UserInfo   `json:"userInfo"` // User info
-	NickName    string      `json:"nickName"`
-	Protocol    string      `json:"protocol"`
-	Content     string      `json:"content"`
-	ContentType string      `json:"contentType"`
-	Encryption  string      `json:"encryption"`
-	ChatType    int64       `json:"chatType"` // 0-msg, 1-red, 2-img
-	Data        interface{} `json:"data"`
-	ReplyPin    string      `json:"replyPin"`
-	ReplyInfo   *ReplyInfo  `json:"replyInfo"`
-	RedMetaId   string      `json:"redMetaId"`
-	Timestamp   int64       `json:"timestamp"`   // Chat record timestamp
-	Params      string      `json:"params"`      // General field for future parameter additions
-	Chain       string      `json:"chain"`       // Chain type
-	BlockHeight int64       `json:"blockHeight"` // Block height
+	From         string      `json:"from"` // Sender MetaId
+	FromUserInfo *UserInfo   `json:"fromUserInfo"`
+	To           string      `json:"to"` // Receiver MetaId
+	ToUserInfo   *UserInfo   `json:"toUserInfo"`
+	TxId         string      `json:"txId"`
+	PinId        string      `json:"pinId"`
+	MetaId       string      `json:"metaId"`   // Message creator MetaId
+	Address      string      `json:"address"`  // Message creator address
+	UserInfo     *UserInfo   `json:"userInfo"` // User info
+	NickName     string      `json:"nickName"`
+	Protocol     string      `json:"protocol"`
+	Content      string      `json:"content"`
+	ContentType  string      `json:"contentType"`
+	Encryption   string      `json:"encryption"`
+	ChatType     int64       `json:"chatType"` // 0-msg, 1-red, 2-img
+	Data         interface{} `json:"data"`
+	ReplyPin     string      `json:"replyPin"`
+	ReplyInfo    *ReplyInfo  `json:"replyInfo"`
+	RedMetaId    string      `json:"redMetaId"`
+	Timestamp    int64       `json:"timestamp"`   // Chat record timestamp
+	Params       string      `json:"params"`      // General field for future parameter additions
+	Chain        string      `json:"chain"`       // Chain type
+	BlockHeight  int64       `json:"blockHeight"` // Block height
+	Index        int64       `json:"index"`       //Index default -1
 }
 
 type LuckyBagInfoResponse struct {
@@ -211,8 +221,10 @@ type LuckyBagInfoResponse struct {
 	ImgType             string         `json:"imgType"`
 	Amount              string         `json:"amount"`
 	Count               string         `json:"count"`
+	ValidCount          string         `json:"validCount"`
 	UsedCount           string         `json:"usedCount"`
 	PayList             []*InfoPayList `json:"payList"`
+	ErrPayList          []*InfoPayList `json:"errPayList"`
 	Type                string         `json:"type"`
 	TokenCount          uint64         `json:"tokenCount"`
 	RequireType         string         `json:"requireType"`
@@ -230,7 +242,7 @@ type InfoPayList struct {
 	GradMetaId   string           `json:"gradMetaId"`
 	GradAddress  string           `json:"gradAddress"`
 	GradTxId     string           `json:"gradTxId"`
-	GradState    models.GrabState `json:"gradState"`
+	GradState    models.GrabState `json:"gradState"` // 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal, 4-reclaim, 5-reclaim and sent, 6-reclaim and sent abnormal
 	GradMsg      string           `json:"gradMsg"`
 	UserInfo     *UserInfo        `json:"userInfo"`
 	Timestamp    int64            `json:"timestamp"`
@@ -249,10 +261,12 @@ type LuckyBagUnusedResponse struct {
 	CreateTime          string        `json:"createTime"`
 	Amount              string        `json:"amount"`
 	Count               string        `json:"count"`
+	ValidCount          string        `json:"validCount"`
 	Content             string        `json:"content"`
 	Img                 string        `json:"img"`
 	ImgType             string        `json:"imgType"`
 	Unused              []*UnusedList `json:"unused"`
+	ErrUnused           []*UnusedList `json:"errUnused"`
 	Type                string        `json:"type"`
 	TokenCount          uint64        `json:"tokenCount"`
 	RequireType         string        `json:"requireType"`
@@ -265,4 +279,11 @@ type UnusedList struct {
 	Amount       string `json:"amount"`
 	Address      string `json:"address"`
 	ScriptPubKey string `json:"scriptPubKey"`
+}
+
+// UserInfoResponse User information response
+type UserInfoResponse struct {
+	Address  string    `json:"address"`  // User address
+	MetaId   string    `json:"metaId"`   // User metaId
+	UserInfo *UserInfo `json:"userInfo"` // User information
 }

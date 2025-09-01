@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	LatestTargetVersion = 3
+	LatestTargetVersion = 5
 )
 
 // Version migration record structure
@@ -86,6 +86,66 @@ func (m *MigrationV2ToV3) Execute() error {
 	}
 
 	log.Printf("[migrate_db] Version 3 migration completed")
+	return nil
+}
+
+// Migration from version 3 to version 4: Rebuild index collections from timestamp collections
+type MigrationV3ToV4 struct{}
+
+func (m *MigrationV3ToV4) Version() int {
+	return 4
+}
+
+func (m *MigrationV3ToV4) Description() string {
+	return "Rebuild TalkGroupChatIndexCollection and TalkPrivateChatIndexCollection from timestamp collections"
+}
+
+func (m *MigrationV3ToV4) Execute() error {
+	log.Printf("[migrate_db] Starting version 4 migration: %s", m.Description())
+
+	// Rebuild group chat index collection from TalkGroupChatTimestamp2Collection
+	err := rebuildGroupChatIndexCollection()
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkGroupChatIndexCollection: %v", err)
+	}
+
+	// Rebuild private chat index collection from TalkPrivateChatTimestampCollection
+	err = rebuildPrivateChatIndexCollection()
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkPrivateChatIndexCollection: %v", err)
+	}
+
+	log.Printf("[migrate_db] Version 4 migration completed")
+	return nil
+}
+
+// Migration from version 4 to version 5: Rebuild index collections with zero-padded format
+type MigrationV4ToV5 struct{}
+
+func (m *MigrationV4ToV5) Version() int {
+	return 5
+}
+
+func (m *MigrationV4ToV5) Description() string {
+	return "Rebuild TalkGroupChatIndexCollection and TalkPrivateChatIndexCollection with zero-padded index format for proper sorting"
+}
+
+func (m *MigrationV4ToV5) Execute() error {
+	log.Printf("[migrate_db] Starting version 5 migration: %s", m.Description())
+
+	// Rebuild group chat index collection with zero-padded format
+	err := rebuildGroupChatIndexCollectionV5()
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkGroupChatIndexCollection: %v", err)
+	}
+
+	// Rebuild private chat index collection with zero-padded format
+	err = rebuildPrivateChatIndexCollectionV5()
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to rebuild TalkPrivateChatIndexCollection: %v", err)
+	}
+
+	log.Printf("[migrate_db] Version 5 migration completed")
 	return nil
 }
 
@@ -418,6 +478,8 @@ func MigrateDatabase(targetVersion int) error {
 	migrations := []Migration{
 		&MigrationV1ToV2{},
 		&MigrationV2ToV3{},
+		&MigrationV3ToV4{},
+		&MigrationV4ToV5{},
 		// Add more migration operations here
 		// Note: When adding new migrations, also update the LatestTargetVersion constant
 	}
@@ -526,6 +588,8 @@ func validateMigrationConfig() error {
 	migrations := []Migration{
 		&MigrationV1ToV2{},
 		&MigrationV2ToV3{},
+		&MigrationV3ToV4{},
+		&MigrationV4ToV5{},
 		// Add more migration operations here
 	}
 
@@ -591,6 +655,8 @@ func GetMigrationInfo() (*MigrationInfo, error) {
 	migrations := []Migration{
 		&MigrationV1ToV2{},
 		&MigrationV2ToV3{},
+		&MigrationV3ToV4{},
+		&MigrationV4ToV5{},
 		// Add more migration operations here
 	}
 
@@ -655,6 +721,8 @@ func ShowMigrationInfo() {
 	migrations := []Migration{
 		&MigrationV1ToV2{},
 		&MigrationV2ToV3{},
+		&MigrationV3ToV4{},
+		&MigrationV4ToV5{},
 		// Add more migration operations here
 	}
 	log.Printf("[migrate_db]   Total migrations: %d", len(migrations))
@@ -683,4 +751,525 @@ func ShowMigrationInfo() {
 	}
 
 	log.Printf("[migrate_db] ===========================================")
+}
+
+// Rebuild group chat index collection from TalkGroupChatTimestamp2Collection
+func rebuildGroupChatIndexCollection() error {
+	log.Printf("[migrate_db] Starting to rebuild TalkGroupChatIndexCollection")
+
+	sourceDB, exists := Pb[TalkGroupChatTimestamp2Collection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkGroupChatTimestamp2Collection)
+	}
+
+	targetDB, exists := Pb[TalkGroupChatIndexCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] target collection %s does not exist", TalkGroupChatIndexCollection)
+	}
+
+	// Clear target collection first
+	log.Printf("[migrate_db] Clearing TalkGroupChatIndexCollection")
+	err := clearCollection(targetDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear TalkGroupChatIndexCollection: %v", err)
+	}
+
+	// Use iterator to traverse all data in source collection
+	iter, err := sourceDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create source collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	batch := targetDB.NewBatch()
+	defer batch.Close()
+
+	// Track index for each group
+	groupIndexCounter := make(map[string]int64)
+	count := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse source key: groupId_timestamp+number(6)
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 2 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		groupId := keyParts[0]
+
+		// Parse source value: pinId_chatType_timestamp_number
+		valueStr := string(value)
+		valueParts := strings.Split(valueStr, "_")
+		if len(valueParts) < 1 {
+			log.Printf("[migrate_db] Skipping invalid value format: %s", valueStr)
+			continue
+		}
+
+		pinId := valueParts[0]
+
+		// Get next index for this group
+		groupIndexCounter[groupId]++
+		nextIndex := groupIndexCounter[groupId]
+
+		// Construct new index key: groupId_index
+		indexKey := groupId + "_" + strconv.FormatInt(nextIndex, 10)
+
+		// Construct new index value: pinId_chatType_timestamp_isSet
+		indexValue := valueStr + "_1" // Add isSet flag
+
+		// Write data to target collection
+		err := batch.Set([]byte(indexKey), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkGroupChatIndexCollection: %v", err)
+		}
+
+		// Update chat message with index
+		err = updateChatMessageIndex(pinId, nextIndex)
+		if err != nil {
+			log.Printf("[migrate_db] Warning: failed to update chat message index for pinId %s: %v", pinId, err)
+		}
+
+		count++
+
+		// Commit batch every 1000 records
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = targetDB.NewBatch()
+			log.Printf("[migrate_db] Rebuilt %d records for TalkGroupChatIndexCollection", count)
+		}
+	}
+
+	// Commit remaining batch
+	if count%1000 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully rebuilt %d records for TalkGroupChatIndexCollection", count)
+	return nil
+}
+
+// Rebuild private chat index collection from TalkPrivateChatTimestampCollection
+func rebuildPrivateChatIndexCollection() error {
+	log.Printf("[migrate_db] Starting to rebuild TalkPrivateChatIndexCollection")
+
+	sourceDB, exists := Pb[TalkPrivateChatTimestampCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkPrivateChatTimestampCollection)
+	}
+
+	targetDB, exists := Pb[TalkPrivateChatIndexCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] target collection %s does not exist", TalkPrivateChatIndexCollection)
+	}
+
+	// Clear target collection first
+	log.Printf("[migrate_db] Clearing TalkPrivateChatIndexCollection")
+	err := clearCollection(targetDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear TalkPrivateChatIndexCollection: %v", err)
+	}
+
+	// Use iterator to traverse all data in source collection
+	iter, err := sourceDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create source collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	batch := targetDB.NewBatch()
+	defer batch.Close()
+
+	// Track index for each conversation (from_to)
+	conversationIndexCounter := make(map[string]int64)
+	count := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse source key: from_to_timestamp+number(6) or to_from_timestamp+number(6)
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 3 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		fromMetaId := keyParts[0]
+		toMetaId := keyParts[1]
+
+		// Parse source value: pinId_chatType_timestamp_number
+		valueStr := string(value)
+		valueParts := strings.Split(valueStr, "_")
+		if len(valueParts) < 1 {
+			log.Printf("[migrate_db] Skipping invalid value format: %s", valueStr)
+			continue
+		}
+
+		pinId := valueParts[0]
+
+		// Create conversation key (from_to)
+		conversationKey := fromMetaId + "_" + toMetaId
+
+		// Get next index for this conversation
+		conversationIndexCounter[conversationKey]++
+		nextIndex := conversationIndexCounter[conversationKey]
+
+		// Construct new index key: fromMetaId_toMetaId_index
+		indexKey1 := fromMetaId + "_" + toMetaId + "_" + strconv.FormatInt(nextIndex, 10)
+
+		indexKey2 := toMetaId + "_" + fromMetaId + "_" + strconv.FormatInt(nextIndex, 10)
+
+		// Construct new index value: pinId_chatType_timestamp_isSet
+		indexValue := valueStr + "_1" // Add isSet flag
+
+		// Write data to target collection
+		err := batch.Set([]byte(indexKey1), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkPrivateChatIndexCollection: %v", err)
+		}
+
+		err = batch.Set([]byte(indexKey2), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkPrivateChatIndexCollection: %v", err)
+		}
+
+		// Update private chat message with index
+		err = updatePrivateChatMessageIndex(pinId, nextIndex)
+		if err != nil {
+			log.Printf("[migrate_db] Warning: failed to update private chat message index for pinId %s: %v", pinId, err)
+		}
+
+		count++
+
+		// Commit batch every 1000 records
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = targetDB.NewBatch()
+			log.Printf("[migrate_db] Rebuilt %d records for TalkPrivateChatIndexCollection", count)
+		}
+	}
+
+	// Commit remaining batch
+	if count%1000 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully rebuilt %d records for TalkPrivateChatIndexCollection", count)
+	return nil
+}
+
+// Update chat message with index
+func updateChatMessageIndex(pinId string, index int64) error {
+	chatDB, exists := Pb[TalkGroupChatPinCollection]
+	if !exists {
+		return fmt.Errorf("TalkGroupChatPinCollection does not exist")
+	}
+
+	// Get chat message
+	key := []byte(pinId)
+	value, closer, err := chatDB.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return fmt.Errorf("chat message not found for pinId: %s", pinId)
+		}
+		return err
+	}
+	defer closer.Close()
+
+	// Parse chat message
+	var chat map[string]interface{}
+	err = json.Unmarshal(value, &chat)
+	if err != nil {
+		return fmt.Errorf("failed to parse chat message: %v", err)
+	}
+
+	// Update index
+	chat["index"] = index
+
+	// Save updated chat message
+	updatedValue, err := json.Marshal(chat)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated chat message: %v", err)
+	}
+
+	return chatDB.Set(key, updatedValue, pebble.Sync)
+}
+
+// Rebuild group chat index collection with zero-padded format (version 5)
+func rebuildGroupChatIndexCollectionV5() error {
+	log.Printf("[migrate_db] Starting to rebuild TalkGroupChatIndexCollection with zero-padded format")
+
+	sourceDB, exists := Pb[TalkGroupChatIndexCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkGroupChatIndexCollection)
+	}
+
+	// Clear target collection first (same as source)
+	log.Printf("[migrate_db] Clearing TalkGroupChatIndexCollection")
+	err := clearCollection(sourceDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear TalkGroupChatIndexCollection: %v", err)
+	}
+
+	// Get data from TalkGroupChatTimestamp2Collection to rebuild with proper order
+	timestampDB, exists := Pb[TalkGroupChatTimestamp2Collection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkGroupChatTimestamp2Collection)
+	}
+
+	// Use iterator to traverse all data in timestamp collection
+	iter, err := timestampDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create timestamp collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	batch := sourceDB.NewBatch()
+	defer batch.Close()
+
+	// Track index for each group
+	groupIndexCounter := make(map[string]int64)
+	count := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse source key: groupId_timestamp+number(6)
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 2 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		groupId := keyParts[0]
+
+		// Parse source value: pinId_chatType_timestamp_number
+		valueStr := string(value)
+		valueParts := strings.Split(valueStr, "_")
+		if len(valueParts) < 1 {
+			log.Printf("[migrate_db] Skipping invalid value format: %s", valueStr)
+			continue
+		}
+
+		pinId := valueParts[0]
+
+		// Get next index for this group
+		groupIndexCounter[groupId]++
+		nextIndex := groupIndexCounter[groupId]
+
+		// Construct new index key with zero-padded format: groupId_00000000000000000001
+		indexKey := groupId + "_" + fmt.Sprintf("%040d", nextIndex)
+
+		// Construct new index value: pinId_chatType_timestamp_isSet
+		indexValue := valueStr + "_1" // Add isSet flag
+
+		// Write data to target collection
+		err := batch.Set([]byte(indexKey), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkGroupChatIndexCollection: %v", err)
+		}
+
+		// Update chat message with index
+		err = updateChatMessageIndex(pinId, nextIndex)
+		if err != nil {
+			log.Printf("[migrate_db] Warning: failed to update chat message index for pinId %s: %v", pinId, err)
+		}
+
+		count++
+
+		// Commit batch every 1000 records
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = sourceDB.NewBatch()
+			log.Printf("[migrate_db] Rebuilt %d records for TalkGroupChatIndexCollection with zero-padded format", count)
+		}
+	}
+
+	// Commit remaining batch
+	if count%1000 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully rebuilt %d records for TalkGroupChatIndexCollection with zero-padded format", count)
+	return nil
+}
+
+// Rebuild private chat index collection with zero-padded format (version 5)
+func rebuildPrivateChatIndexCollectionV5() error {
+	log.Printf("[migrate_db] Starting to rebuild TalkPrivateChatIndexCollection with zero-padded format")
+
+	sourceDB, exists := Pb[TalkPrivateChatIndexCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkPrivateChatIndexCollection)
+	}
+
+	// Clear target collection first (same as source)
+	log.Printf("[migrate_db] Clearing TalkPrivateChatIndexCollection")
+	err := clearCollection(sourceDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear TalkPrivateChatIndexCollection: %v", err)
+	}
+
+	// Get data from TalkPrivateChatTimestampCollection to rebuild with proper order
+	timestampDB, exists := Pb[TalkPrivateChatTimestampCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkPrivateChatTimestampCollection)
+	}
+
+	// Use iterator to traverse all data in timestamp collection
+	iter, err := timestampDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create timestamp collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	batch := sourceDB.NewBatch()
+	defer batch.Close()
+
+	// Track index for each conversation (from_to)
+	conversationIndexCounter := make(map[string]int64)
+	count := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse source key: from_to_timestamp+number(6) or to_from_timestamp+number(6)
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 3 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		fromMetaId := keyParts[0]
+		toMetaId := keyParts[1]
+
+		// Parse source value: pinId_chatType_timestamp_number
+		valueStr := string(value)
+		valueParts := strings.Split(valueStr, "_")
+		if len(valueParts) < 1 {
+			log.Printf("[migrate_db] Skipping invalid value format: %s", valueStr)
+			continue
+		}
+
+		pinId := valueParts[0]
+
+		// Create conversation key (from_to)
+		conversationKey := fromMetaId + "_" + toMetaId
+
+		// Get next index for this conversation
+		conversationIndexCounter[conversationKey]++
+		nextIndex := conversationIndexCounter[conversationKey]
+
+		// Construct new index key with zero-padded format: fromMetaId_toMetaId_00000000000000000001
+		indexKey1 := fromMetaId + "_" + toMetaId + "_" + fmt.Sprintf("%040d", nextIndex)
+		indexKey2 := toMetaId + "_" + fromMetaId + "_" + fmt.Sprintf("%040d", nextIndex)
+
+		// Construct new index value: pinId_chatType_timestamp_isSet
+		indexValue := valueStr + "_1" // Add isSet flag
+
+		// Write data to target collection
+		err := batch.Set([]byte(indexKey1), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkPrivateChatIndexCollection: %v", err)
+		}
+
+		err = batch.Set([]byte(indexKey2), []byte(indexValue), nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write to TalkPrivateChatIndexCollection: %v", err)
+		}
+
+		// Update private chat message with index
+		err = updatePrivateChatMessageIndex(pinId, nextIndex)
+		if err != nil {
+			log.Printf("[migrate_db] Warning: failed to update private chat message index for pinId %s: %v", pinId, err)
+		}
+
+		count++
+
+		// Commit batch every 1000 records
+		if count%1000 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = sourceDB.NewBatch()
+			log.Printf("[migrate_db] Rebuilt %d records for TalkPrivateChatIndexCollection with zero-padded format", count)
+		}
+	}
+
+	// Commit remaining batch
+	if count%1000 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully rebuilt %d records for TalkPrivateChatIndexCollection with zero-padded format", count)
+	return nil
+}
+
+// Update private chat message with index
+func updatePrivateChatMessageIndex(pinId string, index int64) error {
+	chatDB, exists := Pb[TalkPrivateChatPinCollection]
+	if !exists {
+		return fmt.Errorf("TalkPrivateChatPinCollection does not exist")
+	}
+
+	// Get private chat message
+	key := []byte(pinId)
+	value, closer, err := chatDB.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return fmt.Errorf("private chat message not found for pinId: %s", pinId)
+		}
+		return err
+	}
+	defer closer.Close()
+
+	// Parse private chat message
+	var chat map[string]interface{}
+	err = json.Unmarshal(value, &chat)
+	if err != nil {
+		return fmt.Errorf("failed to parse private chat message: %v", err)
+	}
+
+	// Update index
+	chat["index"] = index
+
+	// Save updated private chat message
+	updatedValue, err := json.Marshal(chat)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated private chat message: %v", err)
+	}
+
+	return chatDB.Set(key, updatedValue, pebble.Sync)
 }

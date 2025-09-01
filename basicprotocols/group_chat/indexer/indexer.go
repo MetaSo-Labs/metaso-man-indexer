@@ -14,6 +14,7 @@ type GroupChatIndexer struct {
 	groupDB     *db.GroupDB
 	chatDB      *db.ChatDB
 	privateDB   *db.PrivateChatDB
+	userDB      *db.UserInfoDB
 	pb          *db.Pebble
 }
 
@@ -28,11 +29,14 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 		return nil, err
 	}
 
+	ch := db.NewChatDB(pb)
+
 	return &GroupChatIndexer{
 		communityDB: db.NewCommunityDB(pb),
-		groupDB:     db.NewGroupDB(pb),
-		chatDB:      db.NewChatDB(pb),
+		groupDB:     db.NewGroupDB(pb, ch),
+		chatDB:      ch,
 		privateDB:   db.NewPrivateChatDB(pb),
+		userDB:      db.NewUserInfoDB(pb),
 		pb:          pb,
 	}, nil
 }
@@ -68,16 +72,27 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		return nil
 	}
 
+	// ProcessUserInfoPin
+	infoNode, ok := gci.extractInfo(pin.Path)
+	if ok {
+		if strings.ToLower(infoNode) == strings.ToLower(protocols.MonitorInfoChatpubkey) {
+			log.Printf("[%s]ProcessUserInfoPin: %s", pin.ChainName, pin.Path)
+			return gci.userDB.ProcessUserInfoPin(pin)
+		}
+	}
+
 	// Distribute processing based on protocol path
 	protocol := gci.extractProtocol(pin.Path)
 
 	switch strings.ToLower(protocol) {
 	case strings.ToLower(protocols.MonitorSimpleCommunity), strings.ToLower(protocols.MonitorSimpleCommunityJoin):
-		log.Printf("Community protocol: %s", pin.Path)
+		log.Printf("[%s]Community protocol: %s", pin.ChainName, pin.Path)
 		// Community related protocols
 		return gci.communityDB.ProcessCommunityPin(pin)
-	case strings.ToLower(protocols.MonitorSimpleGroupCreate), strings.ToLower(protocols.MonitorSimpleGroupJoin):
-		log.Printf("Group protocol: %s", pin.Path)
+	case strings.ToLower(protocols.MonitorSimpleGroupCreate),
+		strings.ToLower(protocols.MonitorSimpleGroupJoin),
+		strings.ToLower(protocols.MonitorSimpleGroupRemoveUser):
+		log.Printf("[%s]Group protocol: %s", pin.ChainName, pin.Path)
 		// Group related protocols
 		return gci.groupDB.ProcessGroupPin(pin)
 	case strings.ToLower(protocols.MonitorSimpleGroupChat),
@@ -85,15 +100,15 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		strings.ToLower(protocols.MonitorSimpleGroupLuckyBag),
 		strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag),
 		strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag):
-		log.Printf("Chat protocol: %s", pin.Path)
+		log.Printf("[%s]Chat protocol: %s", pin.ChainName, pin.Path)
 		// Chat related protocols
 		return gci.chatDB.ProcessGroupChatPin(pin, tx)
 	case strings.ToLower(protocols.MonitorSimpleMsg), strings.ToLower(protocols.MonitorSimpleFileMsg):
-		log.Printf("Private chat protocol: %s", pin.Path)
+		log.Printf("[%s]Private chat protocol: %s", pin.ChainName, pin.Path)
 		// Private chat related protocols
 		return gci.privateDB.ProcessPrivateChatPin(pin)
 	default:
-		log.Printf("Unknown protocol: %s", protocol)
+		log.Printf("[%s]Unknown protocol: %s", pin.ChainName, protocol)
 		return nil
 	}
 }
@@ -103,6 +118,15 @@ func (gci *GroupChatIndexer) extractProtocol(path string) string {
 	// Remove "/protocols/" prefix
 	protocol := strings.Replace(path, "/protocols/", "", -1)
 	return protocol
+}
+
+func (gci *GroupChatIndexer) extractInfo(path string) (string, bool) {
+	if !strings.HasPrefix(path, "/info/") {
+		return "", false
+	}
+	// Remove "/info/" prefix
+	infoNode := strings.Replace(path, "/info/", "", -1)
+	return infoNode, true
 }
 
 // GetCommunityDB Get community database instance
@@ -128,4 +152,9 @@ func (gci *GroupChatIndexer) GetPrivateDB() *db.PrivateChatDB {
 // GetPebble Get Pebble database instance
 func (gci *GroupChatIndexer) GetPebble() *db.Pebble {
 	return gci.pb
+}
+
+// GetUserInfoDB Get user info database instance
+func (gci *GroupChatIndexer) GetUserInfoDB() *db.UserInfoDB {
+	return gci.userDB
 }

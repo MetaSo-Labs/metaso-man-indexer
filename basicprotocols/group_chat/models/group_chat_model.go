@@ -175,6 +175,7 @@ type TalkGroupChatV3 struct {
 	Timestamp   int64           `json:"timestamp"`   // Chat record timestamp
 	Chain       string          `json:"chain"`       // Chain type
 	BlockHeight int64           `json:"blockHeight"` // Block height
+	Index       int64           `json:"index"`       // Index default -1
 }
 
 type ReplyInfo struct {
@@ -189,34 +190,42 @@ type ReplyInfo struct {
 	ChatType    ChatType        `json:"chatType"`    //0-msg, 1-red, 2-img
 	InsideIndex ChatInsideIndex `json:"insideIndex"` //0-in, 1-out
 	Timestamp   int64           `json:"timestamp"`   // Chat record timestamp
+	Index       int64           `json:"index"`       // Index default -1
 }
 
 type TalkGroupLuckyBagV3 struct {
-	CommunityId         string            `json:"communityId"` // Room ID unique
-	GroupId             string            `json:"groupId"`     // Channel ID unique
-	TxId                string            `json:"txId"`
-	PinId               string            `json:"pinId"` //
-	MetaId              string            `json:"metaId"`
-	Address             string            `json:"address"`
-	Protocol            string            `json:"protocol"`
-	SubId               string            `json:"subId"`
-	Code                string            `json:"code"`
-	CreateTimeStr       string            `json:"createTimeStr"`
-	Content             string            `json:"content"`
-	Img                 string            `json:"img"`
-	ImgType             string            `json:"imgType"`
-	Amount              string            `json:"amount"`
-	Count               string            `json:"count"`
-	PayList             []*ProInfoPayList `json:"payList"`
-	LuckyBagVouts       []*LuckyBagOutput `json:"luckyBagVouts"`
-	Type                string            `json:"type"`
-	RequireType         string            `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
-	RequireTickId       string            `json:"requireTickId"`       // FT-limit requires temporarily mrc20
-	RequireCollectionId string            `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
-	LimitAmount         uint64            `json:"limitAmount"`
-	Timestamp           int64             `json:"timestamp"`   // Chat record timestamp
-	BlockHeight         int64             `json:"blockHeight"` // Block height
-	Chain               string            `json:"chain"`       // Chain type
+	CommunityId           string            `json:"communityId"` // Room ID unique
+	GroupId               string            `json:"groupId"`     // Channel ID unique
+	TxId                  string            `json:"txId"`
+	PinId                 string            `json:"pinId"` //
+	MetaId                string            `json:"metaId"`
+	Address               string            `json:"address"`
+	Protocol              string            `json:"protocol"`
+	SubId                 string            `json:"subId"`
+	Code                  string            `json:"code"`
+	CreateTimeStr         string            `json:"createTimeStr"`
+	Content               string            `json:"content"`
+	Img                   string            `json:"img"`
+	ImgType               string            `json:"imgType"`
+	Amount                string            `json:"amount"`
+	Count                 string            `json:"count"`
+	ValidCount            string            `json:"validCount"`
+	ErrCount              string            `json:"errCount"`
+	PayList               []*ProInfoPayList `json:"payList"`
+	ErrPayList            []*ProInfoPayList `json:"errPayList"`
+	LuckyBagVouts         []*LuckyBagOutput `json:"luckyBagVouts"`
+	ErrLuckyBagVouts      []*LuckyBagOutput `json:"errLuckyBagVouts"`
+	OriginalPayList       []*ProInfoPayList `json:"originalPayList"`
+	OriginalLuckyBagVouts []*LuckyBagOutput `json:"originalLuckyBagVouts"`
+	Type                  string            `json:"type"`
+	RequireType           string            `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
+	RequireTickId         string            `json:"requireTickId"`       // FT-limit requires temporarily mrc20
+	RequireCollectionId   string            `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
+	LimitAmount           uint64            `json:"limitAmount"`
+	Timestamp             int64             `json:"timestamp"`   // Chat record timestamp
+	BlockHeight           int64             `json:"blockHeight"` // Block height
+	Chain                 string            `json:"chain"`       // Chain type
+	State                 int               `json:"state"`       // 1-pending, 2-completed, 3-timeout residue, 4-err, 5-err timeout residue
 }
 type ProInfoPayList struct {
 	Amount   string `json:"amount"`
@@ -237,6 +246,11 @@ const (
 	GrabStateOpen           GrabState = 1
 	GrabStateOpenAndSend    GrabState = 2
 	GrabStateOpenAndSendErr GrabState = 3
+	GrabStateDuplicate      GrabState = 4
+
+	GrabStateReclaim           GrabState = 5
+	GrabStateReclaimAndSend    GrabState = 6
+	GrabStateReclaimAndSendErr GrabState = 7
 )
 
 type TalkGroupOpenLuckyBagV3 struct {
@@ -264,7 +278,7 @@ type TalkGroupOpenLuckyBagV3 struct {
 	Timestamp           int64     `json:"timestamp"`   // Chat record timestamp
 	BlockHeight         int64     `json:"blockHeight"` // Block height
 	Chain               string    `json:"chain"`       // Chain type
-	GrabState           GrabState `json:"grabState"`   // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal
+	GrabState           GrabState `json:"grabState"`   // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal, 4-reclaim, 5-reclaim and sent, 6-reclaim and sent abnormal
 	GrabTxId            string    `json:"grabTxId"`    //
 	GrabMsg             string    `json:"grabMsg"`     //
 }
@@ -365,6 +379,7 @@ type TalkPrivateChatV3 struct {
 	Timestamp   int64      `json:"timestamp"`   // Chat record timestamp
 	Chain       string     `json:"chain"`       // Chain type
 	BlockHeight int64      `json:"blockHeight"` // Block height
+	Index       int64      `json:"index"`       // Index default -1
 }
 
 // Grab lucky bag list item
@@ -397,4 +412,32 @@ type ResidueLuckyBagListItem struct {
 type ResidueLuckyBagList struct {
 	LuckyBagPinId string                     `json:"luckyBagPinId"` // Lucky bag PinId
 	Items         []*ResidueLuckyBagListItem `json:"items"`         // Reclaim lucky bag list items
+}
+
+type UserInfo struct {
+	MetaId          string `json:"metaId"`
+	Address         string `json:"address"`
+	ChatPublicKey   string `json:"chatPublicKey"`
+	ChatPublicKeyId string `json:"chatPublicKeyId"`
+	Timestamp       int64  `json:"timestamp"`
+	BlockHeight     int64  `json:"blockHeight"`
+	Chain           string `json:"chain"`
+	Operation       string `json:"operation"`
+	IsValid         bool   `json:"isValid"`
+}
+
+// Group remove user model
+type TalkGroupRemoveUserModel struct {
+	GroupId         string `json:"groupId"`         // Group ID
+	RemoveMetaId    string `json:"removeMetaId"`    // MetaId of user being removed
+	RemoveAddress   string `json:"removeAddress"`   // Address of user being removed
+	RemoveReason    string `json:"removeReason"`    // Reason for removal
+	RemoveByMetaId  string `json:"removeByMetaId"`  // MetaId of user who initiated removal
+	RemoveByAddress string `json:"removeByAddress"` // Address of user who initiated removal
+	TxId            string `json:"txId"`            // Transaction ID
+	PinId           string `json:"pinId"`           // Pin ID
+	Chain           string `json:"chain"`           // Chain type
+	BlockHeight     int64  `json:"blockHeight"`     // Block height
+	ConfirmState    int64  `json:"confirmState"`    // Confirmation state
+	Timestamp       int64  `json:"timestamp"`       // Timestamp
 }

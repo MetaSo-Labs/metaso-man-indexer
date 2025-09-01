@@ -3,25 +3,117 @@ package service
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
 	"manindexer/common"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	chaincfg2 "github.com/bitcoinsv/bsvd/chaincfg"
 	wire2 "github.com/bitcoinsv/bsvd/wire"
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/cockroachdb/pebble"
 	"github.com/libsv/go-bk/bec"
 	"github.com/tyler-smith/go-bip32"
 )
+
+// luckyBagGrabMutexItem lock item for lucky bag grab operations
+type luckyBagGrabMutexItem struct {
+	mutex       *sync.Mutex
+	lastUsed    time.Time
+	accessCount int64
+}
+
+// Global lucky bag grab mutex map
+var luckyBagGrabMutexMap sync.Map
+
+// getLuckyBagGrabMutex get or create lucky bag grab mutex
+func getLuckyBagGrabMutex(luckyBagPinId string) *sync.Mutex {
+	// try to get existing lock from sync.Map
+	if value, exists := luckyBagGrabMutexMap.Load(luckyBagPinId); exists {
+		if item, ok := value.(*luckyBagGrabMutexItem); ok {
+			// update access statistics
+			item.lastUsed = time.Now()
+			item.accessCount++
+			return item.mutex
+		}
+	}
+
+	// if not exists, create new lock item
+	newItem := &luckyBagGrabMutexItem{
+		mutex:       &sync.Mutex{},
+		lastUsed:    time.Now(),
+		accessCount: 1,
+	}
+
+	// use LoadOrStore to ensure atomicity, avoid duplicate creation
+	if value, loaded := luckyBagGrabMutexMap.LoadOrStore(luckyBagPinId, newItem); loaded {
+		// if already exists, return existing lock and update statistics
+		if item, ok := value.(*luckyBagGrabMutexItem); ok {
+			item.lastUsed = time.Now()
+			item.accessCount++
+			return item.mutex
+		}
+	}
+
+	// return new created lock
+	return newItem.mutex
+}
+
+// cleanupUnusedLuckyBagGrabLocks cleanup unused lucky bag grab locks
+func cleanupUnusedLuckyBagGrabLocks() {
+	now := time.Now()
+	cleanupThreshold := 30 * time.Minute // 30 minutes not used to clean up
+
+	var keysToDelete []string
+
+	// traverse all locks, find locks to clean up
+	luckyBagGrabMutexMap.Range(func(key, value interface{}) bool {
+		if item, ok := value.(*luckyBagGrabMutexItem); ok {
+			// check if it exceeds the cleanup threshold
+			if now.Sub(item.lastUsed) > cleanupThreshold {
+				keysToDelete = append(keysToDelete, key.(string))
+			}
+		}
+		return true
+	})
+
+	// delete unused locks
+	for _, key := range keysToDelete {
+		luckyBagGrabMutexMap.Delete(key)
+	}
+
+	if len(keysToDelete) > 0 {
+		log.Printf("Cleaned up %d unused lucky bag grab locks", len(keysToDelete))
+	}
+}
+
+// startLuckyBagGrabCleanupGoroutine start cleanup goroutine for lucky bag grab locks
+func startLuckyBagGrabCleanupGoroutine() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute) // every 5 minutes
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				cleanupUnusedLuckyBagGrabLocks()
+			}
+		}
+	}()
+}
 
 // GetLuckyBagWithOpenList Get lucky bag object and claimed list by groupId and pinId
 func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoResponse, error) {
@@ -67,8 +159,10 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		ImgType:             luckyBag.ImgType,
 		Amount:              luckyBag.Amount,
 		Count:               luckyBag.Count,
+		ValidCount:          luckyBag.ValidCount,
 		UsedCount:           "0",
 		PayList:             make([]*respond.InfoPayList, 0),
+		ErrPayList:          make([]*respond.InfoPayList, 0),
 		Type:                luckyBag.Type,
 		TokenCount:          0, // TalkGroupLuckyBagV3 doesn't have TokenCount field
 		RequireType:         luckyBag.RequireType,
@@ -141,7 +235,7 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 							infoPayList.UserInfo = common_service.FetchMetaIDUserInfo(residueItem.CreateAddress)
 							infoPayList.Timestamp = residueItem.Timestamp
 							// infoPayList.IsBest = true
-							if residueLuckyBag.ReclaimState == models.GrabStateOpenAndSend || residueLuckyBag.ReclaimState == models.GrabStateChain {
+							if residueLuckyBag.ReclaimState == models.GrabStateReclaimAndSend || residueLuckyBag.ReclaimState == models.GrabStateChain {
 								infoPayList.IsWithdraw = true
 							}
 							usedCount++
@@ -223,6 +317,7 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Amount:              luckyBag.Amount,
 		Count:               luckyBag.Count,
+		ValidCount:          luckyBag.ValidCount,
 		Content:             luckyBag.Content,
 		Img:                 luckyBag.Img,
 		ImgType:             luckyBag.ImgType,
@@ -294,6 +389,10 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 	if luckyBag.GroupId != groupId {
 		return "", errors.New("lucky bag not match")
 	}
+
+	// if address == "1HYDwLC4myjVDtddUm7rcNB1FDwePwthaD" {
+	// 	return "", errors.New("error")
+	// }
 
 	// Check if user is in group
 	isInGroup, err := chatDB.IsUserInGroup(metaId, groupId)
@@ -438,6 +537,14 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
 
+	// Use lucky bag-specific mutex to prevent concurrent grabbing of the same lucky bag
+	luckyBagMutex := getLuckyBagGrabMutex(luckyBag.PinId)
+	luckyBagMutex.Lock()
+	defer luckyBagMutex.Unlock()
+
+	t := time.Now().UnixMilli()
+	log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [Lock] %d", luckyBag.PinId, metaId, address, t)
+
 	for _, unused := range unusedList {
 		// Use cache service to check if lucky bag has been grabbed
 		usedMetaId, err := cache_service.GetCacheGiftInfo(luckyBag.GroupId, luckyBag.PinId, unused.Index)
@@ -483,8 +590,11 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	}
 
 	if !has {
+		log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [UnLock]NoLuckyBag [%d]", luckyBag.PinId, metaId, address, time.Now().UnixMilli()-t)
 		return errors.New("LuckyBag had been all grab.")
 	}
+
+	log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [UnLock]Success [%d]", luckyBag.PinId, metaId, address, time.Now().UnixMilli()-t)
 
 	hasSuccess := false
 	for _, v := range grabEntityList {
@@ -659,6 +769,21 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		return errors.New("no vins found")
 	}
 
+	if grabEntity.Address == "1HYDwLC4myjVDtddUm7rcNB1FDwePwthaD" {
+		fmt.Printf("[LuckyBag] black list: %s\n", grabEntity.Address)
+		return errors.New("black list")
+	}
+
+	// Check and clean up duplicate grab records for the same address
+	shouldProcess, err := cleanupDuplicateGrabRecords(grabEntity)
+	if err != nil {
+		log.Printf("[disposingGrabLuckyBag] cleanupDuplicateGrabRecords err: %v", err)
+	}
+	if !shouldProcess {
+		log.Printf("[disposingGrabLuckyBag] cleanupDuplicateGrabRecords shouldProcess: %v", shouldProcess)
+		return nil
+	}
+
 	_ = grabEntity.Vins[0] // utxo, temporarily unused
 	_, hexStr := makeGiftKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
 	if hexStr == "" {
@@ -750,9 +875,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		grabEntity.GrabState = models.GrabStateOpenAndSend
 		grabEntity.GrabTxId = resultTxId
 		grabEntity.GrabMsg = "success"
-		log.Printf("Success broadcast tx: %s, totalCount: %d", resultTxId, totalCount)
+		log.Printf("[Grad]Success broadcast tx: %s, totalCount: %d", resultTxId, totalCount)
 	} else {
-		log.Printf("Failure broadcast tx: %s, totalCount: %d", err.Error(), totalCount)
+		log.Printf("[Grad]Failure broadcast tx: %s, totalCount: %d", err.Error(), totalCount)
 		grabEntity.GrabState = models.GrabStateOpenAndSendErr
 		grabEntity.GrabMsg = err.Error()
 
@@ -769,6 +894,60 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 	}
 
 	return nil
+}
+
+// cleanupDuplicateGrabRecords checks and cleans up duplicate grab records for the same address
+// Returns true if the current entity should be processed, false if it should be skipped
+func cleanupDuplicateGrabRecords(grabEntity *models.TalkGroupOpenLuckyBagV3) (bool, error) {
+	// Get all grab records for this lucky bag from TalkGroupOpenLuckyBagListCollection
+	openLuckyBagList, err := chatDB.GetOpenLuckyBagList(grabEntity.LuckyBagPinId)
+	if err != nil {
+		return false, fmt.Errorf("GetOpenLuckyBagList err: %v", err)
+	}
+
+	// Find records with same address but different pinId and grabState = 1
+	var duplicateRecords []*models.OpenLuckyBagListItem
+	for _, item := range openLuckyBagList.Items {
+		if item.CreateAddress == grabEntity.Address &&
+			item.CreateMetaId == grabEntity.MetaId &&
+			item.OpenPinId != grabEntity.PinId {
+			// Check if the corresponding grab record has grabState = 1
+			openBag, err := chatDB.GetOpenLuckyBagByPinId(item.OpenPinId)
+			if err == nil && openBag != nil && openBag.GrabState == models.GrabStateOpen {
+				duplicateRecords = append(duplicateRecords, item)
+			}
+		}
+	}
+
+	// If no duplicate records found, no need to clean up
+	if len(duplicateRecords) == 0 {
+		log.Printf("[cleanupDuplicateGrabRecords] No duplicate records found for address %s in lucky bag %s",
+			grabEntity.Address, grabEntity.LuckyBagPinId)
+		return true, nil
+	}
+
+	log.Printf("[cleanupDuplicateGrabRecords] Found %d duplicate records for address %s in lucky bag %s, cleaning up",
+		len(duplicateRecords), grabEntity.Address, grabEntity.LuckyBagPinId)
+
+	// Remove current entity from TalkGroupOpenLuckyBagListCollection
+	err = chatDB.RemoveOpenLuckyBagListItem(grabEntity.LuckyBagPinId, grabEntity.PinId)
+	if err != nil {
+		log.Printf("[cleanupDuplicateGrabRecords] RemoveOpenLuckyBagListItem err: %v", err)
+	} else {
+		log.Printf("[cleanupDuplicateGrabRecords] Removed current entity %s from list", grabEntity.PinId)
+	}
+
+	// Update current entity's grabState to 4 (duplicate)
+	grabEntity.GrabState = models.GrabStateDuplicate
+	err = chatDB.SaveOpenLuckyBag(grabEntity)
+	if err != nil {
+		log.Printf("[cleanupDuplicateGrabRecords] SaveOpenLuckyBag err: %v", err)
+	} else {
+		log.Printf("[cleanupDuplicateGrabRecords] Updated current entity %s grabState to 4", grabEntity.PinId)
+	}
+
+	// Skip processing this entity
+	return false, nil
 }
 
 // Start grab lucky bag queue processor
@@ -895,14 +1074,28 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 		}
 	}
 
-	// Get unused UTXO list
+	// Get unused UTXO list (including both PayList and ErrLuckyBagVouts)
 	unusedList := make([]*respond.UnusedList, 0)
+
+	// Add unused items from PayList
 	for _, v := range luckyBag.PayList {
 		if !usedIndices[v.Index] {
 			unused := &respond.UnusedList{
 				Index:   v.Index,
 				Amount:  v.Amount,
 				Address: v.Address,
+			}
+			unusedList = append(unusedList, unused)
+		}
+	}
+
+	// Add unused items from ErrLuckyBagVouts (these are also available for reclaim)
+	for _, vout := range luckyBag.ErrLuckyBagVouts {
+		if !usedIndices[vout.Index] {
+			unused := &respond.UnusedList{
+				Index:   vout.Index,
+				Amount:  strconv.FormatUint(vout.Amount, 10),
+				Address: vout.Address,
 			}
 			unusedList = append(unusedList, unused)
 		}
@@ -960,6 +1153,17 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 				})
 			}
 		}
+		for _, vout := range luckyBag.ErrLuckyBagVouts {
+			if vout.Index == v.unusedIndex {
+				pkScript = vout.ScriptPubKey
+				proInfoPayList = append(proInfoPayList, &models.ProInfoPayList{
+					Amount:   strconv.FormatInt(int64(vout.Amount), 10),
+					Address:  vout.Address,
+					Index:    vout.Index,
+					PkScript: vout.ScriptPubKey,
+				})
+			}
+		}
 
 		// Generate unique TxId and PinId
 		txId := fmt.Sprintf("%s:%d:%s:reclaim", luckyBag.TxId, v.unusedIndex, metaId)
@@ -998,7 +1202,7 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			Timestamp:           time.Now().Unix(),
 			BlockHeight:         0, // Need to get from actual transaction
 			Chain:               luckyBag.Chain,
-			ReclaimState:        models.GrabStateOpen,
+			ReclaimState:        models.GrabStateReclaim,
 			ReclaimTxId:         "",
 			ReclaimMsg:          "",
 		}
@@ -1037,7 +1241,7 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 // Process records in reclaim lucky bag queue
 func ProcessResidueLuckyBagQueue() {
 	// Get pending reclaim lucky bag messages
-	messages, err := chatDB.GetPendingResidueLuckyBagMessages(10) // Process 10 items each time
+	messages, err := chatDB.GetPendingResidueLuckyBagMessages(100) // Process 100 items each time
 	if err != nil {
 		log.Printf("GetPendingResidueLuckyBagMessages err: %v", err)
 		return
@@ -1047,7 +1251,7 @@ func ProcessResidueLuckyBagQueue() {
 		// Process reclaim lucky bag record
 		err := disposingReclaimLuckyBag(message.ResidueLuckyBag)
 		if err != nil {
-			log.Printf("disposingReclaimLuckyBag err: %v", err)
+			// log.Printf("disposingReclaimLuckyBag err: %v", err)
 			continue
 		}
 
@@ -1065,8 +1269,8 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		return fmt.Errorf("chain adapter not found")
 	}
 
-	if reclaimEntity.ReclaimState != models.GrabStateOpen {
-		return nil
+	if reclaimEntity.ReclaimState != models.GrabStateReclaim {
+		return fmt.Errorf("reclaim state is not reclaim")
 	}
 	if reclaimEntity.Vins == nil || len(reclaimEntity.Vins) == 0 {
 		return errors.New("no vins found")
@@ -1076,6 +1280,37 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 	_, hexStr := makeGiftKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr)
 	if hexStr == "" {
 		return errors.New("failed to generate wif or hex")
+	}
+
+	if reclaimEntity.UsedList == nil || len(reclaimEntity.UsedList) == 0 {
+		reclaimEntity.UsedList = make([]*models.ProInfoPayList, 0)
+		luckyBag, err := chatDB.GetLuckyBagByPinId(reclaimEntity.LuckyBagPinId)
+		if err != nil {
+			return err
+		}
+		if luckyBag == nil {
+			return errors.New("lucky bag not found")
+		}
+		for _, vout := range luckyBag.LuckyBagVouts {
+			if vout.Index == reclaimEntity.Index {
+				reclaimEntity.UsedList = append(reclaimEntity.UsedList, &models.ProInfoPayList{
+					Amount:   strconv.FormatInt(int64(vout.Amount), 10),
+					Address:  vout.Address,
+					Index:    vout.Index,
+					PkScript: vout.ScriptPubKey,
+				})
+			}
+		}
+		for _, vout := range luckyBag.ErrLuckyBagVouts {
+			if vout.Index == reclaimEntity.Index {
+				reclaimEntity.UsedList = append(reclaimEntity.UsedList, &models.ProInfoPayList{
+					Amount:   strconv.FormatInt(int64(vout.Amount), 10),
+					Address:  vout.Address,
+					Index:    vout.Index,
+					PkScript: vout.ScriptPubKey,
+				})
+			}
+		}
 	}
 
 	// Calculate total amount (all unused UTXOs)
@@ -1186,13 +1421,13 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 
 	resultTxId, err := chainAdapter[reclaimEntity.Chain].BroadcastTx(txRaw)
 	if resultTxId != "" {
-		reclaimEntity.ReclaimState = models.GrabStateOpenAndSend
+		reclaimEntity.ReclaimState = models.GrabStateReclaimAndSend
 		reclaimEntity.ReclaimTxId = resultTxId
 		reclaimEntity.ReclaimMsg = "success"
-		log.Printf("Success broadcast tx: %s", resultTxId)
+		// log.Printf("[Reclaim]Success broadcast tx: %s", resultTxId)
 	} else {
-		log.Printf("Failure broadcast tx: %s", err.Error())
-		reclaimEntity.ReclaimState = models.GrabStateOpenAndSendErr
+		// log.Printf("[Reclaim]Failure broadcast tx: %s", err.Error())
+		reclaimEntity.ReclaimState = models.GrabStateReclaimAndSendErr
 		reclaimEntity.ReclaimMsg = err.Error()
 
 		// Check if error contains broadcast-related issues, if not, return the error
@@ -1213,7 +1448,7 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 // Start reclaim lucky bag queue processor
 func StartResidueLuckyBagQueueProcessor() {
 	go func() {
-		ticker := time.NewTicker(10 * time.Second) // Process every 10 seconds
+		ticker := time.NewTicker(5 * time.Second) // Process every 5 seconds
 		defer ticker.Stop()
 
 		// Flag to track if the previous processing is still running
@@ -1269,4 +1504,736 @@ func isBroadcastError(err error) bool {
 	}
 
 	return false
+}
+
+// UpdateLuckyBagValidation updates lucky bag validation counts and lists
+func UpdateLuckyBagValidation(luckyBagPinId string) (map[string]interface{}, error) {
+	// Get lucky bag from database
+	luckyBag, err := chatDB.GetLuckyBagByPinId(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lucky bag: %v", err)
+	}
+	if luckyBag == nil {
+		return nil, fmt.Errorf("lucky bag not found: %s", luckyBagPinId)
+	}
+
+	if luckyBag.OriginalPayList == nil {
+		luckyBag.OriginalPayList = luckyBag.PayList
+	}
+	if luckyBag.OriginalLuckyBagVouts == nil {
+		luckyBag.OriginalLuckyBagVouts = luckyBag.LuckyBagVouts
+	}
+
+	// Get transaction data
+	var txData *wire.MsgTx
+	if luckyBag.TxId != "" {
+		// Get transaction from chain adapter
+		if chainAdapter != nil && chainAdapter[luckyBag.Chain] != nil {
+			tx, err := chainAdapter[luckyBag.Chain].GetTransaction(luckyBag.TxId)
+			if err == nil && tx != nil {
+				fmt.Printf("tx: %+v\n", tx)
+				// Convert to wire.MsgTx
+				switch txType := tx.(type) {
+				case *wire.MsgTx:
+					txData = txType
+					break
+				case wire.MsgTx:
+					txData = &txType
+					break
+				case *btcutil.Tx:
+					txData = txType.MsgTx()
+					break
+				case btcutil.Tx:
+					txData = txType.MsgTx()
+					break
+				default:
+					fmt.Println("tx type:", txType)
+					// Try to convert other types
+					if msgTx, ok := tx.(*wire.MsgTx); ok {
+						txData = msgTx
+					} else if msgTx, ok := tx.(wire.MsgTx); ok {
+						txData = &msgTx
+					} else {
+						log.Printf("[UpdateLuckyBagValidation]Failed to convert tx to *wire.MsgTx for lucky bag: %s", luckyBagPinId)
+						return nil, fmt.Errorf("failed to convert tx to *wire.MsgTx for lucky bag: %s", luckyBagPinId)
+					}
+				}
+			} else if err != nil {
+				log.Printf("[UpdateLuckyBagValidation]Failed to get transaction data: %v", err)
+				return nil, fmt.Errorf("failed to get transaction data: %v", err)
+			} else {
+				log.Printf("[UpdateLuckyBagValidation]Failed to get transaction data for lucky bag: %s, no err no tx", luckyBagPinId)
+				return nil, fmt.Errorf("failed to get transaction data for lucky bag: %s, no err no tx", luckyBagPinId)
+			}
+		} else {
+			log.Printf("[UpdateLuckyBagValidation]Chain adapter not found for chain: %s", luckyBag.Chain)
+			return nil, fmt.Errorf("chain adapter not found for chain: %s", luckyBag.Chain)
+		}
+	}
+	if txData == nil {
+		return nil, fmt.Errorf("failed to get transaction data")
+	} else {
+		fmt.Printf("txData: %+v\n", txData)
+	}
+
+	// Convert payment list
+	var (
+		payList          []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
+		errPayList       []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
+		luckyBagVouts    []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+		errLuckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+	)
+
+	// Create a map to store PayList items by index for quick lookup
+	payListByIndex := make(map[int64]*models.ProInfoPayList)
+	luckyTxOutList := make([]*models.LuckyBagOutput, 0)
+
+	payAddressList := make([]string, 0)
+	// First, process all PayList items
+	for _, pay := range luckyBag.PayList {
+		payAddressList = append(payAddressList, pay.Address)
+		payItem := &models.ProInfoPayList{
+			Amount:  pay.Amount,
+			Address: pay.Address,
+			Index:   pay.Index,
+		}
+		if _, ok := payListByIndex[pay.Index]; ok {
+			errPayList = append(errPayList, payItem)
+		} else {
+			payListByIndex[pay.Index] = payItem
+		}
+	}
+
+	if txData != nil {
+		// First, extract all TxOut addresses and find matching UTXOs
+		for i, vout := range txData.TxOut {
+			index := int64(i)
+
+			// Extract address from vout
+			voutAddress := ""
+			// Get chain params based on chain name
+			var netParams *chaincfg.Params = &chaincfg.MainNetParams
+			if common.TestNet == "1" {
+				netParams = &chaincfg.TestNet3Params
+			} else if common.TestNet == "2" {
+				netParams = &chaincfg.RegressionNetParams
+			}
+
+			class, addresses, _, _ := txscript.ExtractPkScriptAddrs(vout.PkScript, netParams)
+			if class.String() != "nulldata" && class.String() != "nonstandard" && len(addresses) > 0 {
+				voutAddress = addresses[0].String()
+			}
+
+			// Check if this vout address is in payAddressList (belongs to this lucky bag)
+			if len(payAddressList) > 0 && contains(payAddressList, voutAddress) {
+				// This is a lucky bag UTXO, add it to the list
+				luckyBagVout := &models.LuckyBagOutput{
+					ScriptPubKey: hex.EncodeToString(vout.PkScript),
+					Amount:       uint64(vout.Value),
+					Address:      voutAddress,
+					Index:        index,
+				}
+				luckyTxOutList = append(luckyTxOutList, luckyBagVout)
+			}
+		}
+
+		// Now process only the lucky bag UTXOs
+		for _, luckyBagVout := range luckyTxOutList {
+			// Check if this index exists in PayList
+			if payItem, exists := payListByIndex[luckyBagVout.Index]; exists {
+				// Index exists in PayList, check if address matches
+				if payItem.Address == luckyBagVout.Address {
+					// Both index and address match - this is correct
+					payList = append(payList, payItem)
+					luckyBagVouts = append(luckyBagVouts, luckyBagVout)
+				} else {
+					// Index exists but address doesn't match - this is an error
+					errPayList = append(errPayList, payItem)
+					errLuckyBagVouts = append(errLuckyBagVouts, luckyBagVout)
+				}
+			} else {
+				// Index doesn't exist in PayList - this is an error
+				errLuckyBagVouts = append(errLuckyBagVouts, luckyBagVout)
+			}
+		}
+
+		// Check for PayList items that don't have corresponding TxOut
+		for index, payItem := range payListByIndex {
+			found := false
+			for _, vout := range luckyBagVouts {
+				if vout.Index == index {
+					found = true
+					break
+				}
+			}
+			for _, vout := range errLuckyBagVouts {
+				if vout.Index == index {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				// PayList item exists but no corresponding TxOut - this is an error
+				errPayList = append(errPayList, payItem)
+			}
+		}
+	} else {
+		// No txData available, all PayList items are considered errors
+		for _, payItem := range payListByIndex {
+			errPayList = append(errPayList, payItem)
+		}
+	}
+
+	fmt.Println("originalPayList len:", len(luckyBag.OriginalPayList))
+	fmt.Println("originalLuckyBagVouts len:", len(luckyBag.OriginalLuckyBagVouts))
+	fmt.Println("payList len:", len(payList))
+	fmt.Println("errPayList len:", len(errPayList))
+	fmt.Println("luckyBagVouts len:", len(luckyBagVouts))
+	fmt.Println("errLuckyBagVouts len:", len(errLuckyBagVouts))
+
+	// Calculate counts
+	count, _ := strconv.ParseInt(luckyBag.Count, 10, 64)
+	validCount := len(payList)
+	errCount := count - int64(validCount)
+
+	// Update lucky bag with new validation data
+	luckyBag.ValidCount = strconv.FormatInt(int64(validCount), 10)
+	luckyBag.ErrCount = strconv.FormatInt(errCount, 10)
+	luckyBag.PayList = payList
+	luckyBag.ErrPayList = errPayList
+	luckyBag.LuckyBagVouts = luckyBagVouts
+	luckyBag.ErrLuckyBagVouts = errLuckyBagVouts
+
+	// Clean up error lucky bags if there are errors
+	if len(errPayList) > 0 || len(errLuckyBagVouts) > 0 {
+		err = cleanupErrorLuckyBags(luckyBag, errPayList, errLuckyBagVouts)
+		if err != nil {
+			log.Printf("[UpdateLuckyBagValidation] Failed to cleanup error lucky bags: %v", err)
+		}
+	}
+
+	// Save updated lucky bag
+	err = chatDB.SaveLuckyBag(luckyBag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save updated lucky bag: %v", err)
+	}
+
+	// Save lucky bag to appropriate collection based on error status
+	err = chatDB.SaveLuckyBagPendingToCollection(luckyBag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save lucky bag to collection: %v", err)
+	}
+
+	// Return update result
+	result := map[string]interface{}{
+		"luckyBagPinId":         luckyBagPinId,
+		"validCount":            validCount,
+		"errCount":              errCount,
+		"totalCount":            count,
+		"payListCount":          len(payList),
+		"errPayListCount":       len(errPayList),
+		"luckyBagVoutsCount":    len(luckyBagVouts),
+		"errLuckyBagVoutsCount": len(errLuckyBagVouts),
+		"updated":               true,
+	}
+
+	return result, nil
+}
+
+// cleanupErrorLuckyBags cleans up error lucky bags from open lists and queue collections
+func cleanupErrorLuckyBags(luckyBag *models.TalkGroupLuckyBagV3, errPayList []*models.ProInfoPayList, errLuckyBagVouts []*models.LuckyBagOutput) error {
+	// Build error indices set for quick lookup
+	errorIndices := make(map[int64]bool)
+	for _, errPay := range errPayList {
+		errorIndices[errPay.Index] = true
+	}
+	for _, errVout := range errLuckyBagVouts {
+		errorIndices[errVout.Index] = true
+	}
+
+	// Get open lucky bag list
+	openList, err := chatDB.GetOpenLuckyBagList(luckyBag.PinId)
+	if err != nil {
+		return fmt.Errorf("failed to get open lucky bag list: %v", err)
+	}
+
+	// Find and remove error lucky bags from open list
+	var errorOpenPinIds []string
+	for _, openItem := range openList.Items {
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
+
+		// Check if this open lucky bag is for an error index
+		if errorIndices[openLuckyBag.Index] {
+			errorOpenPinIds = append(errorOpenPinIds, openItem.OpenPinId)
+			log.Printf("[UpdateLuckyBagValidation] Found error open lucky bag: %s, index: %d", openItem.OpenPinId, openLuckyBag.Index)
+		}
+	}
+
+	// Remove error open lucky bags from open list
+	for _, errorOpenPinId := range errorOpenPinIds {
+		err = chatDB.RemoveOpenLuckyBagListItem(luckyBag.PinId, errorOpenPinId)
+		if err != nil {
+			log.Printf("[UpdateLuckyBagValidation] Failed to remove error open lucky bag %s from list: %v", errorOpenPinId, err)
+		} else {
+			log.Printf("[UpdateLuckyBagValidation] Successfully removed error open lucky bag %s from list", errorOpenPinId)
+		}
+	}
+
+	// Clean up error lucky bags from queue collection
+	err = cleanupErrorLuckyBagsFromQueue(errorOpenPinIds)
+	if err != nil {
+		log.Printf("[UpdateLuckyBagValidation] Failed to cleanup error lucky bags from queue: %v", err)
+	}
+
+	return nil
+}
+
+// cleanupErrorLuckyBagsFromQueue removes error lucky bags from the queue collection
+func cleanupErrorLuckyBagsFromQueue(errorOpenPinIds []string) error {
+	if len(errorOpenPinIds) == 0 {
+		return nil
+	}
+
+	iter, err := db.Pb[db.TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("failed to create iterator for queue collection: %v", err)
+	}
+	defer iter.Close()
+
+	// Find and remove error lucky bags from queue
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage db.QueueOpenLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// Check if this queue message is for an error lucky bag
+		for _, errorOpenPinId := range errorOpenPinIds {
+			if queueMessage.PinId == errorOpenPinId {
+				// Remove from queue collection
+				err = db.Pb[db.TalkGroupOpenLuckyBagQueueCollection].Delete(iter.Key(), pebble.Sync)
+				if err != nil {
+					log.Printf("[UpdateLuckyBagValidation] Failed to remove error lucky bag %s from queue: %v", errorOpenPinId, err)
+				} else {
+					log.Printf("[UpdateLuckyBagValidation] Successfully removed error lucky bag %s from queue", errorOpenPinId)
+				}
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// Helper function to check if slice contains item
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// ProcessExpiredLuckyBags processes expired lucky bags from pending collections
+func ProcessExpiredLuckyBags() {
+	// Process pending collection
+	err := processExpiredLuckyBagsFromCollection(db.TalkGroupLuckyBagPinPendingCollection, "")
+	if err != nil {
+		log.Printf("[ExpiredLuckyBag]ProcessExpiredLuckyBags pending collection err: %v", err)
+	}
+
+	// Process error pending collection
+	err = processExpiredLuckyBagsFromCollection(db.TalkGroupLuckyBagPinErrPendingCollection, "")
+	if err != nil {
+		log.Printf("[ExpiredLuckyBag]ProcessExpiredLuckyBags error pending collection err: %v", err)
+	}
+}
+
+// processExpiredLuckyBagsFromCollection processes expired lucky bags from a specific collection
+func processExpiredLuckyBagsFromCollection(collection, pinId string) error {
+	iter, err := db.Pb[collection].NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[ExpiredLuckyBag]failed to create iterator for collection %s: %v", collection, err)
+	}
+	defer iter.Close()
+
+	expiredLuckyBags := make([]string, 0)
+	now := time.Now().Unix()
+	expirationTime := int64(24 * 60 * 60) // 24 hours in seconds
+
+	// Iterate through all lucky bags in the collection
+	for iter.First(); iter.Valid(); iter.Next() {
+		luckyBagPinId := string(iter.Value())
+
+		// Get lucky bag details
+		luckyBag, err := chatDB.GetLuckyBagByPinId(luckyBagPinId)
+		if err != nil {
+			log.Printf("[ExpiredLuckyBag]Failed to get lucky bag %s: %v", luckyBagPinId, err)
+			continue
+		}
+		if luckyBag == nil {
+			log.Printf("[ExpiredLuckyBag]Lucky bag %s not found", luckyBagPinId)
+			continue
+		}
+
+		// Check if lucky bag has expired (more than 24 hours old)
+		if now-luckyBag.Timestamp > expirationTime {
+			expiredLuckyBags = append(expiredLuckyBags, luckyBagPinId)
+		}
+	}
+
+	if pinId != "" {
+		expiredLuckyBags = append(expiredLuckyBags, pinId)
+	}
+
+	// Process expired lucky bags
+	for _, luckyBagPinId := range expiredLuckyBags {
+		log.Printf("[ExpiredLuckyBag]Processing expired lucky bag: %s", luckyBagPinId)
+
+		// Get lucky bag details again for processing
+		luckyBag, err := chatDB.GetLuckyBagByPinId(luckyBagPinId)
+		if err != nil {
+			log.Printf("[ExpiredLuckyBag]Failed to get lucky bag %s for processing: %v", luckyBagPinId, err)
+			continue
+		}
+		if luckyBag == nil {
+			continue
+		}
+
+		// Check lucky bag status and determine target collection
+		targetCollection, shouldReclaim := determineLuckyBagStatus(luckyBag, collection)
+
+		if shouldReclaim {
+			// Execute reclaim logic
+			err = autoReclaimExpiredLuckyBag(luckyBag)
+			if err != nil {
+				log.Printf("[ExpiredLuckyBag]Failed to auto reclaim expired lucky bag %s: %v", luckyBagPinId, err)
+				continue
+			}
+		}
+
+		// Update lucky bag state based on target collection
+		err = updateLuckyBagState(luckyBag, targetCollection)
+		if err != nil {
+			log.Printf("[ExpiredLuckyBag]Failed to update lucky bag state for %s: %v", luckyBagPinId, err)
+			continue
+		}
+
+		// Move to target collection
+		err = moveLuckyBagToCollection(luckyBagPinId, collection, targetCollection)
+		if err != nil {
+			log.Printf("[ExpiredLuckyBag]Failed to move lucky bag %s from %s to %s: %v", luckyBagPinId, collection, targetCollection, err)
+			continue
+		}
+
+		log.Printf("[ExpiredLuckyBag]Successfully processed expired lucky bag %s: moved from %s to %s, state updated to %d", luckyBagPinId, collection, targetCollection, luckyBag.State)
+	}
+
+	return nil
+}
+
+// ProcessExpiredLuckyBagByPinId processes a specific lucky bag by pinId as if it were expired
+func ProcessExpiredLuckyBagByPinId(pinId string) (map[string]interface{}, error) {
+	if pinId == "" {
+		return nil, fmt.Errorf("pinId cannot be empty")
+	}
+
+	// Get lucky bag details
+	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lucky bag %s: %v", pinId, err)
+	}
+	if luckyBag == nil {
+		return nil, fmt.Errorf("lucky bag %s not found", pinId)
+	}
+
+	// Determine which collection the lucky bag is currently in
+	var sourceCollection string
+	var found bool
+
+	// Check pending collection
+	_, closer, err := db.Pb[db.TalkGroupLuckyBagPinPendingCollection].Get([]byte(pinId))
+	if err == nil {
+		closer.Close()
+		sourceCollection = db.TalkGroupLuckyBagPinPendingCollection
+		found = true
+	}
+
+	// Check error pending collection
+	if !found {
+		_, closer, err := db.Pb[db.TalkGroupLuckyBagPinErrPendingCollection].Get([]byte(pinId))
+		if err == nil {
+			closer.Close()
+			sourceCollection = db.TalkGroupLuckyBagPinErrPendingCollection
+			found = true
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("lucky bag %s not found in any pending collection", pinId)
+	}
+
+	// Process the lucky bag as if it were expired
+	err = processExpiredLuckyBagsFromCollection(sourceCollection, pinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process expired lucky bag %s: %v", pinId, err)
+	}
+
+	// Get updated lucky bag details after processing
+	updatedLuckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated lucky bag %s: %v", pinId, err)
+	}
+
+	result := map[string]interface{}{
+		"pinId":            pinId,
+		"sourceCollection": sourceCollection,
+		"processed":        true,
+		"newState":         updatedLuckyBag.State,
+		"timestamp":        time.Now().Unix(),
+	}
+
+	// Determine target collection based on new state
+	switch updatedLuckyBag.State {
+	case 2: // completed
+		result["targetCollection"] = db.TalkGroupLuckyBagPinCompletedCollection
+	case 3: // timeout residue
+		result["targetCollection"] = db.TalkGroupLuckyBagPinTimeoutResidueCollection
+	case 5: // err timeout residue
+		result["targetCollection"] = db.TalkGroupLuckyBagPinErrTimeoutResidueCollection
+	default:
+		result["targetCollection"] = "unknown"
+	}
+
+	return result, nil
+}
+
+// determineLuckyBagStatus determines the target collection and whether reclaim is needed
+func determineLuckyBagStatus(luckyBag *models.TalkGroupLuckyBagV3, sourceCollection string) (string, bool) {
+	// Get claimed lucky bag list
+	openList, err := chatDB.GetOpenLuckyBagList(luckyBag.PinId)
+	if err != nil {
+		log.Printf("[ExpiredLuckyBag]Failed to get open lucky bag list for %s: %v", luckyBag.PinId, err)
+		return sourceCollection, false
+	}
+
+	// Get reclaimed lucky bag list
+	residueList, err := chatDB.GetResidueLuckyBagList(luckyBag.PinId)
+	if err != nil {
+		log.Printf("[ExpiredLuckyBag]Failed to get residue lucky bag list for %s: %v", luckyBag.PinId, err)
+		return sourceCollection, false
+	}
+
+	// Build used UTXO index set
+	usedIndices := make(map[int64]bool)
+
+	// Add claimed lucky bag indices
+	for _, openItem := range openList.Items {
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
+		usedIndices[openLuckyBag.Index] = true
+	}
+
+	// Add reclaimed lucky bag indices
+	for _, residueItem := range residueList.Items {
+		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+		if err != nil || residueLuckyBag == nil {
+			continue
+		}
+		if residueLuckyBag.UsedList != nil {
+			for _, used := range residueLuckyBag.UsedList {
+				usedIndices[used.Index] = true
+			}
+		}
+	}
+
+	// Count total available UTXOs (PayList + ErrLuckyBagVouts)
+	totalAvailable := len(luckyBag.PayList) + len(luckyBag.ErrLuckyBagVouts)
+	usedCount := len(usedIndices)
+
+	// Determine status based on source collection
+	if sourceCollection == db.TalkGroupLuckyBagPinPendingCollection {
+		// Normal pending collection
+		if usedCount >= totalAvailable {
+			// All UTXOs have been used, move to completed
+			return db.TalkGroupLuckyBagPinCompletedCollection, false
+		} else {
+			// Some UTXOs are still available, move to timeout residue
+			return db.TalkGroupLuckyBagPinTimeoutResidueCollection, true
+		}
+	} else if sourceCollection == db.TalkGroupLuckyBagPinErrPendingCollection {
+		// Error pending collection
+		// Some UTXOs are still available, move to error timeout residue
+		return db.TalkGroupLuckyBagPinErrTimeoutResidueCollection, true
+	}
+
+	// Default case: stay in source collection
+	return sourceCollection, false
+}
+
+// updateLuckyBagState updates the lucky bag state based on target collection
+func updateLuckyBagState(luckyBag *models.TalkGroupLuckyBagV3, targetCollection string) error {
+	// Update state based on target collection
+	switch targetCollection {
+	case db.TalkGroupLuckyBagPinCompletedCollection:
+		luckyBag.State = 2 // completed
+	case db.TalkGroupLuckyBagPinTimeoutResidueCollection:
+		luckyBag.State = 3 // timeout residue
+	case db.TalkGroupLuckyBagPinErrTimeoutResidueCollection:
+		luckyBag.State = 5 // err timeout residue
+	default:
+		// Keep current state for other collections
+		return nil
+	}
+
+	// Save updated lucky bag
+	err := chatDB.SaveLuckyBag(luckyBag)
+	if err != nil {
+		return fmt.Errorf("failed to save lucky bag with updated state: %v", err)
+	}
+
+	return nil
+}
+
+// moveLuckyBagToCollection moves a lucky bag from source collection to target collection
+func moveLuckyBagToCollection(luckyBagPinId, sourceCollection, targetCollection string) error {
+	// Add to target collection
+	err := db.Pb[targetCollection].Set([]byte(luckyBagPinId), []byte(luckyBagPinId), pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to add lucky bag to target collection %s: %v", targetCollection, err)
+	}
+
+	// Remove from source collection
+	err = db.Pb[sourceCollection].Delete([]byte(luckyBagPinId), pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to remove lucky bag from source collection %s: %v", sourceCollection, err)
+	}
+
+	return nil
+}
+
+// autoReclaimExpiredLuckyBag automatically reclaims an expired lucky bag
+func autoReclaimExpiredLuckyBag(luckyBag *models.TalkGroupLuckyBagV3) error {
+	// Get claimed lucky bag list
+	openList, err := chatDB.GetOpenLuckyBagList(luckyBag.PinId)
+	if err != nil {
+		return fmt.Errorf("[ExpiredLuckyBag]failed to get open lucky bag list: %v", err)
+	}
+
+	// Get reclaimed lucky bag list
+	residueList, err := chatDB.GetResidueLuckyBagList(luckyBag.PinId)
+	if err != nil {
+		return fmt.Errorf("[ExpiredLuckyBag]failed to get residue lucky bag list: %v", err)
+	}
+
+	// Build used UTXO index set
+	usedIndices := make(map[int64]bool)
+
+	// Add claimed lucky bag indices
+	for _, openItem := range openList.Items {
+		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
+		if err != nil || openLuckyBag == nil {
+			continue
+		}
+		usedIndices[openLuckyBag.Index] = true
+	}
+
+	// Add reclaimed lucky bag indices
+	for _, residueItem := range residueList.Items {
+		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
+		if err != nil || residueLuckyBag == nil {
+			continue
+		}
+		if residueLuckyBag.UsedList != nil {
+			for _, used := range residueLuckyBag.UsedList {
+				usedIndices[used.Index] = true
+			}
+		}
+	}
+
+	// Get unused UTXO list (including both PayList and ErrLuckyBagVouts)
+	unusedList := make([]*respond.UnusedList, 0)
+
+	// Add unused items from PayList
+	for _, v := range luckyBag.PayList {
+		if !usedIndices[v.Index] {
+			unused := &respond.UnusedList{
+				Index:   v.Index,
+				Amount:  v.Amount,
+				Address: v.Address,
+			}
+			unusedList = append(unusedList, unused)
+		}
+	}
+
+	// Add unused items from ErrLuckyBagVouts (these are also available for reclaim)
+	for _, vout := range luckyBag.ErrLuckyBagVouts {
+		if !usedIndices[vout.Index] {
+			unused := &respond.UnusedList{
+				Index:   vout.Index,
+				Amount:  strconv.FormatUint(vout.Amount, 10),
+				Address: vout.Address,
+			}
+			unusedList = append(unusedList, unused)
+		}
+	}
+
+	if len(unusedList) <= 0 {
+		log.Printf("[ExpiredLuckyBag]No unused UTXOs to reclaim for lucky bag %s", luckyBag.PinId)
+		return nil
+	}
+
+	// Execute reclaim logic
+	err = commonReclaim(luckyBag, unusedList, luckyBag.MetaId, luckyBag.Address)
+	if err != nil {
+		return fmt.Errorf("[ExpiredLuckyBag]failed to execute common reclaim: %v", err)
+	}
+
+	log.Printf("[ExpiredLuckyBag]Successfully auto reclaimed expired lucky bag %s with %d unused UTXOs", luckyBag.PinId, len(unusedList))
+	return nil
+}
+
+// StartExpiredLuckyBagProcessor starts the expired lucky bag processor
+func StartExpiredLuckyBagProcessor() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute) // Check every 10 minutes
+		defer ticker.Stop()
+
+		// Flag to track if the previous processing is still running
+		isProcessing := false
+
+		for {
+			select {
+			case <-ticker.C:
+				// Skip if previous processing is still running
+				if isProcessing {
+					log.Printf("[StartExpiredLuckyBagProcessor] Previous ProcessExpiredLuckyBags is still running, skipping this cycle")
+					continue
+				}
+
+				// Set processing flag
+				isProcessing = true
+
+				// Process expired lucky bags in a goroutine
+				go func() {
+					defer func() {
+						// Reset processing flag when done
+						isProcessing = false
+					}()
+
+					ProcessExpiredLuckyBags()
+				}()
+			}
+		}
+	}()
 }
