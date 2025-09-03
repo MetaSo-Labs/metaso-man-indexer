@@ -138,3 +138,16 @@ func TestCountBlockPEV(t *testing.T) {
 		return
 	}
 }
+func TestGetPoPScore(t *testing.T) {
+	pop := "00000000000000000000000000033334636114634740160621766746103710301536702156407500462500210217703025774636164673653463655020276177464072614410456650342634434412222501133440"
+	fmt.Println("pop:", pop)
+	popLv := 6
+	score := pin.GetPoPScore(pop, int64(popLv), 21)
+	fmt.Println("Lv6 PoP Score:", score)
+	popLv = 5
+	score = pin.GetPoPScore(pop, int64(popLv), 21)
+	fmt.Println("Lv5 PoP Score:", score)
+	popLv = 4
+	score = pin.GetPoPScore(pop, int64(popLv), 21)
+	fmt.Println("Lv4 PoP Score:", score)
+}

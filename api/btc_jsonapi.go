@@ -50,6 +50,7 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/node/parent/:pinId", getParentNodeById)
 	btcGroup.GET("/info/address/:address", getInfoByAddress)
 	btcGroup.GET("/info/metaid/:metaId", getInfoByMetaId)
+	btcGroup.GET("/info/search", infoSearch)
 	btcGroup.GET("/getAllPinByPath", getAllPinByPath)
 	btcGroup.POST("/generalQuery", generalQuery)
 	btcGroup.GET("/pin/ByOutput/:output", getPinByOutput)
@@ -457,7 +458,56 @@ func getCacheInfoByAddress(ctx *gin.Context) {
 	// 使用代理处理请求
 	proxy.ServeHTTP(ctx.Writer, ctx.Request)
 }
+func infoSearch(ctx *gin.Context) {
+	keyword := ctx.Query("keyword")
+	if keyword == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	keytype := ctx.Query("keytype")
+	if keytype == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	// 拼接目标 URL
+	targetURL, err := url.Parse(common.Config.CacheUrl)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid target URL"})
+		return
+	}
+	// 创建反向代理
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	// 修改请求路径
+	ctx.Request.URL.Path = "/v1/search"
+	ctx.Request.Host = targetURL.Host
+
+	// 使用代理处理请求
+	proxy.ServeHTTP(ctx.Writer, ctx.Request)
+}
+func getCacheInfoByMetaid(ctx *gin.Context) {
+	metaid := ctx.Param("metaId")
+	// 拼接目标 URL
+	targetURL, err := url.Parse(common.Config.CacheUrl)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid target URL"})
+		return
+	}
+	// 创建反向代理
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+
+	// 修改请求路径
+	ctx.Request.URL.Path = "/v1/users/info/metaid/" + metaid
+	ctx.Request.Host = targetURL.Host
+
+	// 使用代理处理请求
+	proxy.ServeHTTP(ctx.Writer, ctx.Request)
+}
 func getInfoByMetaId(ctx *gin.Context) {
+	if common.Config.CacheUrl != "" && ctx.Query("cache") == "" {
+		getCacheInfoByMetaid(ctx)
+		return
+	}
 	metaid, unconfirmed, err := man.DbAdapter.GetMetaIdInfo("", true, ctx.Param("metaId"))
 	if err != nil {
 		ctx.JSON(http.StatusOK, respond.ErrServiceError)
