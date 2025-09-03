@@ -112,6 +112,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 			PinId:              group.PinId,
 			RoomName:           group.RoomName,
 			RoomNote:           group.RoomNote,
+			RoomIcon:           group.RoomIcon,
 			RoomType:           group.RoomType,
 			RoomStatus:         group.RoomStatus,
 			RoomJoinType:       group.RoomJoinType,
@@ -227,6 +228,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			PinId:        group.PinId,
 			RoomName:     group.RoomName,
 			RoomNote:     group.RoomNote,
+			RoomIcon:     group.RoomIcon,
 			RoomType:     group.RoomType,
 			RoomStatus:   group.RoomStatus,
 			RoomJoinType: group.RoomJoinType,
@@ -326,6 +328,7 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		PinId:        group.PinId,
 		RoomName:     group.RoomName,
 		RoomNote:     group.RoomNote,
+		RoomIcon:     group.RoomIcon,
 		RoomType:     group.RoomType,
 		RoomStatus:   group.RoomStatus,
 		RoomJoinType: group.RoomJoinType,
@@ -430,7 +433,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			ChatType:    chat.ChatType,
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
-			RedMetaId:   "",
+			ReplyMetaId: "",
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -465,7 +468,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 				Timestamp:   replyChat.Timestamp,
 				Chain:       replyChat.Chain,
 			}
-			chatItem.RedMetaId = replyChat.MetaId
+			chatItem.ReplyMetaId = replyChat.MetaId
 			chatItem.BlockHeight = replyChat.BlockHeight
 		}
 
@@ -498,14 +501,14 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 	var nextTimestamp int64 = 0
 	if req.Timestamp > 0 {
 		// Get chat records by timestamp range using new method with IterOptions
-		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange3(req.GroupId, req.Timestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange3(req.GroupId, req.Timestamp, req.Size)
 	} else {
 		// Get latest chat records using new method with IterOptions
 		// For latest messages, we can use a very large timestamp as start point
 		currentTimestamp := time.Now().Unix()
 		//add 6 number 0
 		currentTimestamp = currentTimestamp * 1000000
-		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange3(req.GroupId, currentTimestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange3(req.GroupId, currentTimestamp, req.Size)
 	}
 	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] get chat time: %d\n", time.Now().UnixMilli()-t)
 
@@ -534,7 +537,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 			ChatType:    chat.ChatType,
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
-			RedMetaId:   "",
+			ReplyMetaId: "",
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -552,26 +555,25 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 			}
 		}
 		if chat.ReplyPin != "" {
-			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
-			if err != nil {
-				replyChat = nil
+			replyChat, _ := chatDB.GetChatByPinId(chat.ReplyPin)
+			if replyChat != nil {
+				chatItem.ReplyInfo = &respond.ReplyInfo{
+					PinId:   replyChat.PinId,
+					MetaId:  replyChat.MetaId,
+					Address: replyChat.Address,
+					// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
+					NickName:    replyChat.NickName,
+					Protocol:    replyChat.Protocol,
+					Content:     replyChat.Content,
+					ContentType: replyChat.ContentType,
+					Encryption:  replyChat.Encryption,
+					ChatType:    replyChat.ChatType,
+					Timestamp:   replyChat.Timestamp,
+					Chain:       replyChat.Chain,
+					Index:       replyChat.Index,
+				}
 			}
-			chatItem.ReplyInfo = &respond.ReplyInfo{
-				PinId:   replyChat.PinId,
-				MetaId:  replyChat.MetaId,
-				Address: replyChat.Address,
-				// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
-				NickName:    replyChat.NickName,
-				Protocol:    replyChat.Protocol,
-				Content:     replyChat.Content,
-				ContentType: replyChat.ContentType,
-				Encryption:  replyChat.Encryption,
-				ChatType:    replyChat.ChatType,
-				Timestamp:   replyChat.Timestamp,
-				Chain:       replyChat.Chain,
-				Index:       replyChat.Index,
-			}
-			chatItem.RedMetaId = replyChat.MetaId
+			chatItem.ReplyMetaId = replyChat.MetaId
 			chatItem.BlockHeight = replyChat.BlockHeight
 		}
 
@@ -610,14 +612,14 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 	var nextTimestamp int64 = 0
 	if req.Timestamp > 0 {
 		// Get chat records by timestamp range using new collection
-		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, req.Timestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange2(req.GroupId, req.Timestamp, req.Size)
 	} else {
 		// Get latest chat records using new collection
 		// For latest messages, we can use a very large timestamp as start point
 		currentTimestamp := time.Now().Unix()
 		//add 6 number 0
 		currentTimestamp = currentTimestamp * 1000000
-		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
+		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
 	}
 	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] get chat time: %d\n", time.Now().UnixMilli()-t)
 
@@ -646,7 +648,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			ChatType:    chat.ChatType,
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
-			RedMetaId:   "",
+			ReplyMetaId: "",
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -664,27 +666,26 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			}
 		}
 		if chat.ReplyPin != "" {
-			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
-			if err != nil {
-				replyChat = nil
+			replyChat, _ := chatDB.GetChatByPinId(chat.ReplyPin)
+			if replyChat != nil {
+				chatItem.ReplyInfo = &respond.ReplyInfo{
+					PinId:   replyChat.PinId,
+					MetaId:  replyChat.MetaId,
+					Address: replyChat.Address,
+					// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
+					NickName:    replyChat.NickName,
+					Protocol:    replyChat.Protocol,
+					Content:     replyChat.Content,
+					ContentType: replyChat.ContentType,
+					Encryption:  replyChat.Encryption,
+					ChatType:    replyChat.ChatType,
+					Timestamp:   replyChat.Timestamp,
+					Chain:       replyChat.Chain,
+					Index:       replyChat.Index,
+				}
+				chatItem.ReplyMetaId = replyChat.MetaId
+				chatItem.BlockHeight = replyChat.BlockHeight
 			}
-			chatItem.ReplyInfo = &respond.ReplyInfo{
-				PinId:   replyChat.PinId,
-				MetaId:  replyChat.MetaId,
-				Address: replyChat.Address,
-				// UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
-				NickName:    replyChat.NickName,
-				Protocol:    replyChat.Protocol,
-				Content:     replyChat.Content,
-				ContentType: replyChat.ContentType,
-				Encryption:  replyChat.Encryption,
-				ChatType:    replyChat.ChatType,
-				Timestamp:   replyChat.Timestamp,
-				Chain:       replyChat.Chain,
-				Index:       replyChat.Index,
-			}
-			chatItem.RedMetaId = replyChat.MetaId
-			chatItem.BlockHeight = replyChat.BlockHeight
 		}
 
 		chatItems = append(chatItems, chatItem)
@@ -890,6 +891,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.CommunityId = group.CommunityId
 			chatInfoItem.RoomName = group.RoomName
 			chatInfoItem.RoomNote = group.RoomNote
+			chatInfoItem.RoomIcon = group.RoomIcon
 			chatInfoItem.RoomType = group.RoomType
 			chatInfoItem.RoomStatus = group.RoomStatus
 			chatInfoItem.RoomJoinType = group.RoomJoinType
@@ -1008,7 +1010,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			ChatType:     int64(chat.ChatType),
 			ReplyPin:     chat.ReplyPin,
 			ReplyInfo:    nil,
-			RedMetaId:    "",
+			ReplyMetaId:  "",
 			Timestamp:    chat.Timestamp,
 			Chain:        chat.Chain,
 			BlockHeight:  chat.BlockHeight,
@@ -1017,17 +1019,14 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 
 		// Handle reply message
 		if chat.ReplyPin != "" {
-			replyChat, err := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
-			if err != nil {
-				replyChat = nil
-			}
+			replyChat, _ := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
 			if replyChat != nil {
 				chatItem.ReplyInfo = &respond.ReplyInfo{
 					PinId:       replyChat.PinId,
 					MetaId:      replyChat.From,
 					Address:     replyChat.FromAddress,
 					UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.FromAddress),
-					NickName:    "", // Private chat message doesn't have NickName field
+					NickName:    "",
 					Protocol:    replyChat.Protocol,
 					Content:     replyChat.Content,
 					ContentType: replyChat.ContentType,
@@ -1037,16 +1036,18 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 					Chain:       replyChat.Chain,
 					Index:       replyChat.Index,
 				}
-				chatItem.RedMetaId = replyChat.From
+				if chatItem.ReplyInfo.Address == "" && chatItem.ReplyInfo.MetaId != "" {
+					chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfoInfoByMetaId(chatItem.ReplyInfo.MetaId)
+					if chatItem.ReplyInfo.UserInfo != nil {
+						chatItem.ReplyInfo.Address = chatItem.ReplyInfo.UserInfo.Address
+					}
+				}
+
+				chatItem.ReplyMetaId = replyChat.From
 			}
 		}
 
 		chatItems = append(chatItems, chatItem)
-
-		// // Record next message timestamp (for pagination)
-		// if i == len(chats)-1 && len(chats) > 0 {
-		// 	nextTimestamp = chat.Timestamp
-		// }
 	}
 
 	return &respond.PrivateChatResponse{
@@ -1083,6 +1084,14 @@ func GetUserInfoByAddress(address string) (*respond.UserInfoResponse, error) {
 			userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
 			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
 		}
+	} else {
+		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
+		if chatPublicKeyInfo != nil {
+			if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+			}
+		}
 	}
 
 	return &respond.UserInfoResponse{
@@ -1108,6 +1117,14 @@ func GetUserInfoByMetaId(metaId string) (*respond.UserInfoResponse, error) {
 		if chatPublicKeyInfo != nil {
 			userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
 			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+		}
+	} else {
+		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
+		if chatPublicKeyInfo != nil {
+			if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+			}
 		}
 	}
 
@@ -1153,5 +1170,337 @@ func GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId string) (*respond.MaxInd
 		FromMetaId: fromMetaId,
 		ToMetaId:   toMetaId,
 		MaxIndex:   maxIndex,
+	}, nil
+}
+
+// FetchGroupChatListByIndex Get group chat list by index range (ascending order)
+func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	var chats []*models.TalkGroupChatV3
+	var lastIndex int64
+	var err error
+
+	t := time.Now().UnixMilli()
+	chats, lastIndex, err = chatDB.GetChatsByGroupIdAndStartIndexRange(req.GroupId, req.StartIndex, req.Size)
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] get chat time: %d\n", time.Now().UnixMilli()-t)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:     chat.GroupId,
+			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			Address:     chat.Address,
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			ReplyMetaId: "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
+			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
+			if openLuckyBag != nil {
+				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
+					chatItem.TxId = openLuckyBag.GrabTxId
+				} else {
+					chatItem.TxId = ""
+				}
+			}
+		}
+		if chat.ReplyPin != "" {
+			replyChat, _ := chatDB.GetChatByPinId(chat.ReplyPin)
+			if replyChat != nil {
+				chatItem.ReplyInfo = &respond.ReplyInfo{
+					PinId:       replyChat.PinId,
+					MetaId:      replyChat.MetaId,
+					Address:     replyChat.Address,
+					NickName:    replyChat.NickName,
+					Protocol:    replyChat.Protocol,
+					Content:     replyChat.Content,
+					ContentType: replyChat.ContentType,
+					Encryption:  replyChat.Encryption,
+					ChatType:    replyChat.ChatType,
+					Timestamp:   replyChat.Timestamp,
+					Chain:       replyChat.Chain,
+					Index:       replyChat.Index,
+				}
+				chatItem.ReplyMetaId = replyChat.MetaId
+				chatItem.BlockHeight = replyChat.BlockHeight
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+
+	//get user info
+	t2 := time.Now().UnixMilli()
+	for _, chatItem := range chatItems {
+		if chatItem.ReplyInfo != nil {
+			chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.ReplyInfo.Address)
+		}
+		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] for user info time: %d\n", time.Now().UnixMilli()-t2)
+
+	return &respond.GroupChatResponse{
+		Total:     int64(len(chatItems)),
+		LastIndex: lastIndex,
+		List:      chatItems,
+	}, nil
+}
+
+// FetchGroupChatListByStartTime Get group chat list by start timestamp range (ascending order)
+func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	var chats []*models.TalkGroupChatV3
+	var lastTimestamp int64
+	var err error
+
+	t := time.Now().UnixMilli()
+	chats, lastTimestamp, err = chatDB.GetChatsByGroupIdAndStartTimestampRange(req.GroupId, req.StartTimestamp, req.Size)
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] get chat time: %d\n", time.Now().UnixMilli()-t)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:     chat.GroupId,
+			MetanetId:   chat.GroupId, // Use GroupId as MetanetId
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			Address:     chat.Address,
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			ReplyMetaId: "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
+			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
+			if openLuckyBag != nil {
+				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
+					chatItem.TxId = openLuckyBag.GrabTxId
+				} else {
+					chatItem.TxId = ""
+				}
+			}
+		}
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err != nil {
+				replyChat = nil
+			}
+			chatItem.ReplyInfo = &respond.ReplyInfo{
+				PinId:       replyChat.PinId,
+				MetaId:      replyChat.MetaId,
+				Address:     replyChat.Address,
+				NickName:    replyChat.NickName,
+				Protocol:    replyChat.Protocol,
+				Content:     replyChat.Content,
+				ContentType: replyChat.ContentType,
+				Encryption:  replyChat.Encryption,
+				ChatType:    replyChat.ChatType,
+				Timestamp:   replyChat.Timestamp,
+				Chain:       replyChat.Chain,
+				Index:       replyChat.Index,
+			}
+			chatItem.ReplyMetaId = replyChat.MetaId
+			chatItem.BlockHeight = replyChat.BlockHeight
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+
+	//get user info
+	t2 := time.Now().UnixMilli()
+	for _, chatItem := range chatItems {
+		if chatItem.ReplyInfo != nil {
+			chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.ReplyInfo.Address)
+		}
+		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] for user info time: %d\n", time.Now().UnixMilli()-t2)
+
+	return &respond.GroupChatResponse{
+		Total:         int64(len(chatItems)),
+		LastTimestamp: lastTimestamp,
+		List:          chatItems,
+	}, nil
+}
+
+// SearchGroupsByNameOrId searches groups by name or ID
+func SearchGroupsByNameOrId(req *request.SearchGroupRequest) (*respond.GroupSearchResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Search using GroupDB
+	results, err := groupDB.SearchGroups(req.Query, int(req.Size))
+	if err != nil {
+		return nil, err
+	}
+	// Convert to response format
+	var groupItems []*respond.GroupSearchItem
+	for _, result := range results {
+
+		// Get group member count
+		userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+		if err != nil {
+			// If failed to get, use default value
+			userCount = 0
+		}
+
+		groupItem := &respond.GroupSearchItem{
+			GroupId:     result.GroupId,
+			GroupName:   result.GroupName,
+			PinId:       result.PinId,
+			Timestamp:   result.Timestamp,
+			MemberCount: userCount,
+		}
+		groupItems = append(groupItems, groupItem)
+	}
+
+	return &respond.GroupSearchResponse{
+		Total: int64(len(groupItems)),
+		List:  groupItems,
+	}, nil
+}
+
+// GetGroupSearchCacheStats returns group search cache statistics
+func GetGroupSearchCacheStats() (map[string]interface{}, error) {
+	return groupDB.GetSearchCacheStats(), nil
+}
+
+// SearchGroupMembers searches group members by name, metaId, or address
+func SearchGroupMembers(req *request.SearchGroupMembersRequest) (*respond.GroupMemberSearchResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	if req.GroupId == "" {
+		return nil, fmt.Errorf("groupId is required")
+	}
+
+	if req.Query == "" {
+		return nil, fmt.Errorf("search query is required")
+	}
+
+	// Get all group members from TalkGroupPersonCollection
+	members, err := groupDB.GetGroupPersonList(req.GroupId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group members: %v", err)
+	}
+
+	// First, collect all valid members with their user info
+	var allMembers []*respond.GroupMemberSearchItem
+	queryLower := strings.ToLower(req.Query)
+
+	// Process all members first to get user info
+	for _, member := range members {
+		// Skip members who are not in the group
+		if member.GroupState != models.RoomStateIn {
+			continue
+		}
+
+		// Get user info from FetchMetaIDUserInfo
+		userInfo := common_service.FetchMetaIDUserInfo(member.Address)
+		if userInfo == nil {
+			// If user info is not available, create a basic one
+			userInfo = &respond.UserInfo{
+				Address: member.Address,
+				Metaid:  member.MetaId,
+				Name:    member.UserName,
+			}
+		}
+
+		// Create member item with all information
+		memberItem := &respond.GroupMemberSearchItem{
+			MetaId:    member.MetaId,
+			Address:   member.Address,
+			UserInfo:  userInfo,
+			Timestamp: member.Timestamp,
+		}
+		allMembers = append(allMembers, memberItem)
+	}
+
+	// Sort results by timestamp (newest first)
+	sort.Slice(allMembers, func(i, j int) bool {
+		return allMembers[i].Timestamp > allMembers[j].Timestamp
+	})
+
+	// Now perform fuzzy search on all collected members
+	var results []*respond.GroupMemberSearchItem
+	for _, member := range allMembers {
+		// Check if member matches search query
+		// Search in: metaId and user info name
+		matches := false
+
+		// Check member's metaId
+		if strings.Contains(strings.ToLower(member.MetaId), queryLower) {
+			matches = true
+		}
+
+		// Check user info name (from external API)
+		if member.UserInfo.Name != "" && strings.Contains(strings.ToLower(member.UserInfo.Name), queryLower) {
+			matches = true
+		}
+
+		if matches {
+			results = append(results, member)
+
+			// Check limit
+			if int64(len(results)) >= req.Size {
+				break
+			}
+		}
+	}
+
+	return &respond.GroupMemberSearchResponse{
+		Total: int64(len(results)),
+		List:  results,
 	}, nil
 }

@@ -154,6 +154,10 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
+		Domain:              luckyBag.Domain,
+		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		GenType:             luckyBag.GenType,
+		GenState:            luckyBag.GenState,
 		Content:             luckyBag.Content,
 		Img:                 luckyBag.Img,
 		ImgType:             luckyBag.ImgType,
@@ -269,6 +273,18 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		return nil, errors.New("lucky bag not match")
 	}
 
+	if luckyBag.Domain != "" && luckyBag.LuckyBagAddress != "" {
+		if luckyBag.GenType == 2 {
+			return nil, errors.New("lucky bag is external")
+		}
+		if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+			return nil, errors.New("lucky bag domain not match")
+		}
+		if luckyBag.GenType == 1 && luckyBag.GenState != 1 {
+			return nil, errors.New("lucky bag is internal and failed")
+		}
+	}
+
 	// Get claimed lucky bag list
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {
@@ -315,6 +331,10 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		SubId:               luckyBag.SubId,
 		Code:                luckyBag.Code,
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
+		Domain:              luckyBag.Domain,
+		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		GenType:             luckyBag.GenType,
+		GenState:            luckyBag.GenState,
 		Amount:              luckyBag.Amount,
 		Count:               luckyBag.Count,
 		ValidCount:          luckyBag.ValidCount,
@@ -401,6 +421,18 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 	}
 	if !isInGroup {
 		return "", errors.New("user not in group")
+	}
+
+	if luckyBag.Domain != "" && luckyBag.LuckyBagAddress != "" {
+		if luckyBag.GenType == 2 {
+			return "", errors.New("lucky bag is external")
+		}
+		if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+			return "", errors.New("lucky bag domain not match")
+		}
+		if luckyBag.GenType == 1 && luckyBag.GenState != 1 {
+			return "", errors.New("lucky bag is internal and failed")
+		}
 	}
 
 	// Get claimed lucky bag list
@@ -633,6 +665,10 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			SubId:               luckyBag.SubId,
 			Code:                luckyBag.Code,
 			CreateTimeStr:       luckyBag.CreateTimeStr,
+			Domain:              luckyBag.Domain,
+			LuckyBagAddress:     luckyBag.LuckyBagAddress,
+			GenType:             luckyBag.GenType,
+			GenState:            luckyBag.GenState,
 			Address:             address,
 			Index:               v.unusedIndex,
 			Amount:              v.unusedAmount,
@@ -785,7 +821,7 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 	}
 
 	_ = grabEntity.Vins[0] // utxo, temporarily unused
-	_, hexStr := makeGiftKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr)
+	_, hexStr := getLuckyBagKey(grabEntity.SubId, grabEntity.Code, grabEntity.CreateTimeStr, grabEntity.LuckyBagAddress, grabEntity.GenType)
 	if hexStr == "" {
 		return errors.New("failed to generate wif or hex")
 	}
@@ -983,6 +1019,27 @@ func StartOpenLuckyBagQueueProcessor() {
 			}
 		}
 	}()
+}
+
+func getLuckyBagKey(subId, code, createTimeStr, luckyBagAddress string, genType int64) (string, string) {
+	if genType == 0 {
+		// External lucky bag, generate key from parameters
+		return makeGiftKey(subId, code, createTimeStr)
+	} else if genType == 1 {
+		// Internal lucky bag, get key from completed collection
+		codeAddressKey, err := chatDB.GetLuckyBagCodeAddressKeyFromCompleted(code, luckyBagAddress)
+		if err != nil {
+			log.Printf("Failed to get lucky bag code address key from completed collection for code %s and address %s: %v", code, luckyBagAddress, err)
+			return "", ""
+		}
+		if codeAddressKey == nil {
+			log.Printf("Lucky bag code address key not found in completed collection for code %s and address %s", code, luckyBagAddress)
+			return "", ""
+		}
+		return "", codeAddressKey.Key
+	} else {
+		return "", ""
+	}
 }
 
 func makeGiftKey(subId, code, createTimeStr string) (string, string) {
@@ -1187,6 +1244,10 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			SubId:               luckyBag.SubId,
 			Code:                luckyBag.Code,
 			CreateTimeStr:       luckyBag.CreateTimeStr,
+			Domain:              luckyBag.Domain,
+			LuckyBagAddress:     luckyBag.LuckyBagAddress,
+			GenType:             luckyBag.GenType,
+			GenState:            luckyBag.GenState,
 			Address:             address,
 			PkScript:            pkScript,
 			Amount:              v.unusedAmount,
@@ -1277,7 +1338,7 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 	}
 
 	_ = reclaimEntity.Vins[0] // utxo, temporarily unused
-	_, hexStr := makeGiftKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr)
+	_, hexStr := getLuckyBagKey(reclaimEntity.SubId, reclaimEntity.Code, reclaimEntity.CreateTimeStr, reclaimEntity.LuckyBagAddress, reclaimEntity.GenType)
 	if hexStr == "" {
 		return errors.New("failed to generate wif or hex")
 	}
@@ -1830,6 +1891,25 @@ func cleanupErrorLuckyBagsFromQueue(errorOpenPinIds []string) error {
 	}
 
 	return nil
+}
+
+// GenerateLuckyBagCodeAddressKey generates a new lucky bag code address key for frontend
+// This method is called before creating a lucky bag to get the code and address
+func GenerateLuckyBagCodeAddressKey() (*respond.LuckyBagCodeAddressKeyResponse, error) {
+	// Call the database method to generate a new lucky bag code address key
+	codeAddressKey, err := chatDB.GenerateLuckyBagCodeAddressKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate lucky bag code address key: %v", err)
+	}
+
+	// Create response without private key for security
+	response := &respond.LuckyBagCodeAddressKeyResponse{
+		Code:            codeAddressKey.Code,
+		LuckyBagAddress: codeAddressKey.LuckyBagAddress,
+		Timestamp:       codeAddressKey.Timestamp,
+	}
+
+	return response, nil
 }
 
 // Helper function to check if slice contains item

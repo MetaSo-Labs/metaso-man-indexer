@@ -741,3 +741,228 @@ func GetCurrentMaxPrivateChatIndex(c *gin.Context) {
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
+
+// @Summary Get group chat list by index range
+// @Description Get group chat records by index range (ascending order)
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param startIndex query int false "Start index for pagination, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "Successfully return group chat records by index"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/group-chat-list-by-index [get]
+func GetGroupChatListByIndex(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupChatListByIndexRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			StartIndex: func() int64 {
+				startIndex, _ := strconv.ParseInt(c.DefaultQuery("startIndex", "0"), 10, 64)
+				return startIndex
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchGroupChatListByIndex(req)
+	if err != nil {
+		log.Printf("Failed to fetch group chat list by index for groupId %s: %v", req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get group chat list by start timestamp range
+// @Description Get group chat records by start timestamp range (ascending order)
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param startTimestamp query int false "Start timestamp for pagination, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupChatResponse} "Successfully return group chat records by start timestamp"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/group-chat-list-by-start-time [get]
+func GetGroupChatListByStartTime(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupChatListByStartTimeRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			StartTimestamp: func() int64 {
+				startTimestamp, _ := strconv.ParseInt(c.DefaultQuery("startTimestamp", "0"), 10, 64)
+				return startTimestamp
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchGroupChatListByStartTime(req)
+	if err != nil {
+		log.Printf("Failed to fetch group chat list by start time for groupId %s: %v", req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Search groups by name or ID
+// @Description Search groups by name or ID using fuzzy search
+// @Produce json
+// @Param query query string true "Search query (group name or ID)"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupSearchResponse} "Successfully return search results"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/search-groups [get]
+func SearchGroups(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.SearchGroupRequest{
+			Query: c.DefaultQuery("query", ""),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.Query == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("query parameter is required"), t, 1))
+		return
+	}
+
+	response, err := service.SearchGroupsByNameOrId(req)
+	if err != nil {
+		log.Printf("Failed to search groups for query %s: %v", req.Query, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get group search cache statistics
+// @Description Get group search cache statistics
+// @Produce json
+// @Tags Group
+// @Success 200 {object} respond.Message{data=map[string]interface{}} "Successfully return cache statistics"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/search-groups-cache-stats [get]
+func GetGroupSearchCacheStats(c *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	response, err := service.GetGroupSearchCacheStats()
+	if err != nil {
+		log.Printf("Failed to get group search cache stats: %v", err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Check if chat is sendable
+// @Description Check if the current system allows sending chat messages
+// @Produce json
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.ChatSendableResponse} "Successfully return chat sendable status"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/chat-sendable [get]
+func CheckChatSendable(c *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	// For now, always return true as the system is operational
+	// You can add more complex logic here based on your requirements
+	// For example: check database connectivity, check blockchain status, etc.
+	response := &respond.ChatSendableResponse{
+		Sendable: true,
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Search group members
+// @Description Search group members by name, metaId, or address using fuzzy search
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param query query string true "Search query (user name, metaId, or address)"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupMemberSearchResponse} "Successfully return search results"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/search-group-members [get]
+func SearchGroupMembers(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.SearchGroupMembersRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			Query:   c.DefaultQuery("query", ""),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter is required"), t, 1))
+		return
+	}
+
+	if req.Query == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("query parameter is required"), t, 1))
+		return
+	}
+
+	response, err := service.SearchGroupMembers(req)
+	if err != nil {
+		log.Printf("Failed to search group members for groupId %s, query %s: %v", req.GroupId, req.Query, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Generate lucky bag code address key
+// @Description Generate a new lucky bag code address key for frontend to use before creating a lucky bag
+// @Produce json
+// @Tags Group Management
+// @Success 200 {object} respond.Message{data=respond.LuckyBagCodeAddressKeyResponse} "Successfully return code and address"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/generate-lucky-bag-code [get]
+func GenerateLuckyBagCodeAddressKey(c *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	response, err := service.GenerateLuckyBagCodeAddressKey()
+	if err != nil {
+		log.Printf("Failed to generate lucky bag code address key: %v", err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}

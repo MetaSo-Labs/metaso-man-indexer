@@ -655,7 +655,8 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 	// Create private chat message model
 	chat := &models.TalkPrivateChatV3{
 		From:        pin.CreateMetaId, // Sender MetaId
-		To:          toMetaId,         // Receiver MetaId (converted if needed)
+		FromAddress: pin.CreateAddress,
+		To:          toMetaId, // Receiver MetaId (converted if needed)
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		Protocol:    pin.Path,

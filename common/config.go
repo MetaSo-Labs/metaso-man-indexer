@@ -121,6 +121,7 @@ type groupChatConfig struct {
 	ManHost         string `toml:"manHost"`
 	BackupHour      int    `toml:"backupHour"`
 	BackupRetention int    `toml:"backupRetention"`
+	LuckyBagDomain  string `toml:"luckyBagDomain"`
 }
 type socketConfig struct {
 	IsEnble         bool  `toml:"isEnble"`

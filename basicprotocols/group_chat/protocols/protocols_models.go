@@ -86,6 +86,7 @@ type SimpleGroupCreate struct {
 	CommunityId     string      `json:"communityId"`
 	GroupName       string      `json:"groupName"`
 	GroupNote       string      `json:"groupNote"`
+	GroupIcon       string      `json:"groupIcon"`
 	Timestamp       interface{} `json:"timestamp"`
 	GroupType       interface{} `json:"groupType"`    //Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
 	Status          interface{} `json:"status"`       //"1" when not encrypted is "1", when encrypted is encrypted information, reserved field
@@ -158,6 +159,8 @@ type SimpleFileGroupChat struct {
 	  "code": "redcode",
 	  "createTime": 1234567890,
 	  "content": "Congratulations and prosperity",
+	  "domain": "https://www.example.com/chat-api/",
+	  "luckyBagAddress": "luckyBagAddress",
 	  "img": "https://example.com/red.png",
 	  "imgType": "png",
 	  "amount": "100",
@@ -182,6 +185,8 @@ type SimpleGroupLuckyBag struct {
 	SubId               string            `json:"subId"`
 	GroupId             string            `json:"groupId"`
 	Code                string            `json:"code"`
+	Domain              string            `json:"domain"`
+	LuckyBagAddress     string            `json:"luckyBagAddress"`
 	CreateTime          interface{}       `json:"createTime"`
 	Content             string            `json:"content"`
 	Img                 string            `json:"img"`

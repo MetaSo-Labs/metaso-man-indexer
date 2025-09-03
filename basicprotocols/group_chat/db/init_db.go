@@ -53,12 +53,13 @@ const (
 	TalkGroupChatIndexCollection           string = "talk_group_chat_index"             // key: groupId_index，value: pinId_chatType_timestamp_isSet
 
 	// Lucky bag residue related databases
-	TalkGroupLuckyBagPinPendingCollection        string = "talk_group_lucky_bag_pin_pending"         // key: pinId，value: luckyBagPinId
-	TalkGroupLuckyBagPinCompletedCollection      string = "talk_group_lucky_bag_pin_completed"       // key: pinId，value: luckyBagPinId
-	TalkGroupLuckyBagPinTimeoutResidueCollection string = "talk_group_lucky_bag_pin_timeout_residue" // key: pinId，value: luckyBagPinId
-	TalkGroupLuckyBagPinErrPendingCollection     string = "talk_group_lucky_bag_pin_err_pending"     // key: pinId，value: luckyBagPinId
-	// TalkGroupLuckyBagPinErrCompletedCollection      string = "talk_group_lucky_bag_pin_err_completed"       // key: pinId，value: luckyBagPinId
-	TalkGroupLuckyBagPinErrTimeoutResidueCollection string = "talk_group_lucky_bag_pin_err_timeout_residue" // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinPendingCollection              string = "talk_group_lucky_bag_pin_pending"                // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinCompletedCollection            string = "talk_group_lucky_bag_pin_completed"              // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinTimeoutResidueCollection       string = "talk_group_lucky_bag_pin_timeout_residue"        // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinErrPendingCollection           string = "talk_group_lucky_bag_pin_err_pending"            // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagPinErrTimeoutResidueCollection    string = "talk_group_lucky_bag_pin_err_timeout_residue"    // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagCodeAddressKeyCollection          string = "talk_group_lucky_bag_code_address_key"           //key: code_address, value: {key, code, luckyBagAddress, timestamp}
+	TalkGroupLuckyBagCodeAddressKeyCompletedCollection string = "talk_group_lucky_bag_code_address_key_completed" //key: code_address, value: {key, code, luckyBagAddress, timestamp}
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
@@ -73,6 +74,7 @@ const (
 	// User info
 	TalkUserAddressChatPublicKeyCollection string = "talk_user_address_chat_public_key" // key: address，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 	TalkUserMetaIdChatPublicKeyCollection  string = "talk_user_metaid_chat_public_key"  // key: metaId，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
+
 )
 
 type Pebble struct{}
@@ -239,13 +241,17 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrPendingCollection, err)
 	}
-	// err = open(TalkGroupLuckyBagPinErrCompletedCollection)
-	// if err != nil {
-	// 	return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrCompletedCollection, err)
-	// }
 	err = open(TalkGroupLuckyBagPinErrTimeoutResidueCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagPinErrTimeoutResidueCollection, err)
+	}
+	err = open(TalkGroupLuckyBagCodeAddressKeyCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagCodeAddressKeyCollection, err)
+	}
+	err = open(TalkGroupLuckyBagCodeAddressKeyCompletedCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagCodeAddressKeyCompletedCollection, err)
 	}
 
 	// Initialize private chat related databases

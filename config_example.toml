@@ -44,6 +44,7 @@ host = "0.0.0.0"
 manHost = "https://man.metaid.io"
 backupHour = 3
 backupRetention = 7
+luckyBagDomain = "https://www.example.com/chat-api/"
 [socket]
 isEnble = true
 port = 7555

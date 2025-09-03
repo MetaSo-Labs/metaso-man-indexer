@@ -98,6 +98,7 @@ type TalkGroupModel struct {
 	RoomPublicKey string `json:"roomPublicKey"` // Room public key
 	RoomName      string `json:"roomName"`      // Room creation name
 	RoomNote      string `json:"roomNote"`      // Room creation announcement
+	RoomIcon      string `json:"roomIcon"`      // Room creation icon
 	RoomType      string `json:"roomType"`      // Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
 	RoomStatus    string `json:"roomStatus"`    // "1" when not encrypted is "1", when encrypted is encrypted information, reserved field
 	RoomJoinType  string `json:"roomJoinType"`  // Join method, 1 is password, 2 is nft
@@ -204,6 +205,10 @@ type TalkGroupLuckyBagV3 struct {
 	SubId                 string            `json:"subId"`
 	Code                  string            `json:"code"`
 	CreateTimeStr         string            `json:"createTimeStr"`
+	Domain                string            `json:"domain"`
+	LuckyBagAddress       string            `json:"luckyBagAddress"`
+	GenType               int64             `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState              int64             `json:"genState"` // 0-normal, 1-success, 2-failed
 	Content               string            `json:"content"`
 	Img                   string            `json:"img"`
 	ImgType               string            `json:"imgType"`
@@ -263,6 +268,10 @@ type TalkGroupOpenLuckyBagV3 struct {
 	SubId               string    `json:"subId"`
 	Code                string    `json:"code"`
 	CreateTimeStr       string    `json:"createTimeStr"`
+	Domain              string    `json:"domain"`
+	LuckyBagAddress     string    `json:"luckyBagAddress"`
+	GenType             int64     `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState            int64     `json:"genState"` // 0-normal, 1-success, 2-failed
 	Address             string    `json:"address"`
 	Index               int64     `json:"index"`
 	Amount              string    `json:"amount"`
@@ -302,6 +311,10 @@ type TalkGroupResidueLuckyBagV3 struct {
 	SubId               string            `json:"subId"`
 	Code                string            `json:"code"`
 	CreateTimeStr       string            `json:"createTimeStr"`
+	Domain              string            `json:"domain"`
+	LuckyBagAddress     string            `json:"luckyBagAddress"`
+	GenType             int64             `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState            int64             `json:"genState"` // 0-normal, 1-success, 2-failed
 	PkScript            string            `json:"pkScript"`
 	Amount              string            `json:"amount"`
 	Index               int64             `json:"index"`

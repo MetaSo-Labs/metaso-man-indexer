@@ -8,19 +8,47 @@ import (
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/pin"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 )
+
+// Group search cache item
+type GroupSearchCacheItem struct {
+	GroupId   string `json:"groupId"`   // Group ID
+	GroupName string `json:"groupName"` // Group name
+	PinId     string `json:"pinId"`     // Pin ID
+	Timestamp int64  `json:"timestamp"` // Timestamp
+}
 
 // Group database operations
 type GroupDB struct {
 	pb *Pebble
 	// make reference to chatDB
 	cdb *ChatDB
+
+	// Search cache related fields
+	searchCache      map[string]*GroupSearchCacheItem // GroupId -> GroupSearchCacheItem
+	searchCacheMutex sync.RWMutex
+	cacheUpdateChan  chan struct{} // Channel to trigger cache updates
+	stopCacheChan    chan struct{} // Channel to stop cache goroutine
 }
 
 func NewGroupDB(pb *Pebble, c *ChatDB) *GroupDB {
-	return &GroupDB{pb: pb, cdb: c}
+	gdb := &GroupDB{
+		pb:               pb,
+		cdb:              c,
+		searchCache:      make(map[string]*GroupSearchCacheItem),
+		searchCacheMutex: sync.RWMutex{},
+		cacheUpdateChan:  make(chan struct{}, 1), // Buffered channel to avoid blocking
+		stopCacheChan:    make(chan struct{}),
+	}
+
+	// Start cache update goroutine
+	go gdb.startCacheUpdateGoroutine()
+
+	return gdb
 }
 
 // Save group info
@@ -282,6 +310,7 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		PinId:             pin.Id,
 		RoomName:          simpleGroupCreate.GroupName,
 		RoomNote:          simpleGroupCreate.GroupNote,
+		RoomIcon:          simpleGroupCreate.GroupIcon,
 		RoomType:          getStringValue(simpleGroupCreate.GroupType),
 		RoomStatus:        getStringValue(simpleGroupCreate.Status),
 		RoomJoinType:      getStringValue(simpleGroupCreate.JoinType),
@@ -338,6 +367,9 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Trigger cache update
+	gdb.triggerCacheUpdate(group.GroupId)
+
 	return nil
 }
 
@@ -369,6 +401,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	// Update group info
 	existingGroup.RoomName = simpleGroupCreate.GroupName
 	existingGroup.RoomNote = simpleGroupCreate.GroupNote
+	existingGroup.RoomIcon = simpleGroupCreate.GroupIcon
 	existingGroup.RoomType = getStringValue(simpleGroupCreate.GroupType)
 	existingGroup.RoomStatus = getStringValue(simpleGroupCreate.Status)
 	existingGroup.RoomJoinType = getStringValue(simpleGroupCreate.JoinType)
@@ -430,6 +463,9 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	if err != nil {
 		return err
 	}
+
+	// Trigger cache update
+	gdb.triggerCacheUpdate(existingGroup.GroupId)
 
 	return nil
 }
@@ -1677,4 +1713,179 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 	}
 
 	return nil
+}
+
+// startCacheUpdateGoroutine starts the cache update goroutine
+func (gdb *GroupDB) startCacheUpdateGoroutine() {
+	// Execute initial cache update immediately on startup
+	fmt.Printf("[GroupDB] Starting initial cache update...\n")
+	gdb.updateSearchCache()
+	fmt.Printf("[GroupDB] Initial cache update completed\n")
+
+	ticker := time.NewTicker(30 * time.Second) // Update every 30 seconds
+	defer ticker.Stop()
+
+	// Flag to track if update is in progress
+	isUpdating := false
+
+	for {
+		select {
+		case <-ticker.C:
+			// Periodic update - only if not already updating
+			if !isUpdating {
+				isUpdating = true
+				go func() {
+					gdb.updateSearchCache()
+					isUpdating = false
+				}()
+			} else {
+				fmt.Printf("[GroupDB] Skipping periodic update - previous update still in progress\n")
+			}
+		case <-gdb.cacheUpdateChan:
+			// Manual update triggered - only if not already updating
+			if !isUpdating {
+				isUpdating = true
+				go func() {
+					gdb.updateSearchCache()
+					isUpdating = false
+				}()
+			} else {
+				fmt.Printf("[GroupDB] Skipping manual update - previous update still in progress\n")
+			}
+		case <-gdb.stopCacheChan:
+			// Stop goroutine
+			return
+		}
+	}
+}
+
+// updateSearchCache updates the search cache from TalkGroupInfoCollection
+func (gdb *GroupDB) updateSearchCache() {
+	t := time.Now().UnixMilli()
+	// Create a new temporary cache first
+	newCache := make(map[string]*GroupSearchCacheItem)
+
+	// Iterate through all groups in TalkGroupInfoCollection
+	iter, err := Pb[TalkGroupInfoCollection].NewIter(nil)
+	if err != nil {
+		fmt.Printf("[GroupDB] Failed to create iterator for search cache update: %v\n", err)
+		return
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var group models.TalkGroupModel
+		err := json.Unmarshal(iter.Value(), &group)
+		if err != nil {
+			continue
+		}
+
+		// Add to new cache
+		cacheItem := &GroupSearchCacheItem{
+			GroupId:   group.GroupId,
+			GroupName: group.RoomName,
+			PinId:     group.PinId,
+			Timestamp: group.Timestamp,
+		}
+		newCache[group.GroupId] = cacheItem
+	}
+
+	// Only after successfully building the new cache, replace the old one
+	gdb.searchCacheMutex.Lock()
+	gdb.searchCache = newCache
+	gdb.searchCacheMutex.Unlock()
+
+	fmt.Printf("[GroupDB] Search cache updated, total groups: %d, time: %d\n", len(newCache), time.Now().UnixMilli()-t)
+}
+
+// triggerCacheUpdate triggers a manual cache update for a specific group
+func (gdb *GroupDB) triggerCacheUpdate(groupId string) {
+	// Get the latest group info from database
+	group, err := gdb.GetGroupInfoByGroupId(groupId)
+	if err != nil || group == nil {
+		return
+	}
+
+	// Update only this specific group in cache
+	gdb.searchCacheMutex.Lock()
+	defer gdb.searchCacheMutex.Unlock()
+
+	// Create or update the cache item for this group
+	cacheItem := &GroupSearchCacheItem{
+		GroupId:   group.GroupId,
+		GroupName: group.RoomName,
+		PinId:     group.PinId,
+		Timestamp: group.Timestamp,
+	}
+	gdb.searchCache[groupId] = cacheItem
+
+	fmt.Printf("[GroupDB] Cache updated for group: %s\n", groupId)
+}
+
+// SearchGroups searches groups by name or ID using fuzzy search
+func (gdb *GroupDB) SearchGroups(query string, limit int) ([]*GroupSearchCacheItem, error) {
+	if query == "" {
+		return nil, errors.New("search query cannot be empty")
+	}
+
+	if limit <= 0 {
+		limit = 20 // Default limit
+	}
+
+	t := time.Now().UnixMilli()
+	// Create a temporary copy of the cache to avoid blocking during search
+	gdb.searchCacheMutex.RLock()
+	cacheCopy := make(map[string]*GroupSearchCacheItem, len(gdb.searchCache))
+	for k, v := range gdb.searchCache {
+		cacheCopy[k] = v
+	}
+	gdb.searchCacheMutex.RUnlock()
+	fmt.Printf("[GroupDB] Search groups from cache, time: %d\n", time.Now().UnixMilli()-t)
+
+	var results []*GroupSearchCacheItem
+	queryLower := strings.ToLower(query)
+
+	// Search through the temporary copy
+	for _, item := range cacheCopy {
+		// Check if group name or ID contains the query (case-insensitive)
+		if strings.Contains(strings.ToLower(item.GroupName), queryLower) ||
+			strings.Contains(strings.ToLower(item.GroupId), queryLower) {
+			results = append(results, item)
+
+			// Check limit
+			if len(results) >= limit {
+				break
+			}
+		}
+	}
+
+	// Sort results by timestamp (newest first)
+	// Simple bubble sort for small result sets
+	for i := 0; i < len(results)-1; i++ {
+		for j := 0; j < len(results)-1-i; j++ {
+			if results[j].Timestamp < results[j+1].Timestamp {
+				results[j], results[j+1] = results[j+1], results[j]
+			}
+		}
+	}
+
+	return results, nil
+}
+
+// GetSearchCacheStats returns search cache statistics
+func (gdb *GroupDB) GetSearchCacheStats() map[string]interface{} {
+	gdb.searchCacheMutex.RLock()
+	totalGroups := len(gdb.searchCache)
+	gdb.searchCacheMutex.RUnlock()
+
+	return map[string]interface{}{
+		"totalGroups": totalGroups,
+		"lastUpdate":  time.Now().Unix(),
+		"searchCache": gdb.searchCache,
+	}
+}
+
+// StopCacheGoroutine stops the cache update goroutine
+func (gdb *GroupDB) StopCacheGoroutine() {
+	close(gdb.stopCacheChan)
 }

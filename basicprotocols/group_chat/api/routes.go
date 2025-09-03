@@ -28,6 +28,12 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get group chat records (test version with IterOptions)
 		group.GET("/group-chat-list-v3", GetGroupChatListV3)
 
+		// Get group chat records by index range (ascending order)
+		group.GET("/group-chat-list-by-index", GetGroupChatListByIndex)
+
+		// Get group chat records by start timestamp range (ascending order)
+		group.GET("/group-chat-list-by-start-time", GetGroupChatListByStartTime)
+
 		// Get private chat records
 		group.GET("/private-chat-list", GetPrivateChatList)
 
@@ -44,6 +50,16 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		group.GET("/max-group-chat-index", GetCurrentMaxGroupChatIndex)
 		group.GET("/max-private-chat-index", GetCurrentMaxPrivateChatIndex)
 
+		// Group search routes
+		group.GET("/search-groups", SearchGroups)
+		group.GET("/search-groups-cache-stats", GetGroupSearchCacheStats)
+
+		// Search group members
+		group.GET("/search-group-members", SearchGroupMembers)
+
+		// Check if chat is sendable
+		group.GET("/chat-sendable", CheckChatSendable)
+
 		// Lucky bag related routes
 		// Get lucky bag info
 		group.GET("/lucky-bag-info", GetLuckyBagInfo)
@@ -56,6 +72,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Reclaim lucky bag
 		group.POST("/reclaim-lucky-bag", ReclaimLuckyBag)
+
+		// Generate lucky bag code address key
+		group.GET("/generate-lucky-bag-code", GenerateLuckyBagCodeAddressKey)
 	}
 }
 

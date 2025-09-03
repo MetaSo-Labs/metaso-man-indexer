@@ -569,12 +569,18 @@ func (udb *UserInfoDB) GetLatestValidUserInfo(key string, isAddress bool) (*mode
 
 	for _, userInfo := range history {
 		// Check if this UserInfo is valid
-		if userInfo.IsValid {
-			// Check if this is the latest one
-			if userInfo.Timestamp > latestTimestamp {
-				latestTimestamp = userInfo.Timestamp
-				latestValidUserInfo = userInfo
-			}
+		// if userInfo.IsValid {
+		// 	// Check if this is the latest one
+		// 	if userInfo.Timestamp > latestTimestamp {
+		// 		latestTimestamp = userInfo.Timestamp
+		// 		latestValidUserInfo = userInfo
+		// 	}
+		// }
+
+		// Check if this is the latest one
+		if userInfo.Timestamp > latestTimestamp {
+			latestTimestamp = userInfo.Timestamp
+			latestValidUserInfo = userInfo
 		}
 	}
 

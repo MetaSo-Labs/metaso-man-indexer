@@ -330,8 +330,8 @@ func (cdb *ChatDB) GetChatsByCommunityId(communityId string, page, size int64) (
 	return chats, nil
 }
 
-// Get chat message list by group ID and start timestamp (reverse order, pagination based on timestamp)
-func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
+// Get chat message list by group ID and end timestamp (reverse order, pagination based on timestamp)
+func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, endTimestamp int64, size int64) ([]*models.TalkGroupChatV3, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatTimestampCollection].NewIter(nil)
 	if err != nil {
@@ -339,8 +339,8 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 	}
 	defer iter.Close()
 
-	// Construct query start key: groupId_startTimestamp
-	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
+	// Construct query start key: groupId_endTimestamp
+	startKey := []byte(groupId + "_" + strconv.FormatInt(endTimestamp, 10))
 
 	// Start reverse iteration from specified timestamp (latest messages first)
 	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
@@ -376,11 +376,11 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange(groupId string, startTimes
 	return chats, nil
 }
 
-// Get chat message list by group ID and start timestamp using TalkGroupChatTimestamp2Collection
+// Get chat message list by group ID and end timestamp using TalkGroupChatTimestamp2Collection
 // This function handles the new key format: groupId_timestamp+number(6)
 // Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
 // which provides better support for multiple messages at the same timestamp
-func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+func (cdb *ChatDB) GetChatsByGroupIdAndEndTimestampRange2(groupId string, endTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
 	var chats []*models.TalkGroupChatV3
 	iter, err := Pb[TalkGroupChatTimestamp2Collection].NewIter(nil)
 	if err != nil {
@@ -390,10 +390,10 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 
 	nextTimestamp := int64(0)
 
-	// Construct query start key: groupId_startTimestamp
+	// Construct query start key: groupId_endTimestamp
 	// Since key format is now groupId_timestamp+number(6), we can use proper range scanning
 	// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
-	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
+	startKey := []byte(groupId + "_" + strconv.FormatInt(endTimestamp, 10))
 
 	// Start reverse iteration from specified timestamp (latest messages first)
 	// Use SeekLT to find the last key that is less than our startKey
@@ -425,8 +425,8 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 			continue
 		}
 
-		// Skip messages after our start timestamp (since we're going backwards)
-		if timestamp > startTimestamp {
+		// Skip messages before our end timestamp (since we're going backwards)
+		if timestamp > endTimestamp {
 			continue
 		}
 
@@ -467,7 +467,7 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange2(groupId string, startTime
 // GetChatsByGroupIdAndTimestampRange3 is a test version that uses IterOptions to limit the range
 // This function handles the key format: groupId_timestamp+number(6)
 // Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
-func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange3(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+func (cdb *ChatDB) GetChatsByGroupIdAndEndTimestampRange3(groupId string, endTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
 	var chats []*models.TalkGroupChatV3
 
 	// Create iter options to limit the range to only keys for this group
@@ -484,10 +484,10 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange3(groupId string, startTime
 
 	nextTimestamp := int64(0)
 
-	// Construct query start key: groupId_startTimestamp
+	// Construct query start key: groupId_endTimestamp
 	// Since key format is now groupId_timestamp+number(6), we can use proper range scanning
 	// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
-	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
+	startKey := []byte(groupId + "_" + strconv.FormatInt(endTimestamp, 10))
 
 	// Start reverse iteration from specified timestamp (latest messages first)
 	// Use SeekLT to find the last key that is less than our startKey
@@ -507,8 +507,8 @@ func (cdb *ChatDB) GetChatsByGroupIdAndTimestampRange3(groupId string, startTime
 		timestampKey := timestampStr
 		timestampKeyInt, _ := strconv.ParseInt(timestampKey, 10, 64)
 
-		// Skip messages after our start timestamp (since we're going backwards)
-		if timestampKeyInt > startTimestamp {
+		// Skip messages after our end timestamp (since we're going backwards)
+		if timestampKeyInt > endTimestamp {
 			continue
 		}
 
@@ -2073,6 +2073,10 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		SubId:               simpleLuckyBag.SubId,
 		Code:                simpleLuckyBag.Code,
 		CreateTimeStr:       formatInt64(simpleLuckyBag.CreateTime),
+		Domain:              simpleLuckyBag.Domain,
+		LuckyBagAddress:     simpleLuckyBag.LuckyBagAddress,
+		GenType:             0,
+		GenState:            0,
 		Content:             simpleLuckyBag.Content,
 		Img:                 simpleLuckyBag.Img,
 		ImgType:             simpleLuckyBag.ImgType,
@@ -2094,6 +2098,32 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Chain:               pin.ChainName,
 	}
 
+	chatType := models.ChatTypeLuckyBag
+	// Check if this is an internal lucky bag (has domain and LuckyBagAddress)
+	if simpleLuckyBag.Domain != "" && simpleLuckyBag.LuckyBagAddress != "" {
+		chatType = models.ChatTypeLuckyBagV2
+		// This is an internal lucky bag, verify the code and address
+		codeAddressKey, err := cdb.GetLuckyBagCodeAddressKeyByCodeAndAddress(simpleLuckyBag.Code, simpleLuckyBag.LuckyBagAddress)
+		if err != nil {
+			log.Printf("Failed to get lucky bag code address key for code %s and address %s: %v", simpleLuckyBag.Code, simpleLuckyBag.LuckyBagAddress, err)
+			// Set as error state if verification fails
+			redEnvelope.GenType = 1  // Internal type
+			redEnvelope.GenState = 2 // Error state
+		} else if codeAddressKey != nil {
+			// Verification successful, set as internal type and completed state
+			redEnvelope.GenType = 1  // Internal type
+			redEnvelope.GenState = 1 // Completed state
+		} else {
+			// Code and address not found, set as error state
+			redEnvelope.GenType = 2 // External type
+			redEnvelope.GenState = 1
+		}
+	} else {
+		// This is an external lucky bag, set default values
+		redEnvelope.GenType = 0  // External type
+		redEnvelope.GenState = 0 // Default state
+	}
+
 	if len(errPayList) > 0 || len(errLuckyBagVouts) > 0 {
 		redEnvelope.State = 4 // err
 	} else {
@@ -2104,6 +2134,15 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	err = cdb.SaveLuckyBag(redEnvelope)
 	if err != nil {
 		return err
+	}
+
+	// If this is an internal lucky bag with successful verification, move the key-value pair to completed collection
+	if redEnvelope.GenType == 1 && redEnvelope.GenState == 1 {
+		err = cdb.moveLuckyBagCodeAddressKeyToCompleted(simpleLuckyBag.Code, simpleLuckyBag.LuckyBagAddress)
+		if err != nil {
+			log.Printf("Failed to move lucky bag code address key to completed collection: %v", err)
+			// Don't return error here as the main lucky bag save was successful
+		}
 	}
 
 	// Save lucky bag to appropriate collection based on error status
@@ -2123,7 +2162,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Content:     "[LuckyBag]:" + simpleLuckyBag.Content, // Lucky bag blessing message
 		ContentType: "text/plain",
 		Encryption:  "",
-		ChatType:    models.ChatTypeLuckyBag,  // Lucky bag type
+		ChatType:    chatType,                 // Lucky bag type
 		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    "",
 		Timestamp:   pin.Timestamp,
@@ -2659,4 +2698,338 @@ func (cdb *ChatDB) SaveLuckyBagPendingToCollection(luckyBag *models.TalkGroupLuc
 	// Use PinId as primary key
 	key := []byte(luckyBag.PinId)
 	return Pb[collection].Set(key, []byte(luckyBag.PinId), pebble.Sync)
+}
+
+// GetChatsByGroupIdAndStartIndexRange gets chat messages by group ID and index range (ascending order)
+// This function handles the key format: groupId_index (with zero-padding)
+// Example: groupId_0000000000000000000000000000000000000001
+// Returns chat list, last index, and error
+func (cdb *ChatDB) GetChatsByGroupIdAndStartIndexRange(groupId string, startIndex int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this group
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(groupId + "_"),
+		UpperBound: []byte(groupId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChatIndexCollection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	lastIndex := int64(0)
+
+	// Construct query start key: groupId_startIndex (with zero-padding)
+	// Since key format is groupId_index with zero-padding, we can use proper range scanning
+	// Example: groupId_0000000000000000000000000000000000000001
+	startKey := []byte(groupId + "_" + fmt.Sprintf("%040d", startIndex))
+
+	// Start iteration from specified index (ascending order)
+	// Use SeekGE to find the first key that is greater than or equal to our startKey
+	for iter.SeekGE(startKey); iter.Valid() && iter.Key() != nil; iter.Next() {
+		key := string(iter.Key())
+		// fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndStartIndexRange key: %s\n", key)
+
+		// Parse key to extract index
+		// Key format: groupId_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract index from key (remove leading zeros)
+		indexStr := strings.TrimLeft(keyParts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		index, err := strconv.ParseInt(indexStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// Skip messages before our start index (since we're going forwards)
+		if index < startIndex {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_state
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndStartIndexRange index: %d, pinId: %s\n", index, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if index > lastIndex {
+			lastIndex = index
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, lastIndex, nil
+}
+
+// GetChatsByGroupIdAndStartTimestampRange gets chat messages by group ID and start timestamp range (ascending order)
+// This function handles the key format: groupId_timestamp+number(6)
+// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+// Returns chat list, last time, and error
+func (cdb *ChatDB) GetChatsByGroupIdAndStartTimestampRange(groupId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this group
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(groupId + "_"),
+		UpperBound: []byte(groupId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChatTimestamp2Collection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	lastTimestamp := int64(0)
+
+	// Construct query start key: groupId_startTimestamp
+	// Since key format is now groupId_timestamp+number(6), we can use proper range scanning
+	// Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
+	startKey := []byte(groupId + "_" + strconv.FormatInt(startTimestamp, 10))
+
+	// Start iteration from specified timestamp (ascending order)
+	// Use SeekGE to find the first key that is greater than or equal to our startKey
+	for iter.SeekGE(startKey); iter.Valid() && iter.Key() != nil; iter.Next() {
+		key := string(iter.Key())
+		// fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndStartTimestampRange key: %s\n", key)
+
+		// Parse key to extract timestamp
+		// Key format: groupId_timestamp+number(6)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
+		timestampStr := keyParts[1]
+		timestampKeyInt, _ := strconv.ParseInt(timestampStr, 10, 64)
+
+		// Skip messages before our start timestamp (since we're going forwards)
+		if timestampKeyInt < startTimestamp {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_number
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByGroupIdAndStartTimestampRange timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if timestampKeyInt > lastTimestamp {
+			lastTimestamp = timestampKeyInt
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, lastTimestamp, nil
+}
+
+// LuckyBagCodeAddressKey represents the structure stored in TalkGroupLuckyBagCodeAddressKeyCollection
+type LuckyBagCodeAddressKey struct {
+	Key             string `json:"key"`             // Private key
+	Code            string `json:"code"`            // 6-digit random code
+	LuckyBagAddress string `json:"luckyBagAddress"` // Lucky bag address
+	Timestamp       int64  `json:"timestamp"`       // Creation timestamp
+}
+
+// GenerateLuckyBagCodeAddressKey generates a new lucky bag code address key
+// This method generates a private key, address, and 6-digit random code
+// and saves it to TalkGroupLuckyBagCodeAddressKeyCollection
+func (cdb *ChatDB) GenerateLuckyBagCodeAddressKey() (*LuckyBagCodeAddressKey, error) {
+	// Get chain parameters based on configuration
+	var netParams *chaincfg.Params = &chaincfg.MainNetParams
+	if common.TestNet == "1" {
+		netParams = &chaincfg.TestNet3Params
+	} else if common.TestNet == "2" {
+		netParams = &chaincfg.RegressionNetParams
+	}
+
+	// Generate private key and address
+	privateKey, address, err := common.GenerateKeyAndLegacyAddress(netParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key and address: %v", err)
+	}
+
+	// Generate 6-digit random code (alphanumeric, case-sensitive)
+	code := generateRandomCode(8)
+
+	// Create the key structure
+	codeAddressKey := &LuckyBagCodeAddressKey{
+		Key:             privateKey,
+		Code:            code,
+		LuckyBagAddress: address,
+		Timestamp:       time.Now().UnixMilli(),
+	}
+
+	// Save to database
+	// Key format: code_address
+	key := code + "_" + address
+	data, err := json.Marshal(codeAddressKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal code address key: %v", err)
+	}
+
+	err = Pb[TalkGroupLuckyBagCodeAddressKeyCollection].Set([]byte(key), data, pebble.Sync)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save code address key: %v", err)
+	}
+
+	return codeAddressKey, nil
+}
+
+// GetLuckyBagCodeAddressKeyByCodeAndAddress retrieves the lucky bag code address key
+// based on the provided code and address
+func (cdb *ChatDB) GetLuckyBagCodeAddressKeyByCodeAndAddress(code, address string) (*LuckyBagCodeAddressKey, error) {
+	if code == "" || address == "" {
+		return nil, fmt.Errorf("code and address cannot be empty")
+	}
+
+	// Construct key: code_address
+	key := code + "_" + address
+
+	// First, try to get from TalkGroupLuckyBagCodeAddressKeyCollection
+	value, closer, err := Pb[TalkGroupLuckyBagCodeAddressKeyCollection].Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			// Not found in main collection, try completed collection
+			value, closer, err = Pb[TalkGroupLuckyBagCodeAddressKeyCompletedCollection].Get([]byte(key))
+			if err != nil {
+				if err == pebble.ErrNotFound {
+					return nil, nil // Not found in either collection
+				}
+				return nil, fmt.Errorf("failed to get code address key from completed collection: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to get code address key from main collection: %v", err)
+		}
+	}
+	defer closer.Close()
+
+	// Unmarshal the value
+	var codeAddressKey LuckyBagCodeAddressKey
+	err = json.Unmarshal(value, &codeAddressKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal code address key: %v", err)
+	}
+
+	return &codeAddressKey, nil
+}
+
+// GetLuckyBagCodeAddressKeyFromCompleted retrieves the lucky bag code address key
+// directly from TalkGroupLuckyBagCodeAddressKeyCompletedCollection
+func (cdb *ChatDB) GetLuckyBagCodeAddressKeyFromCompleted(code, address string) (*LuckyBagCodeAddressKey, error) {
+	if code == "" || address == "" {
+		return nil, fmt.Errorf("code and address cannot be empty")
+	}
+
+	// Construct key: code_address
+	key := code + "_" + address
+
+	// Get directly from completed collection
+	value, closer, err := Pb[TalkGroupLuckyBagCodeAddressKeyCompletedCollection].Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil // Not found in completed collection
+		}
+		return nil, fmt.Errorf("failed to get code address key from completed collection: %v", err)
+	}
+	defer closer.Close()
+
+	// Unmarshal the value
+	var codeAddressKey LuckyBagCodeAddressKey
+	err = json.Unmarshal(value, &codeAddressKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal code address key from completed collection: %v", err)
+	}
+
+	return &codeAddressKey, nil
+}
+
+// generateRandomCode generates a random alphanumeric code with specified length
+// Characters include: 0-9, A-Z, a-z (case-sensitive)
+func generateRandomCode(length int) string {
+	const charset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	code := make([]byte, length)
+
+	for i := range code {
+		code[i] = charset[rand.Intn(len(charset))]
+	}
+
+	return string(code)
+}
+
+// moveLuckyBagCodeAddressKeyToCompleted moves a lucky bag code address key from the main collection to the completed collection
+func (cdb *ChatDB) moveLuckyBagCodeAddressKeyToCompleted(code, address string) error {
+	if code == "" || address == "" {
+		return fmt.Errorf("code and address cannot be empty")
+	}
+
+	// Construct key: code_address
+	key := code + "_" + address
+
+	// Get the value from TalkGroupLuckyBagCodeAddressKeyCollection
+	value, closer, err := Pb[TalkGroupLuckyBagCodeAddressKeyCollection].Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return fmt.Errorf("lucky bag code address key not found: %s", key)
+		}
+		return fmt.Errorf("failed to get lucky bag code address key: %v", err)
+	}
+	defer closer.Close()
+
+	// Save to TalkGroupLuckyBagCodeAddressKeyCompletedCollection
+	err = Pb[TalkGroupLuckyBagCodeAddressKeyCompletedCollection].Set([]byte(key), value, pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to save to completed collection: %v", err)
+	}
+
+	// Delete from the original collection
+	err = Pb[TalkGroupLuckyBagCodeAddressKeyCollection].Delete([]byte(key), pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to delete from original collection: %v", err)
+	}
+
+	return nil
 }

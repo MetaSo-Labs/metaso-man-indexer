@@ -165,6 +165,64 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/group-chat-list-by-index": {
+            "get": {
+                "description": "Get group chat records by index range (ascending order) using TalkGroupChatIndexCollection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group chat records by index range",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Start index for pagination, default is 0", "name": "startIndex", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return group chat records by index", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupChatResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/group-chat-list-by-start-time": {
+            "get": {
+                "description": "Get group chat records by start timestamp range (ascending order) using TalkGroupChatTimestamp2Collection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group chat records by start timestamp range",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Start timestamp for pagination, default is 0", "name": "startTimestamp", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return group chat records by start timestamp", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupChatResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
         "/group-chat/private-chat-list": {
             "get": {
                 "description": "Get private chat records between two users, support timestamp pagination",
@@ -236,6 +294,115 @@ func SetupSwagger(router *gin.Engine) {
                     "200": {"description": "Successfully return user information", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/search-groups": {
+            "get": {
+                "description": "Search groups by name or ID using fuzzy search",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Search groups by name or ID",
+                "parameters": [
+                    {"type": "string", "description": "Search query (group name or ID)", "name": "query", "in": "query", "required": true},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return search results", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupSearchResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/search-groups-cache-stats": {
+            "get": {
+                "description": "Get group search cache statistics",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group search cache statistics",
+                "responses": {
+                    "200": {
+                        "description": "Successfully return cache statistics", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "totalGroups": {"type": "integer", "description": "Total number of groups in cache"},
+                                        "lastUpdate": {"type": "integer", "description": "Last update timestamp"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/chat-sendable": {
+            "get": {
+                "description": "Check if the current system allows sending chat messages",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Check if chat is sendable",
+                "responses": {
+                    "200": {
+                        "description": "Successfully return chat sendable status",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/ChatSendableResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/search-group-members": {
+            "get": {
+                "description": "Search group members by name, metaId, or address using fuzzy search",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Search group members",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "Search query (user name, metaId, or address)", "name": "query", "in": "query", "required": true},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return search results",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupMemberSearchResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
                 }
             }
         },
@@ -391,6 +558,29 @@ func SetupSwagger(router *gin.Engine) {
                     "200": {"description": "Successfully return reclaim lucky bag result", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/generate-lucky-bag-code": {
+            "get": {
+                "description": "Generate a new lucky bag code address key for frontend to use before creating a lucky bag",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Generate lucky bag code address key",
+                "responses": {
+                    "200": {
+                        "description": "Successfully return code and address",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/LuckyBagCodeAddressKeyResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
                 }
             }
         },
@@ -998,7 +1188,850 @@ func SetupSwagger(router *gin.Engine) {
             "description": "Socket management related APIs, including connection statistics and user online status",
             "name": "Socket Management"
         }
-    ]
+    ],
+    "definitions": {
+        "Message": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer",
+                    "description": "Response code"
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Response message"
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Response data"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Response timestamp"
+                }
+            }
+        },
+        "GroupResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupItem"
+                    },
+                    "description": "Group list"
+                }
+            }
+        },
+        "GroupItem": {
+            "type": "object",
+            "properties": {
+                "communityId": {
+                    "type": "string",
+                    "description": "Community ID"
+                },
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "txId": {
+                    "type": "string",
+                    "description": "Transaction ID"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "roomName": {
+                    "type": "string",
+                    "description": "Room name"
+                },
+                "roomNote": {
+                    "type": "string",
+                    "description": "Room note"
+                },
+                "roomIcon": {
+                    "type": "string",
+                    "description": "Room icon"
+                },
+                "roomType": {
+                    "type": "string",
+                    "description": "Room type"
+                },
+                "roomStatus": {
+                    "type": "string",
+                    "description": "Room status"
+                },
+                "roomJoinType": {
+                    "type": "string",
+                    "description": "Room join type"
+                },
+                "roomAvatarUrl": {
+                    "type": "string",
+                    "description": "Room avatar URL"
+                },
+                "roomNinePersonHash": {
+                    "type": "string",
+                    "description": "Room nine person hash"
+                },
+                "roomNewestTxId": {
+                    "type": "string",
+                    "description": "Room newest transaction ID"
+                },
+                "roomNewestPinId": {
+                    "type": "string",
+                    "description": "Room newest pin ID"
+                },
+                "roomNewestMetaId": {
+                    "type": "string",
+                    "description": "Room newest meta ID"
+                },
+                "roomNewestUserName": {
+                    "type": "string",
+                    "description": "Room newest user name"
+                },
+                "roomNewestProtocol": {
+                    "type": "string",
+                    "description": "Room newest protocol"
+                },
+                "roomNewestContent": {
+                    "type": "string",
+                    "description": "Room newest content"
+                },
+                "roomNewestTimestamp": {
+                    "type": "integer",
+                    "description": "Room newest timestamp"
+                },
+                "createUserMetaId": {
+                    "type": "string",
+                    "description": "Create user meta ID"
+                },
+                "createUserAddress": {
+                    "type": "string",
+                    "description": "Create user address"
+                },
+                "createUserInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "userCount": {
+                    "type": "integer",
+                    "description": "User count"
+                },
+                "chatSettingType": {
+                    "type": "string",
+                    "description": "Chat setting type"
+                },
+                "deleteStatus": {
+                    "type": "string",
+                    "description": "Delete status"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
+                }
+            }
+        },
+        "GroupChatResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "nextTimestamp": {
+                    "type": "integer",
+                    "description": "Next timestamp for pagination"
+                },
+                "lastIndex": {
+                    "type": "integer",
+                    "description": "Last index for pagination"
+                },
+                "lastTimestamp": {
+                    "type": "integer",
+                    "description": "Last timestamp for pagination"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupChatItem"
+                    },
+                    "description": "Chat list"
+                }
+            }
+        },
+        "GroupChatItem": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "metanetId": {
+                    "type": "string",
+                    "description": "Metanet ID"
+                },
+                "txId": {
+                    "type": "string",
+                    "description": "Transaction ID"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "User meta ID"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "nickName": {
+                    "type": "string",
+                    "description": "Nick name"
+                },
+                "protocol": {
+                    "type": "string",
+                    "description": "Protocol"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content"
+                },
+                "contentType": {
+                    "type": "string",
+                    "description": "Content type"
+                },
+                "encryption": {
+                    "type": "string",
+                    "description": "Encryption"
+                },
+                "chatType": {
+                    "type": "integer",
+                    "description": "Chat type: 0-msg, 1-red, 2-img"
+                },
+                "replyPin": {
+                    "type": "string",
+                    "description": "Reply pin"
+                },
+                "replyInfo": {
+                    "$ref": "#/definitions/ReplyInfo"
+                },
+                "redMetaId": {
+                    "type": "string",
+                    "description": "Red meta ID"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
+                }
+            }
+        },
+        "ReplyInfo": {
+            "type": "object",
+            "properties": {
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "Meta ID"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Address"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "nickName": {
+                    "type": "string",
+                    "description": "Nick name"
+                },
+                "protocol": {
+                    "type": "string",
+                    "description": "Protocol"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content"
+                },
+                "contentType": {
+                    "type": "string",
+                    "description": "Content type"
+                },
+                "encryption": {
+                    "type": "string",
+                    "description": "Encryption"
+                },
+                "chatType": {
+                    "type": "integer",
+                    "description": "Chat type"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
+                }
+            }
+        },
+        "UserInfo": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "metaid": {
+                    "type": "string",
+                    "description": "User meta ID"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "User name"
+                },
+                "avatar": {
+                    "type": "string",
+                    "description": "User avatar"
+                },
+                "bio": {
+                    "type": "string",
+                    "description": "User bio"
+                },
+                "chatPublicKey": {
+                    "type": "string",
+                    "description": "Chat public key"
+                },
+                "chatPublicKeyId": {
+                    "type": "string",
+                    "description": "Chat public key ID"
+                }
+            }
+        },
+        "GroupMemberResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupMemberItem"
+                    },
+                    "description": "Member list"
+                }
+            }
+        },
+        "GroupMemberItem": {
+            "type": "object",
+            "properties": {
+                "metaId": {
+                    "type": "string",
+                    "description": "Meta ID"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Address"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "timeStr": {
+                    "type": "string",
+                    "description": "Time string"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                }
+            }
+        },
+        "GroupPersonResponse": {
+            "type": "object",
+            "properties": {
+                "isInGroup": {
+                    "type": "boolean",
+                    "description": "Whether in the group"
+                },
+                "person": {
+                    "$ref": "#/definitions/GroupPersonItem"
+                }
+            }
+        },
+        "GroupPersonItem": {
+            "type": "object",
+            "properties": {
+                "groupIdMetaIdHash": {
+                    "type": "string",
+                    "description": "Group ID and member unique identifier"
+                },
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "Meta ID"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Address"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "avatarTxId": {
+                    "type": "string",
+                    "description": "Avatar transaction ID"
+                },
+                "userName": {
+                    "type": "string",
+                    "description": "User name"
+                },
+                "userNickName": {
+                    "type": "string",
+                    "description": "User nick name"
+                },
+                "groupState": {
+                    "type": "integer",
+                    "description": "Group state: 1-in group, -1-left"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                }
+            }
+        },
+        "UserInfoResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "User meta ID"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                }
+            }
+        },
+        "MaxIndexResponse": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "fromMetaId": {
+                    "type": "string",
+                    "description": "From meta ID"
+                },
+                "toMetaId": {
+                    "type": "string",
+                    "description": "To meta ID"
+                },
+                "maxIndex": {
+                    "type": "integer",
+                    "description": "Maximum index"
+                }
+            }
+        },
+        "PrivateChatResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "nextTimestamp": {
+                    "type": "integer",
+                    "description": "Next timestamp for pagination"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PrivateChatItem"
+                    },
+                    "description": "Private chat list"
+                }
+            }
+        },
+        "PrivateChatItem": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "description": "From user"
+                },
+                "fromUserInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "to": {
+                    "type": "string",
+                    "description": "To user"
+                },
+                "toUserInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "txId": {
+                    "type": "string",
+                    "description": "Transaction ID"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "Meta ID"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Address"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "nickName": {
+                    "type": "string",
+                    "description": "Nick name"
+                },
+                "protocol": {
+                    "type": "string",
+                    "description": "Protocol"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content"
+                },
+                "contentType": {
+                    "type": "string",
+                    "description": "Content type"
+                },
+                "encryption": {
+                    "type": "string",
+                    "description": "Encryption"
+                },
+                "chatType": {
+                    "type": "integer",
+                    "description": "Chat type"
+                },
+                "replyPin": {
+                    "type": "string",
+                    "description": "Reply pin"
+                },
+                "replyInfo": {
+                    "$ref": "#/definitions/ReplyInfo"
+                },
+                "replyMetaId": {
+                    "type": "string",
+                    "description": "Reply meta ID"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
+                }
+            }
+        },
+        "ChatInfoResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ChatInfoItem"
+                    },
+                    "description": "Chat info list"
+                }
+            }
+        },
+        "ChatInfoItem": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "description": "Type: 1-group chat, 2-private chat"
+                },
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID (for group chat)"
+                },
+                "metaId": {
+                    "type": "string",
+                    "description": "Other party MetaId (for private chat)"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Other party address (for private chat)"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Latest message timestamp"
+                },
+                "chatType": {
+                    "type": "integer",
+                    "description": "Message type 0-msg, 1-red, 2-img"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Message content summary"
+                },
+                "createMetaId": {
+                    "type": "string",
+                    "description": "Create meta ID"
+                },
+                "createAddress": {
+                    "type": "string",
+                    "description": "Create address"
+                },
+                "lastMessagePinId": {
+                    "type": "string",
+                    "description": "Last message pin ID"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
+                },
+                "communityId": {
+                    "type": "string",
+                    "description": "Community ID"
+                },
+                "roomName": {
+                    "type": "string",
+                    "description": "Room name"
+                },
+                "roomNote": {
+                    "type": "string",
+                    "description": "Room note"
+                },
+                "roomType": {
+                    "type": "string",
+                    "description": "Room type"
+                },
+                "roomStatus": {
+                    "type": "string",
+                    "description": "Room status"
+                },
+                "roomJoinType": {
+                    "type": "string",
+                    "description": "Room join type"
+                },
+                "roomAvatarUrl": {
+                    "type": "string",
+                    "description": "Room avatar URL"
+                },
+                "createUserMetaId": {
+                    "type": "string",
+                    "description": "Create user meta ID"
+                },
+                "createUserAddress": {
+                    "type": "string",
+                    "description": "Create user address"
+                },
+                "createUserInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "userCount": {
+                    "type": "integer",
+                    "description": "User count"
+                },
+                "chatSettingType": {
+                    "type": "string",
+                    "description": "Chat setting type"
+                },
+                "deleteStatus": {
+                    "type": "string",
+                    "description": "Delete status"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                }
+            }
+        },
+        "GroupSearchResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total number of groups found"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupSearchItem"
+                    },
+                    "description": "List of groups"
+                }
+            }
+        },
+        "GroupSearchItem": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "groupName": {
+                    "type": "string",
+                    "description": "Group name"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                }
+            }
+        },
+        "ChatSendableResponse": {
+            "type": "object",
+            "properties": {
+                "sendable": {
+                    "type": "boolean",
+                    "description": "Whether chat is sendable"
+                }
+            }
+        },
+        "GroupMemberSearchItem": {
+            "type": "object",
+            "properties": {
+                "metaId": {
+                    "type": "string",
+                    "description": "User MetaId"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "userInfo": {
+                    "$ref": "#/definitions/UserInfo"
+                },
+                "userName": {
+                    "type": "string",
+                    "description": "User name from group"
+                },
+                "userNickName": {
+                    "type": "string",
+                    "description": "User nickname from group"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Join timestamp"
+                }
+            }
+        },
+        "GroupMemberSearchResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total number of results"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupMemberSearchItem"
+                    },
+                    "description": "Search results"
+                }
+            }
+        },
+        "LuckyBagCodeAddressKeyResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "6-digit random code"
+                },
+                "luckyBagAddress": {
+                    "type": "string",
+                    "description": "Lucky bag address"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Creation timestamp"
+                }
+            }
+        }
+    }
 }`
 
 		swaggerContent := doc

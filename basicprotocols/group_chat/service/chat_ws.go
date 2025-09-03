@@ -85,7 +85,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		Data:        nil,
 		ReplyPin:    chat.ReplyPin,
 		ReplyInfo:   replyInfo,
-		RedMetaId:   replyMetaId,
+		ReplyMetaId: replyMetaId,
 		Timestamp:   chat.Timestamp,
 		Params:      "",
 		Chain:       chat.Chain,
@@ -130,6 +130,12 @@ func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 				BlockHeight: replyChat.BlockHeight,
 				Index:       replyChat.Index,
 			}
+			if replyInfo.Address == "" && replyInfo.MetaId != "" {
+				replyInfo.UserInfo = common_service.FetchMetaIDUserInfoInfoByMetaId(replyInfo.MetaId)
+				if replyInfo.UserInfo != nil {
+					replyInfo.Address = replyInfo.UserInfo.Address
+				}
+			}
 		}
 	}
 
@@ -152,7 +158,7 @@ func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 		ChatType:     int64(chat.ChatType),
 		ReplyPin:     chat.ReplyPin,
 		ReplyInfo:    replyInfo,
-		RedMetaId:    replyMetaId,
+		ReplyMetaId:  replyMetaId,
 		Timestamp:    chat.Timestamp,
 		Chain:        chat.Chain,
 		BlockHeight:  chat.BlockHeight,

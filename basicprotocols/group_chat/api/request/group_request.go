@@ -79,3 +79,30 @@ type ReclaimLuckyBagRequest struct {
 	MetaId  string `form:"metaId"`  // User MetaId
 	Address string `form:"address"` // User address
 }
+
+// FetchGroupChatListByIndexRequest Get group chat list by index range request
+type FetchGroupChatListByIndexRequest struct {
+	GroupId    string `form:"groupId"`    // Group ID
+	StartIndex int64  `form:"startIndex"` // Start index for pagination
+	Size       int64  `form:"size"`       // Page size
+}
+
+// FetchGroupChatListByStartTimeRequest Get group chat list by start timestamp range request
+type FetchGroupChatListByStartTimeRequest struct {
+	GroupId        string `form:"groupId"`        // Group ID
+	StartTimestamp int64  `form:"startTimestamp"` // Start timestamp for pagination
+	Size           int64  `form:"size"`           // Page size
+}
+
+// SearchGroupRequest Search groups by name or ID request
+type SearchGroupRequest struct {
+	Query string `form:"query"` // Search query (group name or ID)
+	Size  int64  `form:"size"`  // Page size
+}
+
+// SearchGroupMembersRequest Search group members request
+type SearchGroupMembersRequest struct {
+	GroupId string `form:"groupId"` // Group ID
+	Query   string `form:"query"`   // Search query (user name, metaId)
+	Size    int64  `form:"size"`    // Page size
+}

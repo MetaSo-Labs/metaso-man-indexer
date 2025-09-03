@@ -224,6 +224,9 @@ func BuildBtcTransferAllTx(netParam *chaincfg.Params, ins []*TxInputUtxo, out *T
 	txTotalSize := tx.SerializeSize() + txSignSize
 
 	txFee := int64(txTotalSize) * feeRate
+	if feeRate == 1 {
+		txFee = int64(txTotalSize) * 120 / 100
+	}
 	outAmount = totalAmount - int64(txFee)
 
 	tx.TxOut[0].Value = outAmount

@@ -24,6 +24,7 @@ type GroupItem struct {
 	PinId               string    `json:"pinId"`               //Room's PinId
 	RoomName            string    `json:"roomName"`            //Room creation name
 	RoomNote            string    `json:"roomNote"`            //Room creation announcement
+	RoomIcon            string    `json:"roomIcon"`            //Room creation icon
 	RoomType            string    `json:"roomType"`            //Room creation type "1" unencrypted "2" encrypted, encryption uses AES algorithm
 	RoomStatus          string    `json:"roomStatus"`          //"1" When unencrypted it's "1", when encrypted it's encrypted info, reserved field
 	RoomJoinType        string    `json:"roomJoinType"`        //Join method, 1 for password, 2 for nft
@@ -50,7 +51,9 @@ type GroupItem struct {
 
 type GroupChatResponse struct {
 	Total         int64            `json:"total"`
-	NextTimestamp int64            `json:"nextTimestamp"`
+	NextTimestamp int64            `json:"nextTimestamp,omitempty"`
+	LastIndex     int64            `json:"lastIndex,omitempty"`
+	LastTimestamp int64            `json:"lastTimestamp,omitempty"`
 	List          []*GroupChatItem `json:"list"`
 }
 
@@ -71,7 +74,7 @@ type GroupChatItem struct {
 	Data        interface{}     `json:"data"`
 	ReplyPin    string          `json:"replyPin"`
 	ReplyInfo   *ReplyInfo      `json:"replyInfo"`
-	RedMetaId   string          `json:"redMetaId"`
+	ReplyMetaId string          `json:"replyMetaId"`
 	Timestamp   int64           `json:"timestamp"`   //Chat record timestamp
 	Params      string          `json:"params"`      //General field for future parameter additions
 	Chain       string          `json:"chain"`       //Chain type
@@ -160,6 +163,7 @@ type ChatInfoItem struct {
 	CommunityId       string    `json:"communityId,omitempty"`   // Community ID (for group chat)
 	RoomName          string    `json:"roomName,omitempty"`      // Room name (for group chat)
 	RoomNote          string    `json:"roomNote,omitempty"`      // Room announcement (for group chat)
+	RoomIcon          string    `json:"roomIcon,omitempty"`      // Room icon (for group chat)
 	RoomType          string    `json:"roomType,omitempty"`      // Room type (for group chat)
 	RoomStatus        string    `json:"roomStatus,omitempty"`    // Room status (for group chat)
 	RoomJoinType      string    `json:"roomJoinType,omitempty"`  // Join method (for group chat)
@@ -199,7 +203,7 @@ type PrivateChatItem struct {
 	Data         interface{} `json:"data"`
 	ReplyPin     string      `json:"replyPin"`
 	ReplyInfo    *ReplyInfo  `json:"replyInfo"`
-	RedMetaId    string      `json:"redMetaId"`
+	ReplyMetaId  string      `json:"replyMetaId"`
 	Timestamp    int64       `json:"timestamp"`   // Chat record timestamp
 	Params       string      `json:"params"`      // General field for future parameter additions
 	Chain        string      `json:"chain"`       // Chain type
@@ -216,6 +220,10 @@ type LuckyBagInfoResponse struct {
 	SubId               string         `json:"subId"`
 	Code                string         `json:"code"`
 	CreateTime          string         `json:"createTime"`
+	Domain              string         `json:"domain"`
+	LuckyBagAddress     string         `json:"luckyBagAddress"`
+	GenType             int64          `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState            int64          `json:"genState"` // 0-normal, 1-success, 2-failed
 	Content             string         `json:"content"`
 	Img                 string         `json:"img"`
 	ImgType             string         `json:"imgType"`
@@ -259,6 +267,10 @@ type LuckyBagUnusedResponse struct {
 	SubId               string        `json:"subId"`
 	Code                string        `json:"code"`
 	CreateTime          string        `json:"createTime"`
+	Domain              string        `json:"domain"`
+	LuckyBagAddress     string        `json:"luckyBagAddress"`
+	GenType             int64         `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState            int64         `json:"genState"` // 0-normal, 1-success, 2-failed
 	Amount              string        `json:"amount"`
 	Count               string        `json:"count"`
 	ValidCount          string        `json:"validCount"`
@@ -286,4 +298,45 @@ type UserInfoResponse struct {
 	Address  string    `json:"address"`  // User address
 	MetaId   string    `json:"metaId"`   // User metaId
 	UserInfo *UserInfo `json:"userInfo"` // User information
+}
+
+// GroupSearchItem Group search result item
+type GroupSearchItem struct {
+	GroupId     string `json:"groupId"`     // Group ID
+	GroupName   string `json:"groupName"`   // Group name
+	PinId       string `json:"pinId"`       // Pin ID
+	Timestamp   int64  `json:"timestamp"`   // Timestamp
+	MemberCount int64  `json:"memberCount"` // Member count
+}
+
+// GroupSearchResponse Group search response
+type GroupSearchResponse struct {
+	Total int64              `json:"total"` // Total number of results
+	List  []*GroupSearchItem `json:"list"`  // Search results
+}
+
+// ChatSendableResponse Response for checking if chat is sendable
+type ChatSendableResponse struct {
+	Sendable bool `json:"sendable"` // Whether chat is sendable
+}
+
+// GroupMemberSearchItem Group member search result item
+type GroupMemberSearchItem struct {
+	MetaId    string    `json:"metaId"`    // User MetaId
+	Address   string    `json:"address"`   // User address
+	UserInfo  *UserInfo `json:"userInfo"`  // User information
+	Timestamp int64     `json:"timestamp"` // Join timestamp
+}
+
+// GroupMemberSearchResponse Group member search response
+type GroupMemberSearchResponse struct {
+	Total int64                    `json:"total"` // Total number of results
+	List  []*GroupMemberSearchItem `json:"list"`  // Search results
+}
+
+// LuckyBagCodeAddressKeyResponse Response for lucky bag code address key generation
+type LuckyBagCodeAddressKeyResponse struct {
+	Code            string `json:"code"`            // 6-digit random code
+	LuckyBagAddress string `json:"luckyBagAddress"` // Lucky bag address
+	Timestamp       int64  `json:"timestamp"`       // Creation timestamp
 }
