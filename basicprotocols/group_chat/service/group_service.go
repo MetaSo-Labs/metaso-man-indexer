@@ -730,11 +730,13 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 
 	// Check if orderBy is "timestamp" for timestamp descending order
 	if req.OrderBy == "timestamp" {
+		t := time.Now().UnixMilli()
 		// Get all group members first
 		allMembers, err := groupDB.GetGroupMembers(req.GroupId)
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST] get group members time: %d\n", time.Now().UnixMilli()-t)
 
 		// Sort by timestamp in descending order
 		sort.Slice(allMembers, func(i, j int) bool {
@@ -768,6 +770,7 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		}
 	}
 
+	t1 := time.Now().UnixMilli()
 	// Convert to response format
 	var memberItems []*respond.GroupMemberItem
 	for _, member := range members {
@@ -781,6 +784,7 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		}
 		memberItems = append(memberItems, memberItem)
 	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST] for member item info time: %d\n", time.Now().UnixMilli()-t1)
 
 	return &respond.GroupMemberResponse{
 		Total: total,
@@ -1085,11 +1089,13 @@ func GetUserInfoByAddress(address string) (*respond.UserInfoResponse, error) {
 			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
 		}
 	} else {
-		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
-		if chatPublicKeyInfo != nil {
-			if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
-				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
-				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+		if userInfo.ChatPublicKeyId == "" {
+			chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
+			if chatPublicKeyInfo != nil {
+				if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+					userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+					userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+				}
 			}
 		}
 	}
@@ -1119,11 +1125,13 @@ func GetUserInfoByMetaId(metaId string) (*respond.UserInfoResponse, error) {
 			userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
 		}
 	} else {
-		chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
-		if chatPublicKeyInfo != nil {
-			if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
-				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
-				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+		if userInfo.ChatPublicKeyId == "" {
+			chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
+			if chatPublicKeyInfo != nil {
+				if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+					userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+					userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+				}
 			}
 		}
 	}
@@ -1396,6 +1404,7 @@ func SearchGroupsByNameOrId(req *request.SearchGroupRequest) (*respond.GroupSear
 		groupItem := &respond.GroupSearchItem{
 			GroupId:     result.GroupId,
 			GroupName:   result.GroupName,
+			GroupIcon:   result.GroupIcon,
 			PinId:       result.PinId,
 			Timestamp:   result.Timestamp,
 			MemberCount: userCount,
@@ -1406,6 +1415,87 @@ func SearchGroupsByNameOrId(req *request.SearchGroupRequest) (*respond.GroupSear
 	return &respond.GroupSearchResponse{
 		Total: int64(len(groupItems)),
 		List:  groupItems,
+	}, nil
+}
+
+// SearchGroupsAndUserByNameOrId searches both groups and users by name or ID
+func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*respond.GroupAndUserSearchResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 5
+	}
+
+	var allResults []*respond.GroupAndUserSearchItem
+
+	// Search users
+	userResults, err := common_service.SearchAllMetaIDUserInfoInfo(req.Query)
+	if err != nil {
+		// Log error but continue
+		fmt.Printf("Failed to search users: %v\n", err)
+	} else {
+		// Convert user results to combined format
+		for _, result := range userResults {
+			userItem := &respond.GroupAndUserSearchItem{
+				Type:      "user",
+				MetaId:    result.Metaid,
+				Address:   result.Address,
+				UserName:  result.Name,
+				Avatar:    result.Avatar,
+				AvatarId:  result.AvatarId,
+				Timestamp: 0, // User search doesn't provide timestamp, use 0
+			}
+			allResults = append(allResults, userItem)
+		}
+	}
+
+	// Search groups
+	groupResults, err := groupDB.SearchGroups(req.Query, int(req.Size))
+	if err != nil {
+		// Log error but continue with user search
+		fmt.Printf("Failed to search groups: %v\n", err)
+	} else {
+		// Convert group results to combined format
+		for _, result := range groupResults {
+			// Get group member count
+			userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+			if err != nil {
+				// If failed to get, use default value
+				userCount = 0
+			}
+
+			groupItem := &respond.GroupAndUserSearchItem{
+				Type:        "group",
+				GroupId:     result.GroupId,
+				GroupName:   result.GroupName,
+				GroupIcon:   result.GroupIcon,
+				PinId:       result.PinId,
+				MemberCount: userCount,
+				Timestamp:   result.Timestamp,
+			}
+			allResults = append(allResults, groupItem)
+		}
+	}
+
+	// // Sort results by type (groups first, then users) and limit total results
+	// var finalResults []*respond.GroupAndUserSearchItem
+
+	// // Add groups first
+	// for _, item := range allResults {
+	// 	if item.Type == "group" && len(finalResults) < int(req.Size) {
+	// 		finalResults = append(finalResults, item)
+	// 	}
+	// }
+
+	// // Then add users
+	// for _, item := range allResults {
+	// 	if item.Type == "user" && len(finalResults) < int(req.Size) {
+	// 		finalResults = append(finalResults, item)
+	// 	}
+	// }
+
+	return &respond.GroupAndUserSearchResponse{
+		Total: int64(len(allResults)),
+		List:  allResults,
 	}, nil
 }
 

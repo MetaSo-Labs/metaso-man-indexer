@@ -376,6 +376,20 @@ type SimpleFileMsg struct {
 	ReplyPin   string      `json:"replyPin"`
 }
 
+/*
+*
+SimplePrivateBlock
+
+	{
+		"to": "{metaid}"
+		"blockState": 1 //1:拉黑，-1:取消拉黑
+	}
+*/
+type SimplePrivateBlock struct {
+	To         string      `json:"to"`
+	BlockState interface{} `json:"blockState"`
+}
+
 // Protocol constant definitions
 const (
 	MonitorSimpleCommunity            = "SimpleCommunity"
@@ -389,8 +403,9 @@ const (
 	MonitorSimpleGroupResidueLuckyBag = "SimpleGroupResidueLuckyBag"
 	MonitorSimpleGroupRemoveUser      = "SimpleGroupRemoveUser"
 
-	MonitorSimpleMsg     = "SimpleMsg"
-	MonitorSimpleFileMsg = "SimpleFileMsg"
+	MonitorSimpleMsg          = "SimpleMsg"
+	MonitorSimpleFileMsg      = "SimpleFileMsg"
+	MonitorSimplePrivateBlock = "SimplePrivateBlock"
 )
 
 // info

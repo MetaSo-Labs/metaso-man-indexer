@@ -454,3 +454,27 @@ type TalkGroupRemoveUserModel struct {
 	ConfirmState    int64  `json:"confirmState"`    // Confirmation state
 	Timestamp       int64  `json:"timestamp"`       // Timestamp
 }
+
+type SimplePrivateBlock struct {
+	PinId       string `json:"pinId"`
+	TxId        string `json:"txId"`
+	To          string `json:"to"`
+	BlockState  int64  `json:"blockState"` // 1:block, -1:unblock
+	Protocol    string `json:"protocol"`
+	Timestamp   int64  `json:"timestamp"`
+	Chain       string `json:"chain"`
+	BlockHeight int64  `json:"blockHeight"`
+}
+
+type TalkPrivateChatBlock struct {
+	BlockPinId     string `json:"blockPinId"`
+	BlockMetaId    string `json:"blockMetaId"`
+	BlockState     int64  `json:"blockState"` // 1:block, -1:unblock
+	BlockTimestamp int64  `json:"blockTimestamp"`
+}
+
+// TalkPrivateChatBlockList represents a list of private chat blocks for a user
+type TalkPrivateChatBlockList struct {
+	MetaId string                  `json:"metaId"` // User MetaId
+	Items  []*TalkPrivateChatBlock `json:"items"`  // List of block items
+}

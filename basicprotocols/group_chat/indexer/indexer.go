@@ -103,7 +103,9 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		log.Printf("[%s]Chat protocol: %s", pin.ChainName, pin.Path)
 		// Chat related protocols
 		return gci.chatDB.ProcessGroupChatPin(pin, tx)
-	case strings.ToLower(protocols.MonitorSimpleMsg), strings.ToLower(protocols.MonitorSimpleFileMsg):
+	case strings.ToLower(protocols.MonitorSimpleMsg),
+		strings.ToLower(protocols.MonitorSimpleFileMsg),
+		strings.ToLower(protocols.MonitorSimplePrivateBlock):
 		log.Printf("[%s]Private chat protocol: %s", pin.ChainName, pin.Path)
 		// Private chat related protocols
 		return gci.privateDB.ProcessPrivateChatPin(pin)

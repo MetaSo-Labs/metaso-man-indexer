@@ -52,6 +52,7 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Group search routes
 		group.GET("/search-groups", SearchGroups)
+		group.GET("/search-groups-and-users", SearchGroupsAndUsers)
 		group.GET("/search-groups-cache-stats", GetGroupSearchCacheStats)
 
 		// Search group members
@@ -76,6 +77,7 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Generate lucky bag code address key
 		group.GET("/generate-lucky-bag-code", GenerateLuckyBagCodeAddressKey)
 	}
+
 }
 
 // RegisterSocketRoutes Register socket-related routes

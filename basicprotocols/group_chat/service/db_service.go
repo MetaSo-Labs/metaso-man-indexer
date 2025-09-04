@@ -1728,3 +1728,85 @@ func GetMetaIdContextListByMetaId(metaId string) (map[string]interface{}, error)
 
 	return result, nil
 }
+
+// GetPrivateChatTimestampOutList get private chat timestamp out collection list with pagination
+func GetPrivateChatTimestampOutList(from, to string, cursor int, size int) (map[string]interface{}, error) {
+	// Set default values
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 100 {
+		size = 100
+	}
+
+	var results []map[string]interface{}
+
+	// Construct prefix for filtering
+	fromToPrefix := from + "_" + to + "_"
+
+	// Create iterator with prefix bounds for efficient querying
+	iter, err := db.Pb[db.TalkPrivateChatTimestampOutCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(fromToPrefix),
+		UpperBound: []byte(fromToPrefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+
+	// Iterate through keys in reverse order starting from the prefix
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		key := string(iter.Key())
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkPrivateChatTimestampOutCollection,
+		"from":       from,
+		"to":         to,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+	}
+
+	return result, nil
+}

@@ -1708,15 +1708,17 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	}
 
 	// Save timestamp index (decide which collection to save to based on user state)
-	err = cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
-	err = cdb.EnqueueChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1822,12 +1824,12 @@ func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64
 }
 
 // Save chat timestamp index (decide which collection to save to based on user state)
-func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
 	// Get user's state in group
 	groupState, err := cdb.getUserGroupState(chat.MetaId, chat.GroupId, chat.Timestamp)
 	if err != nil {
 		// If getting state fails, default to saving to normal collection
-		return cdb.SaveChatTimestamp(chat)
+		return true, cdb.SaveChatTimestamp(chat)
 	}
 
 	// Construct timestamp index value: pinId_chatType_timestamp
@@ -1837,6 +1839,7 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 	var (
 		collection  string
 		collection2 string
+		isGoEnqueue bool = true
 	)
 	if groupState == models.RoomStateIn {
 		// User is in group, save to normal collection
@@ -1846,25 +1849,26 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) erro
 		// User is not in group, save to invalid collection
 		collection = TalkGroupChatTimestampOutCollection
 		collection2 = TalkGroupChatTimestamp2OutCollection
+		isGoEnqueue = false
 	}
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	key := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10))
 	if err = Pb[collection].Set(key, []byte(value), pebble.Sync); err != nil {
-		return err
+		return isGoEnqueue, err
 	}
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	// For collection2, we need to handle array format
 	err = cdb.saveChatTimestamp2WithCollection(chat, collection2)
 	if err != nil {
-		return err
+		return isGoEnqueue, err
 	}
 
 	if groupState == models.RoomStateIn {
 		go dealGroupChatItem(chat)
 	}
-	return nil
+	return isGoEnqueue, nil
 }
 
 // Process file group chat
@@ -1914,15 +1918,17 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	}
 
 	// Save timestamp index (decide which collection to save to based on user state)
-	err = cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
-	err = cdb.EnqueueChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2177,15 +2183,17 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	}
 
 	// Save timestamp index (decide which collection to save to based on user state)
-	err = cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
-	err = cdb.EnqueueChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -2316,15 +2324,17 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 	}
 
 	// Save timestamp index (decide which collection to save to based on user state)
-	err = cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
-	err = cdb.EnqueueChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

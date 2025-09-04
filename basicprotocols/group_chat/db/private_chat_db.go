@@ -78,6 +78,31 @@ func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChat
 	return nil
 }
 
+// Save private chat out timestamp index (for blocked messages)
+func (pcdb *PrivateChatDB) SavePrivateChatOutTimestamp(chat *models.TalkPrivateChatV3) error {
+	// Generate a 6-digit random number for uniqueness
+	randomNum := generateRandomNumber(6)
+
+	// Construct timestamp index value: pinId_chatType_timestamp
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + randomNum
+
+	// Save from_to_timestamp index to out collection (blocked messages)
+	fromToKey := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
+	err := Pb[TalkPrivateChatTimestampOutCollection].Set(fromToKey, []byte(value), pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Save to_from_timestamp index to out collection (blocked messages)
+	toFromKey := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
+	err = Pb[TalkPrivateChatTimestampOutCollection].Set(toFromKey, []byte(value), pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Get private chat message by PinId
 func (pcdb *PrivateChatDB) GetPrivateChatByPinId(pinId string) (*models.TalkPrivateChatV3, error) {
 	key := []byte(pinId)
@@ -553,6 +578,8 @@ func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription) error 
 			return pcdb.processPrivateChat(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleFileMsg) {
 			return pcdb.processFilePrivateChat(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimplePrivateBlock) {
+			return pcdb.processPrivateChatBlock(pin)
 		}
 	default:
 		return nil // Unknown operation type, skip
@@ -611,16 +638,37 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 		return err
 	}
 
-	// Save timestamp index
-	err = pcdb.SavePrivateChatTimestamp(chat)
+	isGoEnqueue := true
+	// Check if the receiver has blocked the sender
+	isBlocked, err := pcdb.IsUserBlockedByChatTimestamp(chat.To, chat.From, chat.Timestamp)
 	if err != nil {
-		return err
+		log.Printf("Failed to check block status for chat %s: %v", chat.PinId, err)
+		// If we can't determine block status, save to normal collection as fallback
+		err = pcdb.SavePrivateChatTimestamp(chat)
+		if err != nil {
+			return err
+		}
+	} else if isBlocked {
+		// If blocked, save to out collection
+		err = pcdb.SavePrivateChatOutTimestamp(chat)
+		if err != nil {
+			return err
+		}
+		isGoEnqueue = false
+	} else {
+		// If not blocked, save to normal collection
+		err = pcdb.SavePrivateChatTimestamp(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Enqueue message for asynchronous processing
-	err = pcdb.EnqueuePrivateChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = pcdb.EnqueuePrivateChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -675,16 +723,37 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 		return err
 	}
 
-	// Save timestamp index
-	err = pcdb.SavePrivateChatTimestamp(chat)
+	isGoEnqueue := true
+	// Check if the receiver has blocked the sender
+	isBlocked, err := pcdb.IsUserBlockedByChatTimestamp(chat.To, chat.From, chat.Timestamp)
 	if err != nil {
-		return err
+		log.Printf("Failed to check block status for file chat %s: %v", chat.PinId, err)
+		// If we can't determine block status, save to normal collection as fallback
+		err = pcdb.SavePrivateChatTimestamp(chat)
+		if err != nil {
+			return err
+		}
+	} else if isBlocked {
+		// If blocked, save to out collection
+		err = pcdb.SavePrivateChatOutTimestamp(chat)
+		if err != nil {
+			return err
+		}
+		isGoEnqueue = false
+	} else {
+		// If not blocked, save to normal collection
+		err = pcdb.SavePrivateChatTimestamp(chat)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Enqueue message for asynchronous processing
-	err = pcdb.EnqueuePrivateChatMessage(chat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		// Enqueue message for asynchronous processing
+		err = pcdb.EnqueuePrivateChatMessage(chat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -822,4 +891,231 @@ func (pcdb *PrivateChatDB) convertToMetaId(input string) string {
 	// Otherwise, treat it as an address and convert to MetaId using SHA256
 	hash := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(hash[:])
+}
+
+// Process private chat block operation
+func (pcdb *PrivateChatDB) processPrivateChatBlock(pin *pin.PinInscription) error {
+	// Check if this PinId has already been saved
+	existingBlock, err := pcdb.GetPrivateChatBlockByPinId(pin.Id)
+	if err == nil && existingBlock != nil {
+		if existingBlock.BlockHeight != pin.GenesisHeight {
+			existingBlock.BlockHeight = pin.GenesisHeight
+			err = pcdb.SavePrivateChatBlock(existingBlock)
+			if err != nil {
+				return err
+			}
+		}
+		// Already exists, skip processing
+		return nil
+	}
+
+	// Parse protocol data
+	var simplePrivateBlock protocols.SimplePrivateBlock
+	err = json.Unmarshal(pin.ContentBody, &simplePrivateBlock)
+	if err != nil {
+		return err
+	}
+
+	// Convert To field to MetaId format if needed
+	toMetaId := pcdb.convertToMetaId(simplePrivateBlock.To)
+
+	// Create private chat block model
+	blockRecord := &models.SimplePrivateBlock{
+		PinId:       pin.Id,
+		TxId:        pin.Id[:len(pin.Id)-2],
+		To:          toMetaId,
+		BlockState:  toInt64(simplePrivateBlock.BlockState),
+		Protocol:    pin.Path,
+		Timestamp:   pin.Timestamp,
+		Chain:       pin.ChainName,
+		BlockHeight: pin.GenesisHeight,
+	}
+
+	// Save block record to TalkPrivateChatBlockPinCollection
+	err = pcdb.SavePrivateChatBlock(blockRecord)
+	if err != nil {
+		return err
+	}
+
+	// Update the block list in TalkPrivateChatMetaIdBlockListCollection
+	err = pcdb.UpdatePrivateChatBlockList(pin.CreateMetaId, toMetaId, blockRecord)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetPrivateChatBlockByPinId retrieves a private chat block record by PinId
+func (pcdb *PrivateChatDB) GetPrivateChatBlockByPinId(pinId string) (*models.SimplePrivateBlock, error) {
+	key := []byte(pinId)
+	value, closer, err := Pb[TalkPrivateChatBlockPinCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var blockRecord models.SimplePrivateBlock
+	err = json.Unmarshal(value, &blockRecord)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockRecord, nil
+}
+
+// SavePrivateChatBlock saves a private chat block record to TalkPrivateChatBlockPinCollection
+func (pcdb *PrivateChatDB) SavePrivateChatBlock(block *models.SimplePrivateBlock) error {
+	data, err := json.Marshal(block)
+	if err != nil {
+		return err
+	}
+
+	// Use PinId as primary key
+	key := []byte(block.PinId)
+	return Pb[TalkPrivateChatBlockPinCollection].Set(key, data, pebble.Sync)
+}
+
+// UpdatePrivateChatBlockList updates the block list in TalkPrivateChatMetaIdBlockListCollection
+func (pcdb *PrivateChatDB) UpdatePrivateChatBlockList(fromMetaId, toMetaId string, blockRecord *models.SimplePrivateBlock) error {
+	// Get existing block list for fromMetaId
+	blockList, err := pcdb.GetPrivateChatBlockList(fromMetaId)
+	if err != nil {
+		return err
+	}
+
+	// Create new block item
+	newBlockItem := &models.TalkPrivateChatBlock{
+		BlockPinId:     blockRecord.PinId,
+		BlockMetaId:    blockRecord.To,
+		BlockState:     blockRecord.BlockState,
+		BlockTimestamp: blockRecord.Timestamp,
+	}
+
+	// Check if this user is already in the block list
+	found := false
+	for i, item := range blockList.Items {
+		if item.BlockPinId == blockRecord.PinId {
+			// Update existing item
+			blockList.Items[i] = newBlockItem
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// Add new item to the list
+		blockList.Items = append(blockList.Items, newBlockItem)
+	}
+
+	// Sort the list by timestamp in descending order (newest first)
+	pcdb.sortPrivateChatBlockListByTimestamp(blockList)
+
+	// Save updated block list
+	return pcdb.SavePrivateChatBlockList(fromMetaId, blockList)
+}
+
+// GetPrivateChatBlockList gets the block list for a specific user from TalkPrivateChatMetaIdBlockListCollection
+func (pcdb *PrivateChatDB) GetPrivateChatBlockList(metaId string) (*models.TalkPrivateChatBlockList, error) {
+	key := []byte(metaId)
+	value, closer, err := Pb[TalkPrivateChatMetaIdBlockListCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			// Return empty list if not found
+			return &models.TalkPrivateChatBlockList{
+				MetaId: metaId,
+				Items:  []*models.TalkPrivateChatBlock{},
+			}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var blockList models.TalkPrivateChatBlockList
+	err = json.Unmarshal(value, &blockList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockList, nil
+}
+
+// SavePrivateChatBlockList saves the block list to TalkPrivateChatMetaIdBlockListCollection
+func (pcdb *PrivateChatDB) SavePrivateChatBlockList(metaId string, blockList *models.TalkPrivateChatBlockList) error {
+	data, err := json.Marshal(blockList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(metaId)
+	return Pb[TalkPrivateChatMetaIdBlockListCollection].Set(key, data, pebble.Sync)
+}
+
+// sortPrivateChatBlockListByTimestamp sorts the block list by timestamp in descending order
+func (pcdb *PrivateChatDB) sortPrivateChatBlockListByTimestamp(blockList *models.TalkPrivateChatBlockList) {
+	// Simple bubble sort, descending order by timestamp
+	for i := 0; i < len(blockList.Items)-1; i++ {
+		for j := 0; j < len(blockList.Items)-1-i; j++ {
+			if blockList.Items[j].BlockTimestamp < blockList.Items[j+1].BlockTimestamp {
+				blockList.Items[j], blockList.Items[j+1] = blockList.Items[j+1], blockList.Items[j]
+			}
+		}
+	}
+}
+
+// IsUserBlockedByChatTimestamp checks if fromMetaId has blocked toMetaId at the specific chat timestamp
+// This method handles multiple block/unblock operations by checking the block state at the given timestamp
+func (pcdb *PrivateChatDB) IsUserBlockedByChatTimestamp(fromMetaId, toMetaId string, chatTimestamp int64) (bool, error) {
+	// Get block list for fromMetaId
+	blockList, err := pcdb.GetPrivateChatBlockList(fromMetaId)
+	if err != nil {
+		return false, err
+	}
+
+	// Find the most recent block operation that affects this chat timestamp
+	var currentBlockState int64 = 0 // 0: no block, 1: blocked, -1: unblocked
+	if blockList.Items == nil || len(blockList.Items) == 0 {
+		return false, nil
+	}
+
+	// Sort block list by timestamp to process operations in chronological order
+	// We need to find the last operation before or at the chat timestamp
+	for _, item := range blockList.Items {
+		// Only consider operations that happened before or at the chat timestamp
+		if item.BlockTimestamp <= chatTimestamp {
+			// Check if this is the target user
+			if item.BlockMetaId == toMetaId {
+				// Update the current block state based on this operation
+				currentBlockState = item.BlockState
+			}
+		}
+	}
+
+	// Return true if the user is currently blocked (BlockState == 1)
+	return currentBlockState == 1, nil
+}
+
+// GetUserBlockList gets all block records for a specific user
+func (pcdb *PrivateChatDB) GetUserBlockList(metaId string) ([]*models.SimplePrivateBlock, error) {
+	// Get block list from TalkPrivateChatMetaIdBlockListCollection
+	blockList, err := pcdb.GetPrivateChatBlockList(metaId)
+	if err != nil {
+		return nil, err
+	}
+
+	var blockRecords []*models.SimplePrivateBlock
+
+	// Get actual block records from TalkPrivateChatBlockPinCollection
+	for _, item := range blockList.Items {
+		blockRecord, err := pcdb.GetPrivateChatBlockByPinId(item.BlockPinId)
+		if err != nil || blockRecord == nil {
+			continue
+		}
+		blockRecords = append(blockRecords, blockRecord)
+	}
+
+	return blockRecords, nil
 }

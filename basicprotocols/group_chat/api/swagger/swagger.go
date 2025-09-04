@@ -325,6 +325,34 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/search-groups-and-users": {
+            "get": {
+                "description": "Search both groups and users by name or ID using fuzzy search",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Search groups and users by name or ID",
+                "parameters": [
+                    {"type": "string", "description": "Search query (group name, group ID, user name, or metaId)", "name": "query", "in": "query", "required": true},
+                    {"type": "integer", "description": "Page size, default is 5", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return combined search results", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupAndUserSearchResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
         "/group-chat/search-groups-cache-stats": {
             "get": {
                 "description": "Get group search cache statistics",
@@ -1109,6 +1137,25 @@ func SetupSwagger(router *gin.Engine) {
                 ],
                 "responses": {
                     "200": {"description": "Private chat timestamp collection list with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/private-chat/timestamp-out/list": {
+            "get": {
+                "description": "Get private chat timestamp out collection list with pagination support for specific from and to users",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get private chat timestamp out list with pagination",
+                "parameters": [
+                    {"type": "string", "description": "From user MetaId", "name": "from", "in": "query", "required": true},
+                    {"type": "string", "description": "To user MetaId", "name": "to", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Private chat timestamp out collection list with pagination", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
@@ -2028,6 +2075,80 @@ func SetupSwagger(router *gin.Engine) {
                 "timestamp": {
                     "type": "integer",
                     "description": "Creation timestamp"
+                }
+            }
+        },
+        "GroupAndUserSearchResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total number of groups and users found"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupAndUserSearchItem"
+                    },
+                    "description": "List of groups and users"
+                }
+            }
+        },
+        "GroupAndUserSearchItem": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "groupName": {
+                    "type": "string",
+                    "description": "Group name"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "userName": {
+                    "type": "string",
+                    "description": "User name"
+                },
+                "userNickName": {
+                    "type": "string",
+                    "description": "User nickname"
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Check if the group chat service is running properly",
+                "produces": ["application/json"],
+                "tags": ["System"],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Service is healthy",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer"},
+                                "message": {"type": "string"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {"type": "string"},
+                                        "service": {"type": "string"},
+                                        "timestamp": {"type": "integer"},
+                                        "uptime": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

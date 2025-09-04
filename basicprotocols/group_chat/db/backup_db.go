@@ -166,12 +166,15 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupLuckyBagPinErrTimeoutResidueCollection,
 		TalkGroupLuckyBagCodeAddressKeyCollection,
 		TalkGroupLuckyBagCodeAddressKeyCompletedCollection,
+		TalkPrivateChatBlockPinCollection,
 
 		// Private chat collections
 		TalkPrivateChatPinCollection,
 		TalkPrivateChatTimestampCollection,
 		TalkPrivateChatTimestampOutCollection,
 		TalkPrivateChatQueueCollection,
+		TalkPrivateChatMetaIdBlockListCollection,
+		TalkPrivateChatBlockPinCollection,
 
 		// Version info collection
 		TalkVersionInfoCollection,
@@ -321,6 +324,7 @@ Collections:
 - TalkPrivateChatTimestampCollection
 - TalkPrivateChatTimestampOutCollection
 - TalkPrivateChatQueueCollection
+- TalkPrivateChatMetaIdBlockListCollection
 - TalkVersionInfoCollection
 - TalkGroupLuckyBagCodeAddressKeyCollection
 - TalkGroupLuckyBagCodeAddressKeyCompletedCollection

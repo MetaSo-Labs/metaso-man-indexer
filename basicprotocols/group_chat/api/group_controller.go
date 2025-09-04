@@ -863,6 +863,43 @@ func SearchGroups(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Search groups and users by name or ID
+// @Description Search both groups and users by name or ID using fuzzy search
+// @Produce json
+// @Param query query string true "Search query (group name, group ID, user name, or metaId)"
+// @Param size query int false "Page size, default is 5"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.GroupAndUserSearchResponse} "Successfully return combined search results"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/search-groups-and-users [get]
+func SearchGroupsAndUsers(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.SearchGroupAndUserRequest{
+			Query: c.DefaultQuery("query", ""),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "5"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.Query == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("query parameter is required"), t, 1))
+		return
+	}
+
+	response, err := service.SearchGroupsAndUserByNameOrId(req)
+	if err != nil {
+		log.Printf("Failed to search groups and users for query %s: %v", req.Query, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
 // @Summary Get group search cache statistics
 // @Description Get group search cache statistics
 // @Produce json
@@ -965,4 +1002,24 @@ func GenerateLuckyBagCodeAddressKey(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Health check endpoint
+// @Description Check if the group chat service is running properly
+// @Produce json
+// @Tags System
+// @Success 200 {object} respond.Message{data=map[string]interface{}} "Service is healthy"
+// @Router /health [get]
+func HealthCheck(c *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	// Basic health check response
+	healthData := map[string]interface{}{
+		"status":    "healthy",
+		"service":   "group-chat",
+		"timestamp": t,
+		"uptime":    time.Since(time.Unix(0, 0)).String(), // This is just a placeholder
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(healthData, t))
 }

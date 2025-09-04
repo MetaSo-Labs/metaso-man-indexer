@@ -68,6 +68,10 @@ const (
 	TalkPrivateChatQueueCollection        string = "talk_private_chat_queue"         // key: timestamp_pinId，value: chat message data
 	TalkPrivateChatIndexCollection        string = "talk_private_chat_index"         // key: from_to_index，value: pinId_chatType_timestamp_isSet
 
+	// Private chat metaId block list
+	TalkPrivateChatMetaIdBlockListCollection string = "talk_private_chat_metaid_block_list" // key: from_to, value: []{blockPinId, blockState, timestamp}
+	TalkPrivateChatBlockPinCollection        string = "talk_private_chat_block_pin"         // key: pinId, value: {}
+
 	// Version info
 	TalkVersionInfoCollection string = "talk_version_info" // key: version，value: version
 
@@ -253,6 +257,10 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagCodeAddressKeyCompletedCollection, err)
 	}
+	err = open(TalkPrivateChatBlockPinCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatBlockPinCollection, err)
+	}
 
 	// Initialize private chat related databases
 	err = open(TalkPrivateChatPinCollection)
@@ -275,6 +283,13 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatIndexCollection, err)
 	}
+
+	// Initialize private chat metaId block list database
+	err = open(TalkPrivateChatMetaIdBlockListCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatMetaIdBlockListCollection, err)
+	}
+
 	// Initialize version info database
 	err = open(TalkVersionInfoCollection)
 	if err != nil {

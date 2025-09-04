@@ -28,12 +28,13 @@ type ManResp struct {
 }
 
 type MetaIDUserInfo struct {
-	Metaid     string `json:"metaid"`
-	Name       string `json:"name"`
-	Address    string `json:"address"`
-	Avatar     string `json:"avatar"`
-	AvatarId   string `json:"avatarId"`
-	Chatpubkey string `json:"chatpubkey"`
+	Metaid       string `json:"metaid"`
+	Name         string `json:"name"`
+	Address      string `json:"address"`
+	Avatar       string `json:"avatar"`
+	AvatarId     string `json:"avatarId"`
+	Chatpubkey   string `json:"chatpubkey"`
+	ChatpubkeyId string `json:"chatpubkeyId"`
 }
 
 func FetchMetaIDUserInfo(address string) *respond.UserInfo {
@@ -69,12 +70,13 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 	}
 
 	userInfoResponse := &respond.UserInfo{
-		Address:       address,
-		Metaid:        userInfo.Metaid,
-		AvatarImage:   avatarImage,
-		Avatar:        userInfo.Avatar,
-		Name:          userInfo.Name,
-		ChatPublicKey: userInfo.Chatpubkey,
+		Address:         address,
+		Metaid:          userInfo.Metaid,
+		AvatarImage:     avatarImage,
+		Avatar:          userInfo.Avatar,
+		Name:            userInfo.Name,
+		ChatPublicKey:   userInfo.Chatpubkey,
+		ChatPublicKeyId: userInfo.ChatpubkeyId,
 	}
 
 	// Update cache
@@ -124,10 +126,10 @@ func FetchMetaIDUserInfoInfoByMetaId(metaId string) *respond.UserInfo {
 		Address:     userInfo.Address,
 		AvatarImage: avatarImage,
 		// Avatar:        userInfo.Avatar,
-		Avatar:        "/content/" + userInfo.AvatarId,
-		Name:          userInfo.Name,
-		ChatPublicKey: userInfo.Chatpubkey,
-		// ChatPublicKeyId: userInfo.Chatpubkeyid,
+		Avatar:          "/content/" + userInfo.AvatarId,
+		Name:            userInfo.Name,
+		ChatPublicKey:   userInfo.Chatpubkey,
+		ChatPublicKeyId: userInfo.ChatpubkeyId,
 	}
 
 	// Update cache
@@ -179,6 +181,7 @@ func fetchMetaIDUserInfoInfoByMetaId(metaId string) (*MetaIDUserInfo, error) {
 		data   *MetaIDUserInfo
 		err    error
 	)
+	_ = resp
 	query := map[string]string{}
 	if common.Config.GroupChat.ManHost == "" {
 		return nil, fmt.Errorf("manHost is empty")
@@ -189,17 +192,69 @@ func fetchMetaIDUserInfoInfoByMetaId(metaId string) (*MetaIDUserInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = common.JsonToObject(result, &resp); err != nil {
+
+	if err = common.JsonToObject(result, &data); err != nil {
 		return nil, fmt.Errorf("get request err:%s", err.Error())
-	}
-	if resp.Code != ManCodeSuccess {
-		return nil, fmt.Errorf("msg:%s", resp.Message)
 	}
 
-	if err = common.JsonToAny(resp.Data, &data); err != nil {
+	// if err = common.JsonToObject(result, &resp); err != nil {
+	// 	return nil, fmt.Errorf("get request err:%s", err.Error())
+	// }
+	// if resp.Code != ManCodeSuccess {
+	// 	return nil, fmt.Errorf("msg:%s", resp.Message)
+	// }
+
+	// if err = common.JsonToAny(resp.Data, &data); err != nil {
+	// 	return nil, fmt.Errorf("get request err:%s", err.Error())
+	// }
+	return data, nil
+}
+
+type keyType string
+
+const (
+	keyTypeName   keyType = "name"
+	keyTypeMetaId keyType = "metaid"
+)
+
+func SearchAllMetaIDUserInfoInfo(queryWord string) ([]*MetaIDUserInfo, error) {
+	limit := 2
+	metaIdDataList, _ := searchMetaIDUserInfoInfo(queryWord, keyTypeMetaId)
+	if len(metaIdDataList) > limit {
+		metaIdDataList = metaIdDataList[:limit]
+	}
+	nameDataList, _ := searchMetaIDUserInfoInfo(queryWord, keyTypeName)
+	if len(nameDataList) > limit {
+		nameDataList = nameDataList[:limit]
+	}
+	dataList := append(nameDataList, metaIdDataList...)
+	return dataList, nil
+}
+
+func searchMetaIDUserInfoInfo(queryWord string, keyType keyType) ([]*MetaIDUserInfo, error) {
+	var (
+		url      string
+		result   string
+		dataList []*MetaIDUserInfo
+		err      error
+	)
+	query := map[string]string{
+		"keyword": queryWord,
+		"keytype": string(keyType),
+	}
+	if common.Config.GroupChat.ManHost == "" {
+		return nil, fmt.Errorf("manHost is empty")
+	}
+	url = fmt.Sprintf("%s/api/info/search", common.Config.GroupChat.ManHost)
+
+	result, err = common.GetUrl(url, query, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err = common.JsonToObject(result, &dataList); err != nil {
 		return nil, fmt.Errorf("get request err:%s", err.Error())
 	}
-	return data, nil
+	return dataList, nil
 }
 
 // StartUserInfoPolling Start polling to update cached user info
@@ -352,12 +407,13 @@ func updateSingleUserInfo(address string) {
 	}
 
 	userInfoResponse := &respond.UserInfo{
-		Metaid:        userInfo.Metaid,
-		Address:       address,
-		AvatarImage:   avatarImage,
-		Avatar:        userInfo.Avatar,
-		Name:          userInfo.Name,
-		ChatPublicKey: userInfo.Chatpubkey,
+		Metaid:          userInfo.Metaid,
+		Address:         address,
+		AvatarImage:     avatarImage,
+		Avatar:          userInfo.Avatar,
+		Name:            userInfo.Name,
+		ChatPublicKey:   userInfo.Chatpubkey,
+		ChatPublicKeyId: userInfo.ChatpubkeyId,
 	}
 
 	// Update cache
@@ -409,9 +465,10 @@ func updateSingleUserInfoByMetaId(metaId string) {
 		Address:     userInfo.Address,
 		AvatarImage: avatarImage,
 		// Avatar:        userInfo.Avatar,
-		Avatar:        "/content/" + userInfo.AvatarId,
-		Name:          userInfo.Name,
-		ChatPublicKey: userInfo.Chatpubkey,
+		Avatar:          "/content/" + userInfo.AvatarId,
+		Name:            userInfo.Name,
+		ChatPublicKey:   userInfo.Chatpubkey,
+		ChatPublicKeyId: userInfo.ChatpubkeyId,
 	}
 
 	// Update cache

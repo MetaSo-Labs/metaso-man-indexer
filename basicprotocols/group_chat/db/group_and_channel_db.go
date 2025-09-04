@@ -18,6 +18,7 @@ import (
 type GroupSearchCacheItem struct {
 	GroupId   string `json:"groupId"`   // Group ID
 	GroupName string `json:"groupName"` // Group name
+	GroupIcon string `json:"groupIcon"` // Group icon
 	PinId     string `json:"pinId"`     // Pin ID
 	Timestamp int64  `json:"timestamp"` // Timestamp
 }
@@ -1701,15 +1702,17 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 	}
 
 	// Save timestamp index with state
-	err = cdb.SaveChatTimestampWithState(systemChat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(systemChat)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous processing
-	err = cdb.EnqueueChatMessage(systemChat)
-	if err != nil {
-		return err
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(systemChat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1784,6 +1787,7 @@ func (gdb *GroupDB) updateSearchCache() {
 		cacheItem := &GroupSearchCacheItem{
 			GroupId:   group.GroupId,
 			GroupName: group.RoomName,
+			GroupIcon: group.RoomIcon,
 			PinId:     group.PinId,
 			Timestamp: group.Timestamp,
 		}
@@ -1814,6 +1818,7 @@ func (gdb *GroupDB) triggerCacheUpdate(groupId string) {
 	cacheItem := &GroupSearchCacheItem{
 		GroupId:   group.GroupId,
 		GroupName: group.RoomName,
+		GroupIcon: group.RoomIcon,
 		PinId:     group.PinId,
 		Timestamp: group.Timestamp,
 	}

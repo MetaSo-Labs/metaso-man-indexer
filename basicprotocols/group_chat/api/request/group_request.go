@@ -95,6 +95,12 @@ type FetchGroupChatListByStartTimeRequest struct {
 }
 
 // SearchGroupRequest Search groups by name or ID request
+type SearchGroupAndUserRequest struct {
+	Query string `form:"query"` // Search query (group name or ID)
+	Size  int64  `form:"size"`  // Page size
+}
+
+// SearchGroupRequest Search groups by name or ID request
 type SearchGroupRequest struct {
 	Query string `form:"query"` // Search query (group name or ID)
 	Size  int64  `form:"size"`  // Page size

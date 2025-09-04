@@ -21,3 +21,8 @@ const (
 	ChatTypeLeave           ChatType = 5  // Group chat - Leave type
 	ChatTypeRemove          ChatType = 7  // Group chat - Remove user type
 )
+
+const (
+	PrivateBlockStateBlock   int64 = 1  // block
+	PrivateBlockStateUnblock int64 = -1 // unblock
+)

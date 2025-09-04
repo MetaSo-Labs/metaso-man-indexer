@@ -304,6 +304,7 @@ type UserInfoResponse struct {
 type GroupSearchItem struct {
 	GroupId     string `json:"groupId"`     // Group ID
 	GroupName   string `json:"groupName"`   // Group name
+	GroupIcon   string `json:"groupIcon"`   // Group name
 	PinId       string `json:"pinId"`       // Pin ID
 	Timestamp   int64  `json:"timestamp"`   // Timestamp
 	MemberCount int64  `json:"memberCount"` // Member count
@@ -339,4 +340,26 @@ type LuckyBagCodeAddressKeyResponse struct {
 	Code            string `json:"code"`            // 6-digit random code
 	LuckyBagAddress string `json:"luckyBagAddress"` // Lucky bag address
 	Timestamp       int64  `json:"timestamp"`       // Creation timestamp
+}
+
+// GroupAndUserSearchItem Combined search result item for groups and users
+type GroupAndUserSearchItem struct {
+	Type        string `json:"type"`                  // "group" or "user"
+	GroupId     string `json:"groupId,omitempty"`     // Group ID (for group results)
+	GroupName   string `json:"groupName,omitempty"`   // Group name (for group results)
+	GroupIcon   string `json:"groupIcon,omitempty"`   // Group icon (for group results)
+	PinId       string `json:"pinId,omitempty"`       // Pin ID (for group results)
+	MemberCount int64  `json:"memberCount,omitempty"` // Member count (for group results)
+	MetaId      string `json:"metaId,omitempty"`      // MetaId (for user results)
+	Address     string `json:"address,omitempty"`     // Address (for user results)
+	UserName    string `json:"userName,omitempty"`    // User name (for user results)
+	Avatar      string `json:"avatar,omitempty"`      // Avatar (for user results)
+	AvatarId    string `json:"avatarId,omitempty"`    // Avatar ID (for user results)
+	Timestamp   int64  `json:"timestamp"`             // Timestamp
+}
+
+// GroupAndUserSearchResponse Combined search response for groups and users
+type GroupAndUserSearchResponse struct {
+	Total int64                     `json:"total"` // Total number of results
+	List  []*GroupAndUserSearchItem `json:"list"`  // Search results
 }

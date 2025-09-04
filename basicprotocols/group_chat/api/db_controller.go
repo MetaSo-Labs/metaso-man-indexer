@@ -1297,3 +1297,54 @@ func GetMetaIdContextListByMetaId(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
+
+// @Summary Get private chat timestamp out list with pagination
+// @Description Get private chat timestamp out collection list with pagination support for specific from and to users
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param from query string true "From user MetaId"
+// @Param to query string true "To user MetaId"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Private chat timestamp out collection list with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/private-chat/timestamp-out/list [get]
+func GetPrivateChatTimestampOutList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	from := ctx.Query("from")
+	if from == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("from parameter cannot be empty"), t, 1))
+		return
+	}
+
+	to := ctx.Query("to")
+	if to == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("to parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetPrivateChatTimestampOutList(from, to, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
