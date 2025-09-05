@@ -26,6 +26,9 @@ func RegisterDbRoutes(router *gin.Engine) {
 			groupGroup.GET("/version/all", GetAllGroupVersionInfo)
 			groupGroup.GET("/join", GetGroupJoin)
 			groupGroup.GET("/person", GetDbGroupPerson)
+			groupGroup.GET("/member-list", GetGroupMemberList)
+			groupGroup.GET("/member-list-v2", GetGroupMemberListV2)
+			groupGroup.GET("/person-list-collection", GetGroupPersonListCollection)
 		}
 
 		// Chat-related APIs

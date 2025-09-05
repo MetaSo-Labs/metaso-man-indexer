@@ -218,7 +218,8 @@ func GetGroupMemberList(c *gin.Context) {
 		return
 	}
 
-	response, err := service.FetchGroupMemberList(req)
+	// response, err := service.FetchGroupMemberList(req)
+	response, err := service.FetchGroupMemberListV2(req)
 	if err != nil {
 		log.Printf("Failed to fetch group member list for groupId %s: %v", req.GroupId, err)
 		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))

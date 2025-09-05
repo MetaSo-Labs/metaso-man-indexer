@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"manindexer/basicprotocols/group_chat/api/respond"
@@ -11,7 +12,52 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-// GetCacheUserInfo 获取用户信息缓存
+// UserInfoCache user info cache
+type UserInfoCache struct {
+	memoryCache sync.Map
+	ttl         time.Duration
+	// independent locks for different address/metaId
+	userLocks sync.Map // map[string]*sync.RWMutex
+}
+
+// userInfoCacheItem user info cache item
+type userInfoCacheItem struct {
+	UserInfo   *respond.UserInfo `json:"userInfo"`
+	UpdateTime time.Time         `json:"updateTime"`
+	ExpireTime time.Time         `json:"expireTime"`
+}
+
+var (
+	// user info cache instance
+	userInfoCache *UserInfoCache
+)
+
+// InitUserInfoCache initialize user info cache
+func InitUserInfoCache(ttl time.Duration) {
+	userInfoCache = &UserInfoCache{
+		ttl: ttl,
+	}
+}
+
+// getUserLock get lock for specified key
+func (uic *UserInfoCache) getUserLock(key string) *sync.RWMutex {
+	// try to get existing lock
+	if lockInterface, exists := uic.userLocks.Load(key); exists {
+		return lockInterface.(*sync.RWMutex)
+	}
+
+	// create new lock
+	lock := &sync.RWMutex{}
+
+	// use LoadOrStore to ensure only one goroutine can create the lock
+	if actualLock, loaded := uic.userLocks.LoadOrStore(key, lock); loaded {
+		return actualLock.(*sync.RWMutex)
+	}
+
+	return lock
+}
+
+// GetCacheUserInfo get user info cache
 func GetCacheUserInfo(address string) (*respond.UserInfo, error) {
 	if !initialized {
 		return nil, fmt.Errorf("cache service not initialized")
@@ -24,7 +70,7 @@ func GetCacheUserInfo(address string) (*respond.UserInfo, error) {
 	}
 }
 
-// GetCacheUserInfoWithTime 获取用户信息缓存，同时返回更新时间
+// GetCacheUserInfoWithTime get user info cache with update time
 func GetCacheUserInfoWithTime(address string) (*respond.UserInfo, time.Time, error) {
 	if !initialized {
 		return nil, time.Time{}, fmt.Errorf("cache service not initialized")
@@ -37,7 +83,7 @@ func GetCacheUserInfoWithTime(address string) (*respond.UserInfo, time.Time, err
 	}
 }
 
-// SetCacheUserInfo 设置用户信息缓存
+// SetCacheUserInfo set user info cache
 func SetCacheUserInfo(address string, userInfo *respond.UserInfo) (bool, error) {
 	if !initialized {
 		return false, fmt.Errorf("cache service not initialized")
@@ -50,7 +96,7 @@ func SetCacheUserInfo(address string, userInfo *respond.UserInfo) (bool, error) 
 	}
 }
 
-// GetCacheUserInfoByMetaId 根据MetaId获取用户信息缓存
+// GetCacheUserInfoByMetaId get user info cache by MetaId
 func GetCacheUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	if !initialized {
 		return nil, fmt.Errorf("cache service not initialized")
@@ -63,7 +109,7 @@ func GetCacheUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	}
 }
 
-// GetCacheUserInfoByMetaIdWithTime 根据MetaId获取用户信息缓存，同时返回更新时间
+// GetCacheUserInfoByMetaIdWithTime get user info cache by MetaId with update time
 func GetCacheUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Time, error) {
 	if !initialized {
 		return nil, time.Time{}, fmt.Errorf("cache service not initialized")
@@ -76,7 +122,7 @@ func GetCacheUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Ti
 	}
 }
 
-// SetCacheUserInfoByMetaId 根据MetaId设置用户信息缓存
+// SetCacheUserInfoByMetaId set user info cache by MetaId
 func SetCacheUserInfoByMetaId(metaId string, userInfo *respond.UserInfo) (bool, error) {
 	if !initialized {
 		return false, fmt.Errorf("cache service not initialized")
@@ -89,7 +135,7 @@ func SetCacheUserInfoByMetaId(metaId string, userInfo *respond.UserInfo) (bool, 
 	}
 }
 
-// getRedisUserInfo 从Redis获取用户信息
+// getRedisUserInfo get user info from Redis
 func getRedisUserInfo(address string) (*respond.UserInfo, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -103,16 +149,16 @@ func getRedisUserInfo(address string) (*respond.UserInfo, error) {
 		return nil, fmt.Errorf("Redis get failed: %v", err)
 	}
 
-	// 这里需要反序列化JSON到userInfoCacheItem结构体
-	// 由于Redis存储的是JSON字符串，需要解析
+	// need to deserialize JSON to userInfoCacheItem struct
+	// since Redis stores JSON string, need to parse
 	var cacheItem userInfoCacheItem
 	if err := json.Unmarshal([]byte(result), &cacheItem); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cache item: %v", err)
 	}
 
-	// 检查是否过期
+	// check if expired
 	if time.Now().After(cacheItem.ExpireTime) {
-		// 过期了，删除缓存
+		// expired, delete cache
 		redisClient.Del(ctx, key)
 		return nil, nil
 	}
@@ -120,7 +166,7 @@ func getRedisUserInfo(address string) (*respond.UserInfo, error) {
 	return cacheItem.UserInfo, nil
 }
 
-// getRedisUserInfoWithTime 从Redis获取用户信息，同时返回更新时间
+// getRedisUserInfoWithTime get user info from Redis with update time
 func getRedisUserInfoWithTime(address string) (*respond.UserInfo, time.Time, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -134,15 +180,15 @@ func getRedisUserInfoWithTime(address string) (*respond.UserInfo, time.Time, err
 		return nil, time.Time{}, fmt.Errorf("Redis get failed: %v", err)
 	}
 
-	// 反序列化JSON到userInfoCacheItem结构体
+	// deserialize JSON to userInfoCacheItem struct
 	var cacheItem userInfoCacheItem
 	if err := json.Unmarshal([]byte(result), &cacheItem); err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to unmarshal cache item: %v", err)
 	}
 
-	// 检查是否过期
+	// check if expired
 	if time.Now().After(cacheItem.ExpireTime) {
-		// 过期了，删除缓存
+		// expired, delete cache
 		redisClient.Del(ctx, key)
 		return nil, time.Time{}, nil
 	}
@@ -203,11 +249,8 @@ func getAllRedisUserInfoAddresses() []string {
 
 // getAllMemoryUserInfoAddresses Get all user info addresses from memory
 func getAllMemoryUserInfoAddresses() []string {
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
-
 	var addresses []string
-	memoryCache.Range(func(key, value interface{}) bool {
+	userInfoCache.memoryCache.Range(func(key, value interface{}) bool {
 		if keyStr, ok := key.(string); ok {
 			// Check if this is a user info cache key
 			if len(keyStr) > 9 && keyStr[:9] == "userinfo:" {
@@ -221,21 +264,23 @@ func getAllMemoryUserInfoAddresses() []string {
 	return addresses
 }
 
-// getMemoryUserInfoWithTime 从内存获取用户信息，同时返回更新时间
+// getMemoryUserInfoWithTime get user info from memory with update time
 func getMemoryUserInfoWithTime(address string) (*respond.UserInfo, time.Time, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.RLock()
+	defer lock.RUnlock()
 
-	if value, ok := memoryCache.Load(key); ok {
+	if value, ok := userInfoCache.memoryCache.Load(key); ok {
 		if cacheItem, ok := value.(*userInfoCacheItem); ok {
-			// 检查是否过期
+			// check if expired
 			if time.Now().Before(cacheItem.ExpireTime) {
 				return cacheItem.UserInfo, cacheItem.UpdateTime, nil
 			} else {
-				// 过期了，删除它
-				memoryCache.Delete(key)
+				// expired, delete it
+				userInfoCache.memoryCache.Delete(key)
 			}
 		}
 	}
@@ -243,26 +288,26 @@ func getMemoryUserInfoWithTime(address string) (*respond.UserInfo, time.Time, er
 	return nil, time.Time{}, nil
 }
 
-// setRedisUserInfo 设置用户信息到Redis
+// setRedisUserInfo set user info to Redis
 func setRedisUserInfo(address string, userInfo *respond.UserInfo) (bool, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 创建缓存项
+	// create cache item
 	cacheItem := &userInfoCacheItem{
 		UserInfo:   userInfo,
 		UpdateTime: time.Now(),
 		ExpireTime: time.Now().Add(expireTime),
 	}
 
-	// 序列化为JSON
+	// serialize to JSON
 	jsonData, err := json.Marshal(cacheItem)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal cache item: %v", err)
 	}
 
-	// 设置缓存
+	// set cache
 	err = redisClient.Set(ctx, key, string(jsonData), expireTime).Err()
 	if err != nil {
 		return false, fmt.Errorf("Redis set failed: %v", err)
@@ -271,21 +316,23 @@ func setRedisUserInfo(address string, userInfo *respond.UserInfo) (bool, error) 
 	return true, nil
 }
 
-// getMemoryUserInfo 从内存获取用户信息
+// getMemoryUserInfo get user info from memory
 func getMemoryUserInfo(address string) (*respond.UserInfo, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.RLock()
+	defer lock.RUnlock()
 
-	if value, ok := memoryCache.Load(key); ok {
+	if value, ok := userInfoCache.memoryCache.Load(key); ok {
 		if cacheItem, ok := value.(*userInfoCacheItem); ok {
-			// 检查是否过期
+			// check if expired
 			if time.Now().Before(cacheItem.ExpireTime) {
 				return cacheItem.UserInfo, nil
 			} else {
-				// 过期了，删除它
-				memoryCache.Delete(key)
+				// expired, delete it
+				userInfoCache.memoryCache.Delete(key)
 			}
 		}
 	}
@@ -293,25 +340,27 @@ func getMemoryUserInfo(address string) (*respond.UserInfo, error) {
 	return nil, nil
 }
 
-// setMemoryUserInfo 设置用户信息到内存
+// setMemoryUserInfo set user info to memory
 func setMemoryUserInfo(address string, userInfo *respond.UserInfo) (bool, error) {
 	key := fmt.Sprintf("userinfo:%s", address)
 
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.Lock()
+	defer lock.Unlock()
 
-	// 创建缓存项
+	// create cache item
 	cacheItem := &userInfoCacheItem{
 		UserInfo:   userInfo,
 		UpdateTime: time.Now(),
-		ExpireTime: time.Now().Add(expireTime),
+		ExpireTime: time.Now().Add(userInfoCache.ttl),
 	}
 
-	memoryCache.Store(key, cacheItem)
+	userInfoCache.memoryCache.Store(key, cacheItem)
 	return true, nil
 }
 
-// getRedisUserInfoByMetaId 从Redis根据MetaId获取用户信息
+// getRedisUserInfoByMetaId get user info from Redis by MetaId
 func getRedisUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -325,15 +374,15 @@ func getRedisUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 		return nil, fmt.Errorf("Redis get failed: %v", err)
 	}
 
-	// 反序列化JSON到userInfoCacheItem结构体
+	// deserialize JSON to userInfoCacheItem struct
 	var cacheItem userInfoCacheItem
 	if err := json.Unmarshal([]byte(result), &cacheItem); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cache item: %v", err)
 	}
 
-	// 检查是否过期
+	// check if expired
 	if time.Now().After(cacheItem.ExpireTime) {
-		// 过期了，删除缓存
+		// expired, delete cache
 		redisClient.Del(ctx, key)
 		return nil, nil
 	}
@@ -341,7 +390,7 @@ func getRedisUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	return cacheItem.UserInfo, nil
 }
 
-// getRedisUserInfoByMetaIdWithTime 从Redis根据MetaId获取用户信息，同时返回更新时间
+// getRedisUserInfoByMetaIdWithTime get user info from Redis by MetaId with update time
 func getRedisUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Time, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -355,15 +404,15 @@ func getRedisUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Ti
 		return nil, time.Time{}, fmt.Errorf("Redis get failed: %v", err)
 	}
 
-	// 反序列化JSON到userInfoCacheItem结构体
+	// deserialize JSON to userInfoCacheItem struct
 	var cacheItem userInfoCacheItem
 	if err := json.Unmarshal([]byte(result), &cacheItem); err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to unmarshal cache item: %v", err)
 	}
 
-	// 检查是否过期
+	// check if expired
 	if time.Now().After(cacheItem.ExpireTime) {
-		// 过期了，删除缓存
+		// expired, delete cache
 		redisClient.Del(ctx, key)
 		return nil, time.Time{}, nil
 	}
@@ -371,21 +420,23 @@ func getRedisUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Ti
 	return cacheItem.UserInfo, cacheItem.UpdateTime, nil
 }
 
-// getMemoryUserInfoByMetaId 从内存根据MetaId获取用户信息
+// getMemoryUserInfoByMetaId get user info from memory by MetaId
 func getMemoryUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.RLock()
+	defer lock.RUnlock()
 
-	if value, ok := memoryCache.Load(key); ok {
+	if value, ok := userInfoCache.memoryCache.Load(key); ok {
 		if cacheItem, ok := value.(*userInfoCacheItem); ok {
-			// 检查是否过期
+			// check if expired
 			if time.Now().Before(cacheItem.ExpireTime) {
 				return cacheItem.UserInfo, nil
 			} else {
-				// 过期了，删除它
-				memoryCache.Delete(key)
+				// expired, delete it
+				userInfoCache.memoryCache.Delete(key)
 			}
 		}
 	}
@@ -393,21 +444,23 @@ func getMemoryUserInfoByMetaId(metaId string) (*respond.UserInfo, error) {
 	return nil, nil
 }
 
-// getMemoryUserInfoByMetaIdWithTime 从内存根据MetaId获取用户信息，同时返回更新时间
+// getMemoryUserInfoByMetaIdWithTime get user info from memory by MetaId with update time
 func getMemoryUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.Time, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.RLock()
+	defer lock.RUnlock()
 
-	if value, ok := memoryCache.Load(key); ok {
+	if value, ok := userInfoCache.memoryCache.Load(key); ok {
 		if cacheItem, ok := value.(*userInfoCacheItem); ok {
-			// 检查是否过期
+			// check if expired
 			if time.Now().Before(cacheItem.ExpireTime) {
 				return cacheItem.UserInfo, cacheItem.UpdateTime, nil
 			} else {
-				// 过期了，删除它
-				memoryCache.Delete(key)
+				// expired, delete it
+				userInfoCache.memoryCache.Delete(key)
 			}
 		}
 	}
@@ -415,26 +468,26 @@ func getMemoryUserInfoByMetaIdWithTime(metaId string) (*respond.UserInfo, time.T
 	return nil, time.Time{}, nil
 }
 
-// setRedisUserInfoByMetaId 根据MetaId设置用户信息到Redis
+// setRedisUserInfoByMetaId set user info to Redis by MetaId
 func setRedisUserInfoByMetaId(metaId string, userInfo *respond.UserInfo) (bool, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 创建缓存项
+	// create cache item
 	cacheItem := &userInfoCacheItem{
 		UserInfo:   userInfo,
 		UpdateTime: time.Now(),
 		ExpireTime: time.Now().Add(expireTime),
 	}
 
-	// 序列化为JSON
+	// serialize to JSON
 	jsonData, err := json.Marshal(cacheItem)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal cache item: %v", err)
 	}
 
-	// 设置缓存
+	// set cache
 	err = redisClient.Set(ctx, key, string(jsonData), expireTime).Err()
 	if err != nil {
 		return false, fmt.Errorf("Redis set failed: %v", err)
@@ -443,21 +496,23 @@ func setRedisUserInfoByMetaId(metaId string, userInfo *respond.UserInfo) (bool, 
 	return true, nil
 }
 
-// setMemoryUserInfoByMetaId 根据MetaId设置用户信息到内存
+// setMemoryUserInfoByMetaId set user info to memory by MetaId
 func setMemoryUserInfoByMetaId(metaId string, userInfo *respond.UserInfo) (bool, error) {
 	key := fmt.Sprintf("userinfo_metaid:%s", metaId)
 
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
+	// use lock for specific key
+	lock := userInfoCache.getUserLock(key)
+	lock.Lock()
+	defer lock.Unlock()
 
-	// 创建缓存项
+	// create cache item
 	cacheItem := &userInfoCacheItem{
 		UserInfo:   userInfo,
 		UpdateTime: time.Now(),
-		ExpireTime: time.Now().Add(expireTime),
+		ExpireTime: time.Now().Add(userInfoCache.ttl),
 	}
 
-	memoryCache.Store(key, cacheItem)
+	userInfoCache.memoryCache.Store(key, cacheItem)
 	return true, nil
 }
 
@@ -488,11 +543,8 @@ func getAllRedisUserInfoMetaIds() []string {
 
 // getAllMemoryUserInfoMetaIds Get all user info metaIds from memory
 func getAllMemoryUserInfoMetaIds() []string {
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
-
 	var metaIds []string
-	memoryCache.Range(func(key, value interface{}) bool {
+	userInfoCache.memoryCache.Range(func(key, value interface{}) bool {
 		if keyStr, ok := key.(string); ok {
 			// Check if this is a user info metaId cache key
 			if len(keyStr) > 16 && keyStr[:16] == "userinfo_metaid:" {
@@ -504,4 +556,18 @@ func getAllMemoryUserInfoMetaIds() []string {
 	})
 
 	return metaIds
+}
+
+// CleanExpiredUserInfoCache clean expired user info cache
+func CleanExpiredUserInfoCache() {
+	now := time.Now()
+	userInfoCache.memoryCache.Range(func(key, value interface{}) bool {
+		// clean user info cache
+		if cacheItem, ok := value.(*userInfoCacheItem); ok {
+			if now.After(cacheItem.ExpireTime) {
+				userInfoCache.memoryCache.Delete(key)
+			}
+		}
+		return true
+	})
 }

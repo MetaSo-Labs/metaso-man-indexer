@@ -90,6 +90,13 @@ type TalkGroupPerson struct {
 	PinId             string    `json:"pinId"`       // PinId when joining or leaving group
 }
 
+// Group person list model for TalkGroupPersonListCollection
+type TalkGroupPersonList struct {
+	GroupId string             `json:"groupId"` // Group ID
+	Persons []*TalkGroupPerson `json:"persons"` // List of group members
+	Total   int64              `json:"total"`   // Total number of group members
+}
+
 type TalkGroupModel struct {
 	GroupId       string `json:"groupId"`       // Room ID unique
 	CommunityId   string `json:"communityId"`   // Community ID unique

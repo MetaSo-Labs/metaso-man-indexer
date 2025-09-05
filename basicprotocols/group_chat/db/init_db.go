@@ -11,6 +11,10 @@ import (
 	"github.com/cockroachdb/pebble"
 )
 
+var (
+	GlobalIsStop = false
+)
+
 const (
 	// Community related databases
 	TalkCommunityVersionInfoCollection string = "talk_community_version_info" // key: communityId_pinId and pinId_communityId
@@ -28,7 +32,8 @@ const (
 	TalkGroupRemoveUserCollection string = "talk_group_remove_user" // key: groupId_pinId and pinId_groupId
 	TalkGroupMetaIdJoinCollection string = "talk_group_metaid_join" // key: metaId_groupId, value: []{joinPinId, joinType, joinTimestamp}
 	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId and pinId_groupId
-	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId and metaId_groupId
+	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId and metaId_groupId, value: {TalkGroupPerson}
+	TalkGroupPersonListCollection string = "talk_group_person_list" // key: groupId, value: []{TalkGroupPerson}
 
 	TalkGroupLatestChatCollection   string = "talk_group_latest_chat"    // key: groupId，value: {groupId, timestamp, chatType, content, createAddress}
 	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
@@ -139,6 +144,10 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupPersonCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupPersonCollection, err)
+	}
+	err = open(TalkGroupPersonListCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupPersonListCollection, err)
 	}
 	err = open(TalkGroupRemoveUserCollection)
 	if err != nil {

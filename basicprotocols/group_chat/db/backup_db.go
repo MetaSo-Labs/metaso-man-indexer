@@ -93,6 +93,12 @@ func (bdb *BackupDB) startBackupScheduler() {
 
 		select {
 		case <-time.After(waitDuration):
+
+			if GlobalIsStop {
+				log.Printf("[BackupDB] Backup scheduler is stopped, skipping this cycle")
+				continue
+			}
+
 			// Perform backup
 			err := bdb.performBackup()
 			if err != nil {
@@ -137,6 +143,7 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupMetaIdJoinCollection,
 		TalkGroupJoinCollection,
 		TalkGroupPersonCollection,
+		TalkGroupPersonListCollection,
 		TalkMetaIdContextListCollection,
 		TalkGroupLatestChatCollection,
 		TalkGroupRemoveUserCollection,
@@ -305,6 +312,7 @@ Collections:
 - TalkGroupMetaIdJoinCollection
 - TalkGroupJoinCollection
 - TalkGroupPersonCollection
+- TalkGroupPersonListCollection
 - TalkMetaIdContextListCollection
 - TalkGroupLatestChatCollection
 - TalkGroupChatQueueCollection

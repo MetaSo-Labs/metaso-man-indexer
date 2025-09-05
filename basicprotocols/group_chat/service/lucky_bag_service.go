@@ -569,12 +569,11 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
 
+	t := time.Now().UnixMilli()
 	// Use lucky bag-specific mutex to prevent concurrent grabbing of the same lucky bag
 	luckyBagMutex := getLuckyBagGrabMutex(luckyBag.PinId)
 	luckyBagMutex.Lock()
 	defer luckyBagMutex.Unlock()
-
-	t := time.Now().UnixMilli()
 	log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [Lock] %d", luckyBag.PinId, metaId, address, t)
 
 	for _, unused := range unusedList {
@@ -998,6 +997,11 @@ func StartOpenLuckyBagQueueProcessor() {
 		for {
 			select {
 			case <-ticker.C:
+				if db.GlobalIsStop {
+					log.Printf("[OpenLuckyBagQueueProcessor] Queue processor is stopped, skipping this cycle")
+					continue
+				}
+
 				// Skip if previous processing is still running
 				if isProcessing {
 					log.Printf("Previous ProcessOpenLuckyBagQueue is still running, skipping this cycle")
@@ -1518,6 +1522,11 @@ func StartResidueLuckyBagQueueProcessor() {
 		for {
 			select {
 			case <-ticker.C:
+				if db.GlobalIsStop {
+					log.Printf("[ResidueLuckyBagQueueProcessor] Queue processor is stopped, skipping this cycle")
+					continue
+				}
+
 				// Skip if previous processing is still running
 				if isProcessing {
 					log.Printf("Previous ProcessResidueLuckyBagQueue is still running, skipping this cycle")
@@ -2295,6 +2304,12 @@ func StartExpiredLuckyBagProcessor() {
 		for {
 			select {
 			case <-ticker.C:
+
+				if db.GlobalIsStop {
+					log.Printf("[StartExpiredLuckyBagProcessor] Processor is stopped, skipping this cycle")
+					continue
+				}
+
 				// Skip if previous processing is still running
 				if isProcessing {
 					log.Printf("[StartExpiredLuckyBagProcessor] Previous ProcessExpiredLuckyBags is still running, skipping this cycle")

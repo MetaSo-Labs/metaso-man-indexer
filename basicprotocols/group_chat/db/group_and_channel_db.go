@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
+	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/pin"
 	"strings"
 	"sync"
@@ -1116,6 +1117,31 @@ func (gdb *GroupDB) GetGroupMembers(groupId string) ([]*models.TalkGroupJoinMode
 	return members, nil
 }
 
+// Get group member list from TalkGroupPersonListCollection
+func (gdb *GroupDB) GetGroupMembersFromList(groupId string) ([]*models.TalkGroupPerson, error) {
+	// Get group person list from TalkGroupPersonListCollection
+	personList, err := gdb.GetGroupPersonListFromCollection(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	if personList == nil {
+		return []*models.TalkGroupPerson{}, nil
+	}
+
+	// Filter only members who are in the group (GroupState == RoomStateIn)
+	var members []*models.TalkGroupPerson
+	for _, person := range personList.Persons {
+		if person.GroupState == models.RoomStateIn {
+			members = append(members, person)
+		}
+	}
+
+	gdb.sortGroupPersonListByTimestamp(members)
+
+	return members, nil
+}
+
 // Get group member list (with pagination support)
 func (gdb *GroupDB) GetGroupMembersWithPagination(groupId string, cursor, size int64) ([]*models.TalkGroupJoinModel, int64, error) {
 	var members []*models.TalkGroupJoinModel
@@ -1228,7 +1254,19 @@ func (gdb *GroupDB) SaveGroupPerson(person *models.TalkGroupPerson) error {
 
 	// Use MetaId_GroupId as primary key
 	key2 := []byte(person.MetaId + "_" + person.GroupId)
-	return Pb[TalkGroupPersonCollection].Set(key2, data, pebble.Sync)
+	err = Pb[TalkGroupPersonCollection].Set(key2, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Update group person list
+	err = gdb.updateGroupPersonList(person.GroupId)
+	if err != nil {
+		fmt.Println("updateGroupPersonList error", err)
+		// continue
+	}
+
+	return nil
 }
 
 // Delete group member info
@@ -1242,7 +1280,22 @@ func (gdb *GroupDB) DeleteGroupPerson(groupId, metaId string) error {
 
 	// Use MetaId_GroupId as primary key
 	key2 := []byte(metaId + "_" + groupId)
-	return Pb[TalkGroupPersonCollection].Delete(key2, pebble.Sync)
+	err = Pb[TalkGroupPersonCollection].Delete(key2, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Update group person list
+	err = gdb.updateGroupPersonList(groupId)
+	if err != nil {
+		fmt.Println("updateGroupPersonList error", err)
+		// continue
+	}
+
+	// Delete from cache as well (updateGroupPersonList will update cache with new data)
+	// cache_service.DeleteGroupMemberListFromCache(groupId) // Not needed since updateGroupPersonList updates cache
+
+	return nil
 }
 
 // Get member info by group ID and MetaId
@@ -1265,6 +1318,76 @@ func (gdb *GroupDB) GetGroupPersonByGroupIdAndMetaId(groupId, metaId string) (*m
 	}
 
 	return &person, nil
+}
+
+// Update group person list in TalkGroupPersonListCollection
+func (gdb *GroupDB) updateGroupPersonList(groupId string) error {
+	// Get all group members for this group
+	persons, err := gdb.GetGroupPersonList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Sort persons by timestamp in descending order (newest first)
+	gdb.sortGroupPersonListByTimestamp(persons)
+
+	// Create group person list model
+	personList := &models.TalkGroupPersonList{
+		GroupId: groupId,
+		Persons: persons,
+		Total:   int64(len(persons)),
+	}
+
+	// Serialize data
+	data, err := json.Marshal(personList)
+	if err != nil {
+		return err
+	}
+
+	// Save to TalkGroupPersonListCollection using groupId as key
+	key := []byte(groupId)
+	err = Pb[TalkGroupPersonListCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Update cache with the new data
+	cache_service.SetGroupMemberListToCache(groupId, personList)
+
+	return nil
+}
+
+// Get group person list from TalkGroupPersonListCollection
+func (gdb *GroupDB) GetGroupPersonListFromCollection(groupId string) (*models.TalkGroupPersonList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupPersonListCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var personList models.TalkGroupPersonList
+	err = json.Unmarshal(value, &personList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &personList, nil
+}
+
+// Sort group person list by timestamp in descending order (oldest first)
+func (gdb *GroupDB) sortGroupPersonListByTimestamp(persons []*models.TalkGroupPerson) {
+	// Simple bubble sort, reverse order by timestamp
+	for i := 0; i < len(persons)-1; i++ {
+		for j := 0; j < len(persons)-1-i; j++ {
+			if persons[j].Timestamp > persons[j+1].Timestamp {
+				persons[j], persons[j+1] = persons[j+1], persons[j]
+			}
+		}
+	}
 }
 
 // Get member info by MetaId and group ID

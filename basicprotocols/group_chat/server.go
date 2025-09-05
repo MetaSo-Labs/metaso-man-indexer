@@ -4,6 +4,7 @@ import (
 	"log"
 	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/swagger"
+	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/common"
 	"net/http"
 	"os"
@@ -115,6 +116,9 @@ func (s *Server) SetupRoutes() error {
 
 // Start start server
 func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
+	// Set global stop flag
+	db.GlobalIsStop = false
+
 	// Initialize group_chat module
 	err := Init(indexerChainAdapter)
 	if err != nil {
@@ -143,6 +147,9 @@ func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
 		<-sigChan
 
 		log.Println("Shutting down server...")
+
+		// Set global stop flag
+		db.GlobalIsStop = true
 
 		// Stop group_chat module
 		err := Stop()

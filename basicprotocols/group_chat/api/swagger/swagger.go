@@ -1193,6 +1193,61 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/api/db/group/member-list": {
+            "get": {
+                "description": "Get group member list with pagination support",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group member list",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20},
+                    {"type": "string", "description": "Order by field, use 'timestamp' for timestamp descending order", "name": "orderBy", "in": "query", "required": false},
+                    {"type": "string", "description": "Order type, use 'desc' for descending order", "name": "orderType", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Group member list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/group/member-list-v2": {
+            "get": {
+                "description": "Get group member list using TalkGroupPersonListCollection (already sorted by timestamp descending)",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group member list V2",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Group member list V2", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/group/person-list-collection": {
+            "get": {
+                "description": "Get TalkGroupPersonListCollection data with pagination support, returns groupId and member count",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get group person list collection with pagination",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor, starting from 0", "name": "cursor", "in": "query", "required": false, "default": 0},
+                    {"type": "integer", "description": "Number of items per page", "name": "size", "in": "query", "required": false, "default": 20}
+                ],
+                "responses": {
+                    "200": {"description": "Group person list collection with pagination", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/socket/stats": {
             "get": {
                 "description": "Get Socket connection statistics including total connections, active connections, etc.",

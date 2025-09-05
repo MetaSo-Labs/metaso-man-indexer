@@ -7,26 +7,47 @@ import (
 	"sync"
 	"time"
 
-	"manindexer/basicprotocols/group_chat/api/respond"
-
 	"github.com/go-redis/redis/v8"
 )
+
+// GiftCache gift cache
+type GiftCache struct {
+	memoryCache sync.Map //
+	ttl         time.Duration
+}
 
 var (
 	redisClient *redis.Client
 	useRedis    bool
-	memoryCache sync.Map
-	cacheMutex  sync.RWMutex
 	initialized bool
+
+	// gift cache instance
+	giftCache *GiftCache
 
 	expireTime = 5 * time.Minute
 )
+
+// InitGiftCache initialize gift cache
+func InitGiftCache(ttl time.Duration) {
+	giftCache = &GiftCache{
+		ttl: ttl,
+	}
+}
 
 // InitCacheService Initialize cache service
 func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 	if initialized {
 		return
 	}
+
+	// initialize gift cache
+	InitGiftCache(expireTime)
+
+	// initialize user info cache
+	InitUserInfoCache(expireTime)
+
+	// initialize group member cache
+	InitGroupMemberCache(30 * time.Minute)
 
 	if redisAddr != "" {
 		// Try to connect to Redis
@@ -63,34 +84,34 @@ func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 }
 
 // GetCacheGiftInfo Get lucky bag info cache
-func GetCacheGiftInfo(groupId, txId string, index int64) (string, error) {
+func GetCacheGiftInfo(groupId, luckyBagPinId string, index int64) (string, error) {
 	if !initialized {
 		return "", fmt.Errorf("cache service not initialized")
 	}
 
 	if useRedis && redisClient != nil {
-		return getRedisGiftInfo(groupId, txId, index)
+		return getRedisGiftInfo(groupId, luckyBagPinId, index)
 	} else {
-		return getMemoryGiftInfo(groupId, txId, index)
+		return getMemoryGiftInfo(groupId, luckyBagPinId, index)
 	}
 }
 
 // SetCacheGiftInfo Set lucky bag info cache
-func SetCacheGiftInfo(groupId, txId, metaId string, index int64) (bool, error) {
+func SetCacheGiftInfo(groupId, luckyBagPinId, metaId string, index int64) (bool, error) {
 	if !initialized {
 		return false, fmt.Errorf("cache service not initialized")
 	}
 
 	if useRedis && redisClient != nil {
-		return setRedisGiftInfo(groupId, txId, metaId, index)
+		return setRedisGiftInfo(groupId, luckyBagPinId, metaId, index)
 	} else {
-		return setMemoryGiftInfo(groupId, txId, metaId, index)
+		return setMemoryGiftInfo(groupId, luckyBagPinId, metaId, index)
 	}
 }
 
 // getRedisGiftInfo Get lucky bag info from Redis
-func getRedisGiftInfo(groupId, txId string, index int64) (string, error) {
-	key := fmt.Sprintf("gift:%s:%s:%d", groupId, txId, index)
+func getRedisGiftInfo(groupId, luckyBagPinId string, index int64) (string, error) {
+	key := fmt.Sprintf("gift:%s:%s:%d", groupId, luckyBagPinId, index)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -106,8 +127,8 @@ func getRedisGiftInfo(groupId, txId string, index int64) (string, error) {
 }
 
 // setRedisGiftInfo Set lucky bag info to Redis
-func setRedisGiftInfo(groupId, txId, metaId string, index int64) (bool, error) {
-	key := fmt.Sprintf("gift:%s:%s:%d", groupId, txId, index)
+func setRedisGiftInfo(groupId, luckyBagPinId, metaId string, index int64) (bool, error) {
+	key := fmt.Sprintf("gift:%s:%s:%d", groupId, luckyBagPinId, index)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -121,20 +142,17 @@ func setRedisGiftInfo(groupId, txId, metaId string, index int64) (bool, error) {
 }
 
 // getMemoryGiftInfo Get lucky bag info from memory
-func getMemoryGiftInfo(groupId, txId string, index int64) (string, error) {
-	key := fmt.Sprintf("%s:%s:%d", groupId, txId, index)
+func getMemoryGiftInfo(groupId, luckyBagPinId string, index int64) (string, error) {
+	key := fmt.Sprintf("%s:%s:%d", groupId, luckyBagPinId, index)
 
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
-
-	if value, ok := memoryCache.Load(key); ok {
+	if value, ok := giftCache.memoryCache.Load(key); ok {
 		if cacheItem, ok := value.(*cacheItem); ok {
 			// Check if expired
 			if time.Now().Before(cacheItem.expireTime) {
 				return cacheItem.value, nil
 			} else {
 				// Expired, delete it
-				memoryCache.Delete(key)
+				giftCache.memoryCache.Delete(key)
 			}
 		}
 	}
@@ -143,19 +161,16 @@ func getMemoryGiftInfo(groupId, txId string, index int64) (string, error) {
 }
 
 // setMemoryGiftInfo Set lucky bag info to memory
-func setMemoryGiftInfo(groupId, txId, metaId string, index int64) (bool, error) {
-	key := fmt.Sprintf("%s:%s:%d", groupId, txId, index)
-
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
+func setMemoryGiftInfo(groupId, luckyBagPinId, metaId string, index int64) (bool, error) {
+	key := fmt.Sprintf("%s:%s:%d", groupId, luckyBagPinId, index)
 
 	// Create cache item with expiration time
 	cacheItem := &cacheItem{
 		value:      metaId,
-		expireTime: time.Now().Add(expireTime),
+		expireTime: time.Now().Add(giftCache.ttl),
 	}
 
-	memoryCache.Store(key, cacheItem)
+	giftCache.memoryCache.Store(key, cacheItem)
 	return true, nil
 }
 
@@ -165,30 +180,14 @@ type cacheItem struct {
 	expireTime time.Time
 }
 
-// userInfoCacheItem 用户信息缓存项
-type userInfoCacheItem struct {
-	UserInfo   *respond.UserInfo `json:"userInfo"`
-	UpdateTime time.Time         `json:"updateTime"`
-	ExpireTime time.Time         `json:"expireTime"`
-}
-
 // CleanExpiredMemoryCache Clean expired memory cache
 func CleanExpiredMemoryCache() {
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
-
 	now := time.Now()
-	memoryCache.Range(func(key, value interface{}) bool {
+	giftCache.memoryCache.Range(func(key, value interface{}) bool {
 		// clear gift info cache
 		if cacheItem, ok := value.(*cacheItem); ok {
 			if now.After(cacheItem.expireTime) {
-				memoryCache.Delete(key)
-			}
-		}
-		// clear user info cache
-		if userInfoCacheItem, ok := value.(*userInfoCacheItem); ok {
-			if now.After(userInfoCacheItem.ExpireTime) {
-				memoryCache.Delete(key)
+				giftCache.memoryCache.Delete(key)
 			}
 		}
 		return true
@@ -201,11 +200,13 @@ func StartMemoryCacheCleaner() {
 		ticker := time.NewTicker(5 * time.Minute) // Clean every 5 minutes
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				CleanExpiredMemoryCache()
-			}
+		for range ticker.C {
+			// clean gift cache
+			CleanExpiredMemoryCache()
+			// clean user info cache
+			CleanExpiredUserInfoCache()
+			// clean group member cache
+			CleanExpiredGroupMemberCache()
 		}
 	}()
 }
@@ -218,13 +219,13 @@ func GetCacheStatus() map[string]interface{} {
 	}
 
 	if !useRedis {
-		// Count memory cache items
+		// Count gift cache items
 		count := 0
-		memoryCache.Range(func(key, value interface{}) bool {
+		giftCache.memoryCache.Range(func(key, value interface{}) bool {
 			count++
 			return true
 		})
-		status["memoryCacheCount"] = count
+		status["giftCacheCount"] = count
 	}
 
 	return status

@@ -543,6 +543,12 @@ func (pcdb *PrivateChatDB) StartPrivateQueueProcessor() {
 		for {
 			select {
 			case <-ticker.C:
+
+				if GlobalIsStop {
+					log.Printf("[PrivateChatDB] Queue processor is stopped, skipping this cycle")
+					continue
+				}
+
 				// Check if already processing
 				pcdb.processingMutex.Lock()
 				if pcdb.isProcessing {

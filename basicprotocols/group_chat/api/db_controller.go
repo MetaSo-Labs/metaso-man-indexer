@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/service"
@@ -1341,6 +1342,152 @@ func GetPrivateChatTimestampOutList(ctx *gin.Context) {
 	}
 
 	result, err := service.GetPrivateChatTimestampOutList(from, to, cursor, size)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get group member list (DB version)
+// @Description Get group member list with pagination support from database
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param orderBy query string false "Order by field, use 'timestamp' for timestamp descending order"
+// @Param orderType query string false "Order type, use 'desc' for descending order"
+// @Success 200 {object} map[string]interface{} "Group member list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/group/member-list [get]
+func GetDbGroupMemberList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	groupId := ctx.Query("groupId")
+	if groupId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	orderBy := ctx.Query("orderBy")
+	orderType := ctx.Query("orderType")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	// Create request object
+	req := &request.FetchGroupMemberListRequest{
+		GroupId:   groupId,
+		Cursor:    int64(cursor),
+		Size:      int64(size),
+		OrderBy:   orderBy,
+		OrderType: orderType,
+	}
+
+	result, err := service.FetchGroupMemberList(req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get group member list V2
+// @Description Get group member list using TalkGroupPersonListCollection (already sorted by timestamp descending)
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Group member list V2"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/group/member-list-v2 [get]
+func GetGroupMemberListV2(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	groupId := ctx.Query("groupId")
+	if groupId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId parameter cannot be empty"), t, 1))
+		return
+	}
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	// Create request object
+	req := &request.FetchGroupMemberListRequest{
+		GroupId: groupId,
+		Cursor:  int64(cursor),
+		Size:    int64(size),
+	}
+
+	result, err := service.FetchGroupMemberListV2(req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get group person list collection with pagination
+// @Description Get TalkGroupPersonListCollection data with pagination support, returns groupId and member count
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Group person list collection with pagination"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/group/person-list-collection [get]
+func GetGroupPersonListCollection(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	result, err := service.GetGroupPersonListCollection(cursor, size)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return

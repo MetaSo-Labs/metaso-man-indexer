@@ -792,6 +792,82 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 	}, nil
 }
 
+// FetchGroupMemberListV2 Get group member list using TalkGroupPersonListCollection (already sorted)
+func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.GroupMemberResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+	if req.Cursor <= 0 {
+		req.Cursor = 0
+	}
+
+	t := time.Now().UnixMilli()
+
+	// Try to get from cache first
+	var allMembers []*models.TalkGroupPerson
+	var err error
+
+	if personList, found := cache_service.GetGroupMemberListFromCache(req.GroupId); found {
+		// Use cached data
+		allMembers = personList.Persons
+		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] get group members from cache time: %d\n", time.Now().UnixMilli()-t)
+	} else {
+		// Cache miss, get from database
+		allMembers, err = groupDB.GetGroupMembersFromList(req.GroupId)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] get group members from database time: %d\n", time.Now().UnixMilli()-t)
+
+		// Update cache with the data from database
+		if len(allMembers) > 0 {
+			personList := &models.TalkGroupPersonList{
+				GroupId: req.GroupId,
+				Persons: allMembers,
+			}
+			cache_service.SetGroupMemberListToCache(req.GroupId, personList)
+		}
+	}
+
+	total := int64(len(allMembers))
+
+	// Apply pagination in code
+	start := req.Cursor
+	end := start + req.Size
+	var members []*models.TalkGroupPerson
+	if start >= total {
+		// No more data
+		members = []*models.TalkGroupPerson{}
+	} else if end > total {
+		// Last page
+		members = allMembers[start:total]
+	} else {
+		// Regular page
+		members = allMembers[start:end]
+	}
+
+	t1 := time.Now().UnixMilli()
+	// Convert to response format
+	var memberItems []*respond.GroupMemberItem
+	for _, member := range members {
+		memberItem := &respond.GroupMemberItem{
+			MetaId:    member.MetaId,
+			UserInfo:  common_service.FetchMetaIDUserInfo(member.Address),
+			Address:   member.Address,
+			TimeStr:   time.Unix(member.Timestamp, 0).Format("2006-01-02 15:04:05"),
+			Timestamp: member.Timestamp,
+		}
+		memberItems = append(memberItems, memberItem)
+	}
+	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] for member item info time: %d\n", time.Now().UnixMilli()-t1)
+
+	return &respond.GroupMemberResponse{
+		Total: total,
+		List:  memberItems,
+	}, nil
+}
+
 // FetchGroupPerson Get group member info
 func FetchGroupPerson(req *request.FetchGroupPersonRequest) (*respond.GroupPersonResponse, error) {
 	// Parameter validation
@@ -917,6 +993,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.CreateMetaId = latestChat.MetaId
 				chatInfoItem.CreateAddress = latestChat.CreateAddress
 				chatInfoItem.BlockHeight = latestChat.BlockHeight
+				chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfo(latestChat.CreateAddress)
 
 				// Get group chat index
 				chatInfoItem.Index = -1

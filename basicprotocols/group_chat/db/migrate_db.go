@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	LatestTargetVersion = 5
+	LatestTargetVersion = 6
 )
 
 // Version migration record structure
@@ -146,6 +146,30 @@ func (m *MigrationV4ToV5) Execute() error {
 	}
 
 	log.Printf("[migrate_db] Version 5 migration completed")
+	return nil
+}
+
+// Migration from version 5 to version 6: Update TalkGroupPersonListCollection from TalkGroupPersonCollection
+type MigrationV5ToV6 struct{}
+
+func (m *MigrationV5ToV6) Version() int {
+	return 6
+}
+
+func (m *MigrationV5ToV6) Description() string {
+	return "Update TalkGroupPersonListCollection from TalkGroupPersonCollection data, grouping members by groupId and sorting by timestamp"
+}
+
+func (m *MigrationV5ToV6) Execute() error {
+	log.Printf("[migrate_db] Starting version 6 migration: %s", m.Description())
+
+	// Update TalkGroupPersonListCollection from TalkGroupPersonCollection
+	err := updateGroupPersonListCollection()
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to update TalkGroupPersonListCollection: %v", err)
+	}
+
+	log.Printf("[migrate_db] Version 6 migration completed")
 	return nil
 }
 
@@ -480,6 +504,7 @@ func MigrateDatabase(targetVersion int) error {
 		&MigrationV2ToV3{},
 		&MigrationV3ToV4{},
 		&MigrationV4ToV5{},
+		&MigrationV5ToV6{},
 		// Add more migration operations here
 		// Note: When adding new migrations, also update the LatestTargetVersion constant
 	}
@@ -590,6 +615,7 @@ func validateMigrationConfig() error {
 		&MigrationV2ToV3{},
 		&MigrationV3ToV4{},
 		&MigrationV4ToV5{},
+		&MigrationV5ToV6{},
 		// Add more migration operations here
 	}
 
@@ -657,6 +683,7 @@ func GetMigrationInfo() (*MigrationInfo, error) {
 		&MigrationV2ToV3{},
 		&MigrationV3ToV4{},
 		&MigrationV4ToV5{},
+		&MigrationV5ToV6{},
 		// Add more migration operations here
 	}
 
@@ -723,6 +750,7 @@ func ShowMigrationInfo() {
 		&MigrationV2ToV3{},
 		&MigrationV3ToV4{},
 		&MigrationV4ToV5{},
+		&MigrationV5ToV6{},
 		// Add more migration operations here
 	}
 	log.Printf("[migrate_db]   Total migrations: %d", len(migrations))
@@ -1272,4 +1300,172 @@ func updatePrivateChatMessageIndex(pinId string, index int64) error {
 	}
 
 	return chatDB.Set(key, updatedValue, pebble.Sync)
+}
+
+// Update TalkGroupPersonListCollection from TalkGroupPersonCollection data
+func updateGroupPersonListCollection() error {
+	log.Printf("[migrate_db] Starting to update TalkGroupPersonListCollection from TalkGroupPersonCollection")
+
+	sourceDB, exists := Pb[TalkGroupPersonCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] source collection %s does not exist", TalkGroupPersonCollection)
+	}
+
+	targetDB, exists := Pb[TalkGroupPersonListCollection]
+	if !exists {
+		return fmt.Errorf("[migrate_db] target collection %s does not exist", TalkGroupPersonListCollection)
+	}
+
+	// Clear target collection first
+	log.Printf("[migrate_db] Clearing TalkGroupPersonListCollection")
+	err := clearCollection(targetDB)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to clear TalkGroupPersonListCollection: %v", err)
+	}
+
+	// Use iterator to traverse all data in source collection
+	iter, err := sourceDB.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("[migrate_db] failed to create source collection iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Group persons by groupId
+	groupPersonsMap := make(map[string][]map[string]interface{})
+	count := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// Parse key to get groupId and metaId
+		keyStr := string(key)
+		keyParts := strings.Split(keyStr, "_")
+		if len(keyParts) < 2 {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		// Only process keys that start with groupId_ (not metaId_)
+		// We need to check if this is a groupId_metaId key or metaId_groupId key
+		// For groupId_metaId keys, the first part should be the groupId
+		// For metaId_groupId keys, the second part should be the groupId
+		var groupId string
+		var personData map[string]interface{}
+
+		// Try to parse as groupId_metaId first
+		if len(keyParts) >= 2 {
+			// Check if this looks like a groupId_metaId key by trying to parse the value as TalkGroupPerson
+			err := json.Unmarshal(value, &personData)
+			if err != nil {
+				log.Printf("[migrate_db] Skipping invalid value format for key %s: %v", keyStr, err)
+				continue
+			}
+
+			// Check if the personData has a groupId field that matches the first part of the key
+			if personGroupId, ok := personData["groupId"].(string); ok && personGroupId == keyParts[0] {
+				groupId = keyParts[0]
+			} else {
+				// This might be a metaId_groupId key, skip it as we'll process it when we encounter the groupId_metaId version
+				continue
+			}
+		} else {
+			log.Printf("[migrate_db] Skipping invalid key format: %s", keyStr)
+			continue
+		}
+
+		// Add person to the group
+		if groupPersonsMap[groupId] == nil {
+			groupPersonsMap[groupId] = make([]map[string]interface{}, 0)
+		}
+		groupPersonsMap[groupId] = append(groupPersonsMap[groupId], personData)
+
+		count++
+	}
+
+	log.Printf("[migrate_db] Processed %d person records, found %d groups", count, len(groupPersonsMap))
+
+	// Write grouped data to target collection
+	batch := targetDB.NewBatch()
+	defer batch.Close()
+
+	groupCount := 0
+	for groupId, persons := range groupPersonsMap {
+		// Sort persons by timestamp in descending order (newest first)
+		sortPersonsByTimestamp(persons)
+
+		// Create group person list structure
+		groupPersonList := map[string]interface{}{
+			"groupId": groupId,
+			"persons": persons,
+			"total":   int64(len(persons)),
+		}
+
+		// Serialize data
+		data, err := json.Marshal(groupPersonList)
+		if err != nil {
+			log.Printf("[migrate_db] Failed to marshal group person list for groupId %s: %v", groupId, err)
+			continue
+		}
+
+		// Write to target collection using groupId as key
+		key := []byte(groupId)
+		err = batch.Set(key, data, nil)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to write group person list for groupId %s: %v", groupId, err)
+		}
+
+		groupCount++
+
+		// Commit batch every 100 groups
+		if groupCount%100 == 0 {
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("[migrate_db] failed to commit batch: %v", err)
+			}
+			batch = targetDB.NewBatch()
+			log.Printf("[migrate_db] Updated %d groups in TalkGroupPersonListCollection", groupCount)
+		}
+	}
+
+	// Commit remaining batch
+	if groupCount%100 != 0 {
+		err := batch.Commit(pebble.Sync)
+		if err != nil {
+			return fmt.Errorf("[migrate_db] failed to commit final batch: %v", err)
+		}
+	}
+
+	log.Printf("[migrate_db] Successfully updated %d groups in TalkGroupPersonListCollection", groupCount)
+	return nil
+}
+
+// Sort persons by timestamp in descending order (newest first)
+func sortPersonsByTimestamp(persons []map[string]interface{}) {
+	// Simple bubble sort, reverse order by timestamp
+	for i := 0; i < len(persons)-1; i++ {
+		for j := 0; j < len(persons)-1-i; j++ {
+			timestamp1, ok1 := getTimestampFromPerson(persons[j])
+			timestamp2, ok2 := getTimestampFromPerson(persons[j+1])
+
+			if ok1 && ok2 && timestamp1 < timestamp2 {
+				persons[j], persons[j+1] = persons[j+1], persons[j]
+			}
+		}
+	}
+}
+
+// Get timestamp from person data
+func getTimestampFromPerson(person map[string]interface{}) (int64, bool) {
+	if timestamp, ok := person["timestamp"]; ok {
+		switch t := timestamp.(type) {
+		case float64:
+			return int64(t), true
+		case int64:
+			return t, true
+		case int:
+			return int64(t), true
+		}
+	}
+	return 0, false
 }

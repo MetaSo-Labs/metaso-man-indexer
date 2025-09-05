@@ -1084,7 +1084,8 @@ func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.Ta
 	}
 
 	// Get all members of the group
-	members, err := groupDB.GetGroupMembers(groupId)
+	// members, err := groupDB.GetGroupMembers(groupId)
+	members, err := groupDB.GetGroupMembersFromList(groupId)
 	if err != nil {
 		return err
 	}
@@ -1571,6 +1572,12 @@ func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 		for {
 			select {
 			case <-ticker.C:
+
+				if GlobalIsStop {
+					log.Printf("[ChatDB] Queue processor is stopped, skipping this cycle")
+					continue
+				}
+
 				// Check if already processing
 				cdb.processingMutex.Lock()
 				if cdb.isProcessing {

@@ -30,7 +30,8 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		}
 	} else {
 		// No community, directly get member list by groupId
-		groupMembers, err := groupDB.GetGroupMembers(chat.GroupId)
+		// groupMembers, err := groupDB.GetGroupMembers(chat.GroupId)
+		groupMembers, err := groupDB.GetGroupMembersFromList(chat.GroupId)
 		if err == nil && groupMembers != nil {
 			for _, member := range groupMembers {
 				if member.MetaId != "" {

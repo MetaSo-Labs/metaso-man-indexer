@@ -1810,3 +1810,94 @@ func GetPrivateChatTimestampOutList(from, to string, cursor int, size int) (map[
 
 	return result, nil
 }
+
+// GetGroupPersonListCollection Get TalkGroupPersonListCollection data with pagination
+// Returns key (groupId) and value (total member count) list
+func GetGroupPersonListCollection(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	var results []map[string]interface{}
+
+	// Create iterator for TalkGroupPersonListCollection
+	iter, err := db.Pb[db.TalkGroupPersonListCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+	total := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		total++
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		// Parse the value to get member count
+		var personList struct {
+			GroupId string        `json:"groupId"`
+			Persons []interface{} `json:"persons"`
+		}
+
+		if err := json.Unmarshal(iter.Value(), &personList); err != nil {
+			// If parsing fails, use 0 as member count
+			results = append(results, map[string]interface{}{
+				"groupId":     key,
+				"memberCount": 0,
+			})
+		} else {
+			// Count active members (GroupState == 1)
+			activeMemberCount := 0
+			for _, person := range personList.Persons {
+				if personMap, ok := person.(map[string]interface{}); ok {
+					if groupState, exists := personMap["groupState"]; exists {
+						if state, ok := groupState.(float64); ok && state == 1 {
+							activeMemberCount++
+						}
+					}
+				}
+			}
+
+			results = append(results, map[string]interface{}{
+				"groupId":     key,
+				"memberCount": activeMemberCount,
+			})
+		}
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkGroupPersonListCollection,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+		"total":      total,
+	}
+
+	return result, nil
+}

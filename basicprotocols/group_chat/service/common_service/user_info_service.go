@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/common"
 	"sync"
@@ -276,6 +277,12 @@ func StartUserInfoPolling() {
 		for {
 			select {
 			case <-ticker.C:
+
+				if db.GlobalIsStop {
+					log.Println("[CACHE_SERVICE]User info polling is stopped, skipping this cycle")
+					continue
+				}
+
 				// Check if previous update is still in progress
 				updateMutex.Lock()
 				if updateInProgress {
