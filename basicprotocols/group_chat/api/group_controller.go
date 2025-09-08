@@ -534,6 +534,129 @@ func GetLuckyBagUnusedInfo(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Get lucky bag info (V2 with cache)
+// @Description Get lucky bag object and claimed list based on groupId and pinId using cache optimization
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param pinId query string true "Lucky bag PinId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.LuckyBagInfoResponse} "Successfully return lucky bag info"
+// @Router /group-chat/lucky-bag-info-v2 [get]
+func GetLuckyBagInfoV2(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchLuckyBagInfoRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			PinId:   c.DefaultQuery("pinId", ""),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetLuckyBagWithOpenListV2(req.GroupId, req.PinId)
+	if err != nil {
+		log.Printf("Failed to get lucky bag info V2 for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get lucky bag unused info (V2 with cache)
+// @Description Get lucky bag object and unclaimed list based on groupId and pinId using cache optimization
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Param pinId query string true "Lucky bag PinId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.LuckyBagUnusedResponse} "Successfully return lucky bag unused info"
+// @Router /group-chat/lucky-bag-unused-info-v2 [get]
+func GetLuckyBagUnusedInfoV2(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchLuckyBagInfoRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+			PinId:   c.DefaultQuery("pinId", ""),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetLuckyBagWithUnusedListV2(req.GroupId, req.PinId)
+	if err != nil {
+		log.Printf("Failed to get lucky bag unused info V2 for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Grab lucky bag (V2 with cache)
+// @Description Grab lucky bag based on groupId, pinId, metaId, and address using cache optimization
+// @Accept json
+// @Produce json
+// @Param request body request.GrabLuckyBagRequest true "Grab lucky bag request parameters"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=string} "Successfully return grab lucky bag result"
+// @Router /group-chat/grab-lucky-bag-v2 [post]
+func GrabLuckyBagV2(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.GrabLuckyBagRequest{}
+	)
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	if req.PinId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId is empty"), t, 1))
+		return
+	}
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.Address == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("address is empty"), t, 1))
+		return
+	}
+
+	result, err := service.GrabLuckyBagV2(req.GroupId, req.PinId, req.MetaId, req.Address)
+	if err != nil {
+		log.Printf("Failed to grab lucky bag V2 for groupId %s, pinId %s, metaId %s: %v", req.GroupId, req.PinId, req.MetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
 // @Summary Get group chat list (new format)
 // @Description Get group chat records using TalkGroupChatTimestamp2Collection with improved key format
 // @Produce json
@@ -671,6 +794,49 @@ func GetUserInfoByAddress(c *gin.Context) {
 			c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 			return
 		}
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
+// @Summary Get batch user info by addresses or metaIds
+// @Description Get user information by multiple addresses or metaIds in batch
+// @Accept json
+// @Produce json
+// @Param request body request.BatchUserInfoRequest true "Batch user info request parameters"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.BatchUserInfoResponse} "Successfully return batch user information"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/batch-user-info [post]
+func GetBatchUserInfo(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.BatchUserInfoRequest{}
+	)
+
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request body: %v", err), t, 1))
+		return
+	}
+
+	if len(req.Addresses) == 0 && len(req.MetaIds) == 0 {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("both addresses and metaIds are empty"), t, 1))
+		return
+	}
+
+	// limit total count to 100
+	totalCount := len(req.Addresses) + len(req.MetaIds)
+	if totalCount > 100 {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("total count exceeds maximum limit of 100, got %d", totalCount), t, 1))
+		return
+	}
+
+	response, err := service.GetBatchUserInfo(req.Addresses, req.MetaIds)
+	if err != nil {
+		log.Printf("Failed to get batch user info: %v", err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
 	}
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))

@@ -194,20 +194,20 @@ func fetchMetaIDUserInfoInfoByMetaId(metaId string) (*MetaIDUserInfo, error) {
 		return nil, err
 	}
 
-	if err = common.JsonToObject(result, &data); err != nil {
+	// if err = common.JsonToObject(result, &data); err != nil {
+	// 	return nil, fmt.Errorf("get request err:%s", err.Error())
+	// }
+
+	if err = common.JsonToObject(result, &resp); err != nil {
 		return nil, fmt.Errorf("get request err:%s", err.Error())
 	}
+	if resp.Code != ManCodeSuccess {
+		return nil, fmt.Errorf("msg:%s", resp.Message)
+	}
 
-	// if err = common.JsonToObject(result, &resp); err != nil {
-	// 	return nil, fmt.Errorf("get request err:%s", err.Error())
-	// }
-	// if resp.Code != ManCodeSuccess {
-	// 	return nil, fmt.Errorf("msg:%s", resp.Message)
-	// }
-
-	// if err = common.JsonToAny(resp.Data, &data); err != nil {
-	// 	return nil, fmt.Errorf("get request err:%s", err.Error())
-	// }
+	if err = common.JsonToAny(resp.Data, &data); err != nil {
+		return nil, fmt.Errorf("get request err:%s", err.Error())
+	}
 	return data, nil
 }
 

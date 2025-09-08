@@ -405,7 +405,7 @@ const (
 
 	MonitorSimpleMsg          = "SimpleMsg"
 	MonitorSimpleFileMsg      = "SimpleFileMsg"
-	MonitorSimplePrivateBlock = "SimplePrivateBlock"
+	MonitorSimplePrivateBlock = "SimpleBlock"
 )
 
 // info

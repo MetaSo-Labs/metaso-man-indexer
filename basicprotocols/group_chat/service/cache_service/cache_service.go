@@ -49,6 +49,12 @@ func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 	// initialize group member cache
 	InitGroupMemberCache(30 * time.Minute)
 
+	// initialize group info cache
+	InitGroupInfoCache(30 * time.Minute)
+
+	// initialize lucky bag cache
+	// InitLuckyBagCache(10 * time.Minute)
+
 	if redisAddr != "" {
 		// Try to connect to Redis
 		redisClient = redis.NewClient(&redis.Options{
@@ -207,6 +213,8 @@ func StartMemoryCacheCleaner() {
 			CleanExpiredUserInfoCache()
 			// clean group member cache
 			CleanExpiredGroupMemberCache()
+			// clean group info cache
+			CleanExpiredGroupInfoCache()
 		}
 	}()
 }

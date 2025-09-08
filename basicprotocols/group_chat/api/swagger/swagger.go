@@ -297,6 +297,42 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/batch-user-info": {
+            "post": {
+                "description": "Get user information by multiple addresses or metaIds in batch. Maximum total count is 100 (addresses + metaIds).",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get batch user info by addresses or metaIds (max 100)",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "addresses": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of user addresses"
+                                },
+                                "metaIds": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "List of user metaIds"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return batch user information", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/search-groups": {
             "get": {
                 "description": "Search groups by name or ID using fuzzy search",
@@ -609,6 +645,84 @@ func SetupSwagger(router *gin.Engine) {
                         }
                     },
                     "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/lucky-bag-info-v2": {
+            "get": {
+                "description": "Get lucky bag object and claimed list based on groupId and pinId using cache optimization (V2)",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get lucky bag info (V2 with cache)",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "Lucky bag PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return lucky bag info", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/lucky-bag-unused-info-v2": {
+            "get": {
+                "description": "Get lucky bag object and unclaimed list based on groupId and pinId using cache optimization (V2)",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get lucky bag unused info (V2 with cache)",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "Lucky bag PinId", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return lucky bag unused info", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/grab-lucky-bag-v2": {
+            "post": {
+                "description": "Grab lucky bag based on groupId, pinId, metaId, and address using cache optimization (V2)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Grab lucky bag (V2 with cache)",
+                "parameters": [
+                    {
+                        "description": "Grab lucky bag request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "groupId": {
+                                    "type": "string",
+                                    "description": "Group ID"
+                                },
+                                "pinId": {
+                                    "type": "string",
+                                    "description": "Lucky bag PinId"
+                                },
+                                "metaId": {
+                                    "type": "string",
+                                    "description": "User MetaId"
+                                },
+                                "address": {
+                                    "type": "string",
+                                    "description": "User address"
+                                }
+                            },
+                            "required": ["groupId", "pinId", "metaId", "address"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return grab lucky bag result", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
         },

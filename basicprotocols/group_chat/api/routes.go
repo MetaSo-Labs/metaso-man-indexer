@@ -46,6 +46,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get user info by address
 		group.GET("/user-info", GetUserInfoByAddress)
 
+		// Get batch user info by addresses or metaIds
+		group.POST("/batch-user-info", GetBatchUserInfo)
+
 		// Get current maximum chat index
 		group.GET("/max-group-chat-index", GetCurrentMaxGroupChatIndex)
 		group.GET("/max-private-chat-index", GetCurrentMaxPrivateChatIndex)
@@ -76,6 +79,16 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Generate lucky bag code address key
 		group.GET("/generate-lucky-bag-code", GenerateLuckyBagCodeAddressKey)
+
+		// Lucky bag V2 routes (with cache optimization)
+		// Get lucky bag info V2
+		group.GET("/lucky-bag-info-v2", GetLuckyBagInfoV2)
+
+		// Get lucky bag unused info V2
+		group.GET("/lucky-bag-unused-info-v2", GetLuckyBagUnusedInfoV2)
+
+		// Grab lucky bag V2
+		group.POST("/grab-lucky-bag-v2", GrabLuckyBagV2)
 	}
 
 }

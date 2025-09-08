@@ -68,7 +68,12 @@ func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 			return err
 		}
 		key := []byte(group.GroupId)
-		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+		err = Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			return err
+		}
+		cache_service.SetGroupInfoToCache(group.GroupId, group)
+		return nil
 	}
 
 	// Determine if update is needed
@@ -94,7 +99,12 @@ func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 			return err
 		}
 		key := []byte(group.GroupId)
-		return Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+		err = Pb[TalkGroupInfoCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			return err
+		}
+		cache_service.SetGroupInfoToCache(group.GroupId, group)
+		return nil
 	}
 
 	// No update needed, return directly
@@ -1238,6 +1248,29 @@ func (gdb *GroupDB) GetGroupMemberCount(groupId string) (int64, error) {
 	return count, nil
 }
 
+// Get group member count V2 - from TalkGroupPersonListCollection
+func (gdb *GroupDB) GetGroupMemberCountFromList(groupId string) (int64, error) {
+	// Get group person list from TalkGroupPersonListCollection
+	personList, err := gdb.GetGroupPersonListFromCollection(groupId)
+	if err != nil {
+		return 0, err
+	}
+
+	if personList == nil {
+		return 0, nil
+	}
+
+	// Count only members who are in the group (GroupState == RoomStateIn)
+	var count int64 = 0
+	for _, person := range personList.Persons {
+		if person.GroupState == models.RoomStateIn {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
 // Save group member info
 func (gdb *GroupDB) SaveGroupPerson(person *models.TalkGroupPerson) error {
 	data, err := json.Marshal(person)
@@ -1857,6 +1890,12 @@ func (gdb *GroupDB) startCacheUpdateGoroutine() {
 	for {
 		select {
 		case <-ticker.C:
+
+			if GlobalIsStop {
+				fmt.Printf("[GroupDB] Cache update goroutine is stopped, skipping this cycle\n")
+				continue
+			}
+
 			// Periodic update - only if not already updating
 			if !isUpdating {
 				isUpdating = true
@@ -1868,6 +1907,12 @@ func (gdb *GroupDB) startCacheUpdateGoroutine() {
 				fmt.Printf("[GroupDB] Skipping periodic update - previous update still in progress\n")
 			}
 		case <-gdb.cacheUpdateChan:
+
+			if GlobalIsStop {
+				fmt.Printf("[GroupDB] Cache update goroutine is stopped, skipping this cycle\n")
+				continue
+			}
+
 			// Manual update triggered - only if not already updating
 			if !isUpdating {
 				isUpdating = true

@@ -1,9 +1,11 @@
 package group_chat
 
 import (
+	"fmt"
 	"log"
 	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/swagger"
+	"manindexer/basicprotocols/group_chat/common_util/logger"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/common"
 	"net/http"
@@ -34,11 +36,29 @@ type Server struct {
 	router *gin.Engine
 }
 
+// log init
+func logInit() {
+	logConfig := &logger.LogConfig{
+		LogDir:        common.Config.GroupChat.LogDir,
+		Level:         common.Config.GroupChat.LogLevel,
+		MaxSize:       common.Config.GroupChat.LogMaxSize * 1024 * 1024,
+		MaxBackups:    common.Config.GroupChat.LogMaxBackups,
+		MaxAge:        common.Config.GroupChat.LogMaxAge,
+		ConsoleOutput: common.Config.GroupChat.LogConsoleOutput,
+		FileOutput:    common.Config.GroupChat.LogFileOutput,
+	}
+	fmt.Printf("logConfig: %+v\n", logConfig)
+	logger.InitLoggerWithConfig(logConfig)
+}
+
 // NewServer create new server instance
 func NewServer(config *ServerConfig) *Server {
 	if config == nil {
 		config = DefaultConfig()
 	}
+
+	// init log
+	logInit()
 
 	// Set Gin mode
 	gin.SetMode(gin.DebugMode)
@@ -160,6 +180,11 @@ func (s *Server) Start(indexerChainAdapter map[string]adapter.Chain) error {
 		// Close HTTP server
 		if err := server.Close(); err != nil {
 			log.Printf("Failed to close server: %v", err)
+		}
+
+		// Close logger
+		if err := logger.Close(); err != nil {
+			log.Printf("Failed to close logger: %v", err)
 		}
 	}()
 

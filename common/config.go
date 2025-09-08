@@ -122,6 +122,14 @@ type groupChatConfig struct {
 	BackupHour      int    `toml:"backupHour"`
 	BackupRetention int    `toml:"backupRetention"`
 	LuckyBagDomain  string `toml:"luckyBagDomain"`
+	// log
+	LogDir           string `toml:"logDir"`
+	LogLevel         string `toml:"logLevel"`
+	LogMaxSize       int64  `toml:"logMaxSize"`
+	LogMaxBackups    int    `toml:"logMaxBackups"`
+	LogMaxAge        int    `toml:"logMaxAge"`
+	LogConsoleOutput bool   `toml:"logConsoleOutput"`
+	LogFileOutput    bool   `toml:"logFileOutput"`
 }
 type socketConfig struct {
 	IsEnble         bool  `toml:"isEnble"`

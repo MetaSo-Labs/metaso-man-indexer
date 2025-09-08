@@ -5,6 +5,7 @@ import (
 	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/common_util/logger"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/models"
@@ -99,7 +100,8 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 		}
 
 		// Get group member count
-		userCount, err := groupDB.GetGroupMemberCount(group.GroupId)
+		// userCount, err := groupDB.GetGroupMemberCount(group.GroupId)
+		userCount, err := groupDB.GetGroupMemberCountFromList(group.GroupId)
 		if err != nil {
 			// If failed to get, use default value
 			userCount = 0
@@ -207,7 +209,8 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 		}
 
 		// Get group member count
-		userCount, err := groupDB.GetGroupMemberCount(item.GroupId)
+		// userCount, err := groupDB.GetGroupMemberCount(item.GroupId)
+		userCount, err := groupDB.GetGroupMemberCountFromList(item.GroupId)
 		if err != nil {
 			// If failed to get, use default value
 			userCount = 0
@@ -297,29 +300,59 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 
 // FetchGroupInfo Get group info
 func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, error) {
-	// Get group info
-	group, err := groupDB.GetGroupInfoByGroupId(req.GroupId)
-	if err != nil {
-		return nil, err
-	}
-	if group == nil {
-		return nil, nil
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		groupInfoTime      int64
+		latestChatTime     int64
+		memberCountTime    int64
+		responseFormatTime int64
+		totalTime          int64
+		cacheHit           bool
+	}{}
+
+	// Try to get group info from cache first
+	t := time.Now().UnixMilli()
+	group, found := cache_service.GetGroupInfoFromCache(req.GroupId)
+	if !found {
+		// Cache miss, get from database
+		var err error
+		group, err = groupDB.GetGroupInfoByGroupId(req.GroupId)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil {
+			return nil, nil
+		}
+		perfStats.cacheHit = false
+		perfStats.groupInfoTime = time.Now().UnixMilli() - t
+
+		// Update cache with the fetched data
+		cache_service.SetGroupInfoToCache(req.GroupId, group)
+	} else {
+		perfStats.cacheHit = true
+		perfStats.groupInfoTime = time.Now().UnixMilli() - t
 	}
 
+	t = time.Now().UnixMilli()
 	// Get group's latest chat info
 	latestChat, err := chatDB.GetGroupLatestChat(req.GroupId)
 	if err != nil {
 		// If failed to get, use default value
 		latestChat = nil
 	}
+	perfStats.latestChatTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Get group member count
-	userCount, err := groupDB.GetGroupMemberCount(req.GroupId)
+	userCount, err := groupDB.GetGroupMemberCountFromList(req.GroupId)
 	if err != nil {
 		// If failed to get, use default value
 		userCount = 0
 	}
+	perfStats.memberCountTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Convert to response format
 	groupItem := &respond.GroupItem{
 		CommunityId:  group.CommunityId,
@@ -385,7 +418,23 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		Chain:             group.Chain,
 		BlockHeight:       group.BlockHeight,
 	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
 
+	// Unified performance logging
+	cacheStatus := "DB"
+	if perfStats.cacheHit {
+		cacheStatus = "Cache"
+	}
+	logger.Info("[GROUP_SERVICE][FETCH_GROUP_INFO] Performance Stats - "+
+		"Total: %dms, GroupInfo: %dms, LatestChat: %dms, MemberCount: %dms, "+
+		"ResponseFormat: %dms, Source: %s",
+		perfStats.totalTime,
+		perfStats.groupInfoTime,
+		perfStats.latestChatTime,
+		perfStats.memberCountTime,
+		perfStats.responseFormatTime,
+		cacheStatus)
 	return groupItem, nil
 }
 
@@ -410,7 +459,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Printf("chats: %+v\n", chats)
+	// logger.Info("chats: %+v\n", chats)
 
 	// Convert to response format
 	var chatItems []*respond.GroupChatItem
@@ -441,7 +490,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
 			if openLuckyBag != nil {
-				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				// logger.Info("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
 				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
 					chatItem.TxId = openLuckyBag.GrabTxId
 				} else {
@@ -494,6 +543,15 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 		req.Size = 20
 	}
 
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
 	var chats []*models.TalkGroupChatV3
 	var err error
 
@@ -510,7 +568,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 		currentTimestamp = currentTimestamp * 1000000
 		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange3(req.GroupId, currentTimestamp, req.Size)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] get chat time: %d\n", time.Now().UnixMilli()-t)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
 
 	if err != nil {
 		return nil, err
@@ -546,7 +604,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
 			if openLuckyBag != nil {
-				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				// logger.Info("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
 				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
 					chatItem.TxId = openLuckyBag.GrabTxId
 				} else {
@@ -579,7 +637,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 
 		chatItems = append(chatItems, chatItem)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
 
 	//get user info
 	t2 := time.Now().UnixMilli()
@@ -589,7 +647,17 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 		}
 		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for user info time: %d\n", time.Now().UnixMilli()-t2)
+	perfStats.userInfoTime = time.Now().UnixMilli() - t2
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V3] Performance Stats - "+
+		"Total: %dms, GetChats: %dms, ResponseFormat: %dms, UserInfo: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getChatsTime,
+		perfStats.responseFormatTime,
+		perfStats.userInfoTime,
+		len(chatItems))
 
 	return &respond.GroupChatResponse{
 		Total:         int64(len(chatItems)),
@@ -604,6 +672,15 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 	if req.Size <= 0 {
 		req.Size = 20
 	}
+
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
 
 	var chats []*models.TalkGroupChatV3
 	var err error
@@ -621,7 +698,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		currentTimestamp = currentTimestamp * 1000000
 		chats, nextTimestamp, err = chatDB.GetChatsByGroupIdAndEndTimestampRange2(req.GroupId, currentTimestamp, req.Size)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] get chat time: %d\n", time.Now().UnixMilli()-t)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
 
 	if err != nil {
 		return nil, err
@@ -657,7 +734,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag)) {
 			openLuckyBag, _ := chatDB.GetOpenLuckyBagByPinId(chat.PinId)
 			if openLuckyBag != nil {
-				// fmt.Printf("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
+				// logger.Info("openLuckyBag: GrabTxId: %s, PinId: %s, GrabState: %d\n", openLuckyBag.GrabTxId, openLuckyBag.PinId, openLuckyBag.GrabState)
 				if openLuckyBag.GrabState == models.GrabStateOpenAndSend {
 					chatItem.TxId = openLuckyBag.GrabTxId
 				} else {
@@ -695,7 +772,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		// 	nextTimestamp = chat.Timestamp
 		// }
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for chat item info time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
 
 	//get user info
 	t2 := time.Now().UnixMilli()
@@ -705,7 +782,17 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 		}
 		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] for user info time: %d\n", time.Now().UnixMilli()-t2)
+	perfStats.userInfoTime = time.Now().UnixMilli() - t2
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_V2] Performance Stats - "+
+		"Total: %dms, GetChats: %dms, ResponseFormat: %dms, UserInfo: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getChatsTime,
+		perfStats.responseFormatTime,
+		perfStats.userInfoTime,
+		len(chatItems))
 
 	return &respond.GroupChatResponse{
 		Total:         int64(len(chatItems)),
@@ -724,6 +811,14 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		req.Cursor = 0
 	}
 
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getMembersTime     int64
+		responseFormatTime int64
+		totalTime          int64
+	}{}
+
 	var members []*models.TalkGroupJoinModel
 	var total int64
 	var err error
@@ -736,7 +831,7 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST] get group members time: %d\n", time.Now().UnixMilli()-t)
+		perfStats.getMembersTime = time.Now().UnixMilli() - t
 
 		// Sort by timestamp in descending order
 		sort.Slice(allMembers, func(i, j int) bool {
@@ -764,10 +859,12 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		}
 	} else {
 		// Use original pagination logic
+		t := time.Now().UnixMilli()
 		members, total, err = groupDB.GetGroupMembersWithPagination(req.GroupId, req.Cursor, req.Size)
 		if err != nil {
 			return nil, err
 		}
+		perfStats.getMembersTime = time.Now().UnixMilli() - t
 	}
 
 	t1 := time.Now().UnixMilli()
@@ -784,7 +881,16 @@ func FetchGroupMemberList(req *request.FetchGroupMemberListRequest) (*respond.Gr
 		}
 		memberItems = append(memberItems, memberItem)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST] for member item info time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST] Performance Stats - "+
+		"Total: %dms, GetMembers: %dms, ResponseFormat: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getMembersTime,
+		perfStats.responseFormatTime,
+		len(memberItems))
 
 	return &respond.GroupMemberResponse{
 		Total: total,
@@ -802,23 +908,33 @@ func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.
 		req.Cursor = 0
 	}
 
-	t := time.Now().UnixMilli()
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getMembersTime     int64
+		responseFormatTime int64
+		totalTime          int64
+		cacheHit           bool
+	}{}
 
 	// Try to get from cache first
 	var allMembers []*models.TalkGroupPerson
 	var err error
 
+	t := time.Now().UnixMilli()
 	if personList, found := cache_service.GetGroupMemberListFromCache(req.GroupId); found {
 		// Use cached data
 		allMembers = personList.Persons
-		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] get group members from cache time: %d\n", time.Now().UnixMilli()-t)
+		perfStats.cacheHit = true
+		perfStats.getMembersTime = time.Now().UnixMilli() - t
 	} else {
 		// Cache miss, get from database
 		allMembers, err = groupDB.GetGroupMembersFromList(req.GroupId)
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] get group members from database time: %d\n", time.Now().UnixMilli()-t)
+		perfStats.cacheHit = false
+		perfStats.getMembersTime = time.Now().UnixMilli() - t
 
 		// Update cache with the data from database
 		if len(allMembers) > 0 {
@@ -860,7 +976,21 @@ func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.
 		}
 		memberItems = append(memberItems, memberItem)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] for member item info time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	cacheStatus := "DB"
+	if perfStats.cacheHit {
+		cacheStatus = "Cache"
+	}
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] Performance Stats - "+
+		"Total: %dms, GetMembers: %dms, ResponseFormat: %dms, Items: %d, Source: %s",
+		perfStats.totalTime,
+		perfStats.getMembersTime,
+		perfStats.responseFormatTime,
+		len(memberItems),
+		cacheStatus)
 
 	return &respond.GroupMemberResponse{
 		Total: total,
@@ -921,13 +1051,30 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 		req.Cursor = 0
 	}
 
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		contextListTime    int64
+		groupInfoCacheTime int64
+		groupInfoDBTime    int64
+		latestChatTime     int64
+		memberCountTime    int64
+		chatIndexTime      int64
+		privateChatTime    int64
+		responseFormatTime int64
+		totalTime          int64
+	}{}
+
 	// Get user's context list (group chat + private chat)
+	t := time.Now().UnixMilli()
 	contextList, err := chatDB.GetMetaIdContextList(req.MetaId)
 	if err != nil {
 		return nil, err
 	}
+	perfStats.contextListTime = time.Now().UnixMilli() - t
 
 	// Convert to response format
+	t = time.Now().UnixMilli()
 	var chatInfoItems []*respond.ChatInfoItem
 	for _, item := range contextList.Items {
 		chatInfoItem := &respond.ChatInfoItem{
@@ -947,25 +1094,43 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 		// Handle different fields based on type
 		if item.Type == "1" || item.Type == "" {
 			item.Type = "1"
-			// Group chat type, get group detailed info
-			group, err := groupDB.GetGroupInfoByGroupId(item.GroupId)
-			if err != nil || group == nil {
-				continue
+			t1 := time.Now().UnixMilli()
+			group, found := cache_service.GetGroupInfoFromCache(item.GroupId)
+			if !found {
+				// Cache miss, get from database
+				var err error
+				group, err = groupDB.GetGroupInfoByGroupId(item.GroupId)
+				if err != nil {
+					return nil, err
+				}
+				if group == nil {
+					return nil, nil
+				}
+				perfStats.groupInfoDBTime += time.Now().UnixMilli() - t1
+
+				// Update cache with the fetched data
+				cache_service.SetGroupInfoToCache(item.GroupId, group)
+			} else {
+				perfStats.groupInfoCacheTime += time.Now().UnixMilli() - t1
 			}
 
+			t2 := time.Now().UnixMilli()
 			// Get group's latest chat info
 			latestChat, err := chatDB.GetGroupLatestChat(item.GroupId)
 			if err != nil {
 				// If failed to get, use default value
 				latestChat = nil
 			}
+			perfStats.latestChatTime += time.Now().UnixMilli() - t2
 
+			t3 := time.Now().UnixMilli()
 			// Get group member count
-			userCount, err := groupDB.GetGroupMemberCount(item.GroupId)
+			userCount, err := groupDB.GetGroupMemberCountFromList(item.GroupId)
 			if err != nil {
 				// If failed to get, use default value
 				userCount = 0
 			}
+			perfStats.memberCountTime += time.Now().UnixMilli() - t3
 
 			// Fill group chat specific fields
 			chatInfoItem.CommunityId = group.CommunityId
@@ -995,21 +1160,24 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfoItem.BlockHeight = latestChat.BlockHeight
 				chatInfoItem.UserInfo = common_service.FetchMetaIDUserInfo(latestChat.CreateAddress)
 
+				t4 := time.Now().UnixMilli()
 				// Get group chat index
 				chatInfoItem.Index = -1
 				chatInfo, _ := chatDB.GetChatByPinId(latestChat.LastMessagePinId)
 				if chatInfo != nil {
 					chatInfoItem.Index = chatInfo.Index
 				}
+				perfStats.chatIndexTime += time.Now().UnixMilli() - t4
 			}
 		} else if item.Type == "2" {
-			fmt.Printf("Private chat type, item: %+v\n", item)
+			t5 := time.Now().UnixMilli()
 			// Private chat type, get latest private chat message
 			latestPrivateChat, err := privateDB.GetPrivateChatByPinId(item.LastMessagePinId)
 			if err != nil {
 				// If failed to get, use default value
 				latestPrivateChat = nil
 			}
+			perfStats.privateChatTime += time.Now().UnixMilli() - t5
 
 			// If latest private chat info is obtained, update related fields
 			if latestPrivateChat != nil {
@@ -1038,6 +1206,24 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 
 		chatInfoItems = append(chatInfoItems, chatInfoItem)
 	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[GROUP_SERVICE][FETCH_LATEST_CHAT_INFO_LIST] Performance Stats - "+
+		"Total: %dms, ContextList: %dms, GroupInfoCache: %dms, GroupInfoDB: %dms, "+
+		"LatestChat: %dms, MemberCount: %dms, ChatIndex: %dms, PrivateChat: %dms, "+
+		"ResponseFormat: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.contextListTime,
+		perfStats.groupInfoCacheTime,
+		perfStats.groupInfoDBTime,
+		perfStats.latestChatTime,
+		perfStats.memberCountTime,
+		perfStats.chatIndexTime,
+		perfStats.privateChatTime,
+		perfStats.responseFormatTime,
+		len(chatInfoItems))
 
 	return &respond.ChatInfoResponse{
 		Total: int64(len(chatInfoItems)),
@@ -1067,7 +1253,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Printf("private chats: %+v\n", chats)
+	// logger.Info("private chats: %+v\n", chats)
 
 	// Convert to response format
 	var chatItems []*respond.PrivateChatItem
@@ -1220,6 +1406,104 @@ func GetUserInfoByMetaId(metaId string) (*respond.UserInfoResponse, error) {
 	}, nil
 }
 
+// GetBatchUserInfo Get user information by addresses or metaIds
+func GetBatchUserInfo(addresses []string, metaIds []string) (*respond.BatchUserInfoResponse, error) {
+	if len(addresses) == 0 && len(metaIds) == 0 {
+		return nil, fmt.Errorf("both addresses and metaIds are empty")
+	}
+
+	// limit total count to 100
+	totalCount := len(addresses) + len(metaIds)
+	if totalCount > 100 {
+		return nil, fmt.Errorf("total count exceeds maximum limit of 100, got %d", totalCount)
+	}
+
+	var userInfoItems []*respond.UserInfoResponse
+	var errors []string
+
+	// Process addresses
+	for _, address := range addresses {
+		if address == "" {
+			continue
+		}
+
+		userInfo := common_service.FetchMetaIDUserInfo(address)
+		if userInfo == nil {
+			errors = append(errors, fmt.Sprintf("user info not found for address: %s", address))
+			continue
+		}
+
+		// Get chat public key if not available
+		if userInfo.ChatPublicKey == "" {
+			chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
+			if chatPublicKeyInfo != nil {
+				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+			}
+		} else {
+			if userInfo.ChatPublicKeyId == "" {
+				chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByAddress(address)
+				if chatPublicKeyInfo != nil {
+					if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+						userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+						userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+					}
+				}
+			}
+		}
+
+		userInfoItems = append(userInfoItems, &respond.UserInfoResponse{
+			Address:  address,
+			MetaId:   userInfo.Metaid,
+			UserInfo: userInfo,
+		})
+	}
+
+	// Process metaIds
+	for _, metaId := range metaIds {
+		if metaId == "" {
+			continue
+		}
+
+		userInfo := common_service.FetchMetaIDUserInfoInfoByMetaId(metaId)
+		if userInfo == nil {
+			errors = append(errors, fmt.Sprintf("user info not found for metaId: %s", metaId))
+			continue
+		}
+
+		// Get chat public key if not available
+		if userInfo.ChatPublicKey == "" {
+			chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
+			if chatPublicKeyInfo != nil {
+				userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+				userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+			}
+		} else {
+			if userInfo.ChatPublicKeyId == "" {
+				chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(metaId)
+				if chatPublicKeyInfo != nil {
+					if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == userInfo.ChatPublicKey {
+						userInfo.ChatPublicKey = chatPublicKeyInfo.ChatPublicKey
+						userInfo.ChatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+					}
+				}
+			}
+		}
+
+		userInfoItems = append(userInfoItems, &respond.UserInfoResponse{
+			MetaId:   metaId,
+			Address:  userInfo.Address,
+			UserInfo: userInfo,
+		})
+	}
+
+	return &respond.BatchUserInfoResponse{
+		Total:  int64(len(userInfoItems)),
+		List:   userInfoItems,
+		Errors: errors,
+	}, nil
+}
+
 // GetCurrentMaxGroupChatIndex Get current maximum index for a group
 func GetCurrentMaxGroupChatIndex(groupId string) (*respond.MaxIndexResponse, error) {
 	if groupId == "" {
@@ -1265,13 +1549,22 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 		req.Size = 20
 	}
 
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
 	var chats []*models.TalkGroupChatV3
 	var lastIndex int64
 	var err error
 
 	t := time.Now().UnixMilli()
 	chats, lastIndex, err = chatDB.GetChatsByGroupIdAndStartIndexRange(req.GroupId, req.StartIndex, req.Size)
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] get chat time: %d\n", time.Now().UnixMilli()-t)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
 
 	if err != nil {
 		return nil, err
@@ -1337,7 +1630,7 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 
 		chatItems = append(chatItems, chatItem)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
 
 	//get user info
 	t2 := time.Now().UnixMilli()
@@ -1347,7 +1640,17 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 		}
 		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] for user info time: %d\n", time.Now().UnixMilli()-t2)
+	perfStats.userInfoTime = time.Now().UnixMilli() - t2
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_INDEX] Performance Stats - "+
+		"Total: %dms, GetChats: %dms, ResponseFormat: %dms, UserInfo: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getChatsTime,
+		perfStats.responseFormatTime,
+		perfStats.userInfoTime,
+		len(chatItems))
 
 	return &respond.GroupChatResponse{
 		Total:     int64(len(chatItems)),
@@ -1363,13 +1666,22 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 		req.Size = 20
 	}
 
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
 	var chats []*models.TalkGroupChatV3
 	var lastTimestamp int64
 	var err error
 
 	t := time.Now().UnixMilli()
 	chats, lastTimestamp, err = chatDB.GetChatsByGroupIdAndStartTimestampRange(req.GroupId, req.StartTimestamp, req.Size)
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] get chat time: %d\n", time.Now().UnixMilli()-t)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
 
 	if err != nil {
 		return nil, err
@@ -1436,7 +1748,7 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 
 		chatItems = append(chatItems, chatItem)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] convert chat time: %d\n", time.Now().UnixMilli()-t1)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
 
 	//get user info
 	t2 := time.Now().UnixMilli()
@@ -1446,7 +1758,17 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 		}
 		chatItem.UserInfo = common_service.FetchMetaIDUserInfo(chatItem.Address)
 	}
-	fmt.Printf("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] for user info time: %d\n", time.Now().UnixMilli()-t2)
+	perfStats.userInfoTime = time.Now().UnixMilli() - t2
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// Unified performance logging
+	logger.Info("[CHAT_SERVICE][FETCH_GROUP_CHAT_LIST_BY_START_TIME] Performance Stats - "+
+		"Total: %dms, GetChats: %dms, ResponseFormat: %dms, UserInfo: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getChatsTime,
+		perfStats.responseFormatTime,
+		perfStats.userInfoTime,
+		len(chatItems))
 
 	return &respond.GroupChatResponse{
 		Total:         int64(len(chatItems)),
@@ -1472,7 +1794,8 @@ func SearchGroupsByNameOrId(req *request.SearchGroupRequest) (*respond.GroupSear
 	for _, result := range results {
 
 		// Get group member count
-		userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+		// userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+		userCount, err := groupDB.GetGroupMemberCountFromList(result.GroupId)
 		if err != nil {
 			// If failed to get, use default value
 			userCount = 0
@@ -1508,7 +1831,7 @@ func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*res
 	userResults, err := common_service.SearchAllMetaIDUserInfoInfo(req.Query)
 	if err != nil {
 		// Log error but continue
-		fmt.Printf("Failed to search users: %v\n", err)
+		logger.Info("Failed to search users: %v\n", err)
 	} else {
 		// Convert user results to combined format
 		for _, result := range userResults {
@@ -1529,12 +1852,13 @@ func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*res
 	groupResults, err := groupDB.SearchGroups(req.Query, int(req.Size))
 	if err != nil {
 		// Log error but continue with user search
-		fmt.Printf("Failed to search groups: %v\n", err)
+		logger.Info("Failed to search groups: %v\n", err)
 	} else {
 		// Convert group results to combined format
 		for _, result := range groupResults {
 			// Get group member count
-			userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+			// userCount, err := groupDB.GetGroupMemberCount(result.GroupId)
+			userCount, err := groupDB.GetGroupMemberCountFromList(result.GroupId)
 			if err != nil {
 				// If failed to get, use default value
 				userCount = 0

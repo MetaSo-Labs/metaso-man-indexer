@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"manindexer/basicprotocols/group_chat/api/respond"
+	"manindexer/basicprotocols/group_chat/common_util/logger"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
@@ -117,11 +118,25 @@ func startLuckyBagGrabCleanupGoroutine() {
 
 // GetLuckyBagWithOpenList Get lucky bag object and claimed list by groupId and pinId
 func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoResponse, error) {
+	// 性能监控：记录开始时间
+	startTime := time.Now()
+	var perfStats = struct {
+		getLuckyBagTime        int64
+		getOpenListTime        int64
+		getResidueListTime     int64
+		processOpenListTime    int64
+		processResidueListTime int64
+		responseFormatTime     int64
+		totalTime              int64
+	}{}
+
+	t := time.Now().UnixMilli()
 	// Get lucky bag object
 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
 	if err != nil {
 		return nil, err
 	}
+	perfStats.getLuckyBagTime = time.Now().UnixMilli() - t
 
 	if luckyBag == nil {
 		return nil, errors.New("lucky bag not found")
@@ -132,17 +147,21 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		return nil, errors.New("lucky bag not match")
 	}
 
+	t = time.Now().UnixMilli()
 	// Get claimed lucky bag list
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {
 		return nil, err
 	}
+	perfStats.getOpenListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Get reclaimed lucky bag list
 	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
 	if err != nil {
 		return nil, err
 	}
+	perfStats.getResidueListTime = time.Now().UnixMilli() - t
 
 	// Build LuckyBagInfoResponse
 	response := &respond.LuckyBagInfoResponse{
@@ -197,6 +216,7 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 
 		// Check claimed lucky bags
 		if openList != nil {
+			t = time.Now().UnixMilli()
 			for _, openItem := range openList.Items {
 				if openItem.LuckyBagOutIndex == payItem.Index {
 					// Get detailed open lucky bag info from TalkGroupOpenLuckyBagPinCollection
@@ -219,10 +239,12 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 					}
 				}
 			}
+			perfStats.processOpenListTime += time.Now().UnixMilli() - t
 		}
 
 		// Check reclaimed lucky bags
 		if residueList != nil {
+			t = time.Now().UnixMilli()
 			for _, residueItem := range residueList.Items {
 				// Get detailed residue lucky bag info from TalkGroupResidueLuckyBagPinCollection
 				residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
@@ -247,23 +269,53 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 					}
 				}
 			}
+			perfStats.processResidueListTime += time.Now().UnixMilli() - t
 		}
 
 		response.PayList = append(response.PayList, infoPayList)
 	}
 	response.UsedCount = strconv.Itoa(usedCount)
+	perfStats.responseFormatTime = time.Now().UnixMilli() - startTime.UnixMilli()
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// 统一性能日志记录
+	logger.Info("[LUCKY_BAG_SERVICE][GET_LUCKY_BAG_WITH_OPEN_LIST] Performance Stats - "+
+		"Total: %dms, GetLuckyBag: %dms, GetOpenList: %dms, GetResidueList: %dms, "+
+		"ProcessOpenList: %dms, ProcessResidueList: %dms, ResponseFormat: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getLuckyBagTime,
+		perfStats.getOpenListTime,
+		perfStats.getResidueListTime,
+		perfStats.processOpenListTime,
+		perfStats.processResidueListTime,
+		perfStats.responseFormatTime,
+		len(response.PayList))
 
 	return response, nil
 }
 
 // GetLuckyBagWithUnusedList Get lucky bag object and unclaimed list by groupId and pinId
 func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedResponse, error) {
+	// 性能监控：记录开始时间
+	startTime := time.Now()
+	var perfStats = struct {
+		getLuckyBagTime        int64
+		getOpenListTime        int64
+		getResidueListTime     int64
+		processOpenListTime    int64
+		processResidueListTime int64
+		buildUnusedListTime    int64
+		responseFormatTime     int64
+		totalTime              int64
+	}{}
+
+	t := time.Now().UnixMilli()
 	// Get lucky bag object
 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
 	if err != nil {
 		return nil, err
 	}
-
+	perfStats.getLuckyBagTime = time.Now().UnixMilli() - t
 	if luckyBag == nil {
 		return nil, errors.New("lucky bag not found")
 	}
@@ -285,21 +337,25 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		}
 	}
 
+	t = time.Now().UnixMilli()
 	// Get claimed lucky bag list
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {
 		return nil, err
 	}
+	perfStats.getOpenListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Get reclaimed lucky bag list
 	residueList, err := chatDB.GetResidueLuckyBagList(pinId)
 	if err != nil {
 		return nil, err
 	}
-
+	perfStats.getResidueListTime = time.Now().UnixMilli() - t
 	// Build used UTXO index set
 	usedIndices := make(map[int64]bool)
 
+	t = time.Now().UnixMilli()
 	// Add claimed lucky bag indices
 	for _, openItem := range openList.Items {
 		openLuckyBag, err := chatDB.GetOpenLuckyBagByPinId(openItem.OpenPinId)
@@ -308,7 +364,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		}
 		usedIndices[openLuckyBag.Index] = true
 	}
+	perfStats.processOpenListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Add reclaimed lucky bag indices
 	for _, residueItem := range residueList.Items {
 		residueLuckyBag, err := chatDB.GetResidueLuckyBagByLuckyBagPinId(residueItem.ResiduePinId)
@@ -321,7 +379,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 			}
 		}
 	}
+	perfStats.processResidueListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Build LuckyBagUnusedResponse
 	response := &respond.LuckyBagUnusedResponse{
 		PinId:               luckyBag.PinId,
@@ -371,6 +431,21 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 			response.Unused = append(response.Unused, unused)
 		}
 	}
+	perfStats.buildUnusedListTime = time.Now().UnixMilli() - t
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// 统一性能日志记录
+	logger.Info("[LUCKY_BAG_SERVICE][GET_LUCKY_BAG_WITH_UNUSED_LIST] Performance Stats - "+
+		"Total: %dms, GetLuckyBag: %dms, GetOpenList: %dms, GetResidueList: %dms, "+
+		"ProcessOpenList: %dms, ProcessResidueList: %dms, BuildUnusedList: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getLuckyBagTime,
+		perfStats.getOpenListTime,
+		perfStats.getResidueListTime,
+		perfStats.processOpenListTime,
+		perfStats.processResidueListTime,
+		perfStats.buildUnusedListTime,
+		len(response.Unused))
 
 	return response, nil
 }
@@ -397,10 +472,26 @@ type ProUsed struct {
 }
 
 func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
+	// 性能监控：记录开始时间
+	startTime := time.Now()
+	var perfStats = struct {
+		getLuckyBagTime        int64
+		checkUserInGroupTime   int64
+		getOpenListTime        int64
+		processOpenListTime    int64
+		getResidueListTime     int64
+		processResidueListTime int64
+		getUnusedListTime      int64
+		commonGrabTime         int64
+		totalTime              int64
+	}{}
+
+	t := time.Now().UnixMilli()
 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
 	if err != nil {
 		return "", err
 	}
+	perfStats.getLuckyBagTime = time.Now().UnixMilli() - t
 	if luckyBag == nil {
 		return "", errors.New("lucky bag not found")
 	}
@@ -414,6 +505,7 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 	// 	return "", errors.New("error")
 	// }
 
+	t = time.Now().UnixMilli()
 	// Check if user is in group
 	isInGroup, err := chatDB.IsUserInGroup(metaId, groupId)
 	if err != nil {
@@ -422,6 +514,7 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 	if !isInGroup {
 		return "", errors.New("user not in group")
 	}
+	perfStats.checkUserInGroupTime = time.Now().UnixMilli() - t
 
 	if luckyBag.Domain != "" && luckyBag.LuckyBagAddress != "" {
 		if luckyBag.GenType == 2 {
@@ -435,12 +528,15 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		}
 	}
 
+	t = time.Now().UnixMilli()
 	// Get claimed lucky bag list
 	openList, err := chatDB.GetOpenLuckyBagList(pinId)
 	if err != nil {
 		return "", err
 	}
+	perfStats.getOpenListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Build claimed lucky bag list
 	openRedList := make([]*OpenRedMetaId, 0)
 	for _, v := range openList.Items {
@@ -472,13 +568,17 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 			return "", errors.New("already grab")
 		}
 	}
+	perfStats.processOpenListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Get reclaimed lucky bag list
 	residueRedEnvelopeList, err := chatDB.GetResidueLuckyBagList(pinId)
 	if err != nil {
 		return "", err
 	}
+	perfStats.getResidueListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	if residueRedEnvelopeList != nil && len(residueRedEnvelopeList.Items) != 0 {
 		for _, residueItem := range residueRedEnvelopeList.Items {
 			// Get reclaimed lucky bag detailed info
@@ -511,7 +611,9 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 			}
 		}
 	}
+	perfStats.processResidueListTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	// Get unclaimed lucky bag list
 	unusedList := make([]*respond.UnusedList, 0)
 	for _, v := range luckyBag.PayList {
@@ -546,20 +648,54 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		}
 		unusedList = append(unusedList, unused)
 	}
+	perfStats.getUnusedListTime = time.Now().UnixMilli() - t
 
 	if len(unusedList) <= 0 {
 		return "", errors.New("LuckyBag had been all grab.")
 	}
 
+	t = time.Now().UnixMilli()
 	err = commonGrab(luckyBag, unusedList, metaId, address)
 	if err != nil {
 		return "", err
 	}
+	perfStats.commonGrabTime = time.Now().UnixMilli() - t
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// 统一性能日志记录
+	logger.Info("[LUCKY_BAG_SERVICE][GRAB_LUCKY_BAG] Performance Stats - "+
+		"Total: %dms, GetLuckyBag: %dms, CheckUserInGroup: %dms, GetOpenList: %dms, "+
+		"ProcessOpenList: %dms, GetResidueList: %dms, ProcessResidueList: %dms, "+
+		"GetUnusedList: %dms, CommonGrab: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.getLuckyBagTime,
+		perfStats.checkUserInGroupTime,
+		perfStats.getOpenListTime,
+		perfStats.processOpenListTime,
+		perfStats.getResidueListTime,
+		perfStats.processResidueListTime,
+		perfStats.getUnusedListTime,
+		perfStats.commonGrabTime,
+		len(unusedList))
 
 	return "success", nil
 }
 
 func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.UnusedList, metaId, address string) error {
+	// 性能监控：记录开始时间
+	startTime := time.Now()
+	var perfStats = struct {
+		lockTime                 int64
+		cacheCheckTime           int64
+		dbOperationsTime         int64
+		getOpenLuckyBagTime      int64
+		saveOpenLuckyBagTime     int64
+		saveOpenLuckyBagListTime int64
+		enqueueMessageTime       int64
+		saveChatTime             int64
+		totalTime                int64
+	}{}
+
 	type grabEntity struct {
 		unusedIndex   int64
 		unusedAmount  string
@@ -574,8 +710,9 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	luckyBagMutex := getLuckyBagGrabMutex(luckyBag.PinId)
 	luckyBagMutex.Lock()
 	defer luckyBagMutex.Unlock()
-	log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [Lock] %d", luckyBag.PinId, metaId, address, t)
+	perfStats.lockTime = time.Now().UnixMilli() - t
 
+	t = time.Now().UnixMilli()
 	for _, unused := range unusedList {
 		// Use cache service to check if lucky bag has been grabbed
 		usedMetaId, err := cache_service.GetCacheGiftInfo(luckyBag.GroupId, luckyBag.PinId, unused.Index)
@@ -619,14 +756,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			}
 		}
 	}
+	perfStats.cacheCheckTime = time.Now().UnixMilli() - t
 
 	if !has {
-		log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [UnLock]NoLuckyBag [%d]", luckyBag.PinId, metaId, address, time.Now().UnixMilli()-t)
 		return errors.New("LuckyBag had been all grab.")
 	}
 
-	log.Printf("[commonGrab] luckyBagPinId: %s, metaId: %s, address: %s [UnLock]Success [%d]", luckyBag.PinId, metaId, address, time.Now().UnixMilli()-t)
-
+	t = time.Now().UnixMilli()
 	hasSuccess := false
 	for _, v := range grabEntityList {
 		vins := make([]*models.TxIn, 0)
@@ -646,13 +782,15 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		txId := fmt.Sprintf("%s:%d:%s:%s", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
 		pinId := fmt.Sprintf("%s:%d:%s:%s:pin", luckyBag.TxId, v.unusedIndex, v.unusedAddress, metaId)
 
+		tn1 := time.Now().UnixMilli()
 		// Check if this PinId has already been saved
 		existingOpen, err := chatDB.GetOpenLuckyBagByPinId(pinId)
 		if err == nil && existingOpen != nil {
 			// Already exists, skip processing
 			return errors.New("already grab")
 		}
-
+		tn2 := time.Now().UnixMilli()
+		perfStats.getOpenLuckyBagTime = tn2 - tn1
 		// Create grab lucky bag record
 		openLuckyBag := &models.TalkGroupOpenLuckyBagV3{
 			CommunityId:         "", // Need to get from group info
@@ -688,12 +826,16 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			GrabMsg:             "",
 		}
 
+		tn3 := time.Now().UnixMilli()
+
 		// Save grab lucky bag record to TalkGroupOpenLuckyBagPinCollection
 		err = chatDB.SaveOpenLuckyBag(openLuckyBag)
 		if err != nil {
 			log.Printf("SaveOpenLuckyBag err: %v", err)
 			continue
 		}
+		tn4 := time.Now().UnixMilli()
+		perfStats.saveOpenLuckyBagTime = tn4 - tn3
 
 		// Save grab lucky bag list record to TalkGroupOpenLuckyBagListCollection
 		// use optimistic lock mechanism to ensure atomicity, no distributed lock
@@ -702,13 +844,18 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			log.Printf("SaveOpenLuckyBagList err: %v", err)
 			continue
 		}
+		tn5 := time.Now().UnixMilli()
+		perfStats.saveOpenLuckyBagListTime = tn5 - tn4
 
+		tn6 := time.Now().UnixMilli()
 		// Add grab lucky bag record to queue to be processed
 		err = chatDB.EnqueueOpenLuckyBagMessage(openLuckyBag)
 		if err != nil {
 			log.Printf("EnqueueOpenLuckyBagMessage err: %v", err)
 			continue
 		}
+		tn7 := time.Now().UnixMilli()
+		perfStats.enqueueMessageTime = tn7 - tn6
 
 		// Create chat message model (for group chat display)
 		chat := &models.TalkGroupChatV3{
@@ -729,27 +876,36 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			BlockHeight: openLuckyBag.BlockHeight,
 		}
 
+		tn8 := time.Now().UnixMilli()
 		// Save chat message to TalkGroupChatPinCollection
 		err = chatDB.SaveChat(chat)
 		if err != nil {
 			return err
 		}
-
-		// Save timestamp index (save to which collection based on user state)
-		// err = chatDB.SaveChatTimestampWithState(chat)
-		// if err != nil {
-		// 	return err
-		// }
-
-		// // Add message to queue to asynchronously update group list
-		// err = chatDB.EnqueueChatMessage(chat)
-		// if err != nil {
-		// 	return err
-		// }
+		tn9 := time.Now().UnixMilli()
+		perfStats.saveChatTime = tn9 - tn8
 
 		hasSuccess = true
 		break // Only process one lucky bag
 	}
+	perfStats.dbOperationsTime = time.Now().UnixMilli() - t
+	perfStats.totalTime = time.Since(startTime).Milliseconds()
+
+	// 统一性能日志记录
+	logger.Info("[LUCKY_BAG_SERVICE][COMMON_GRAB] Performance Stats - "+
+		"Total: %dms, Lock: %dms, CacheCheck: %dms, DBOperations: %dms, "+
+		"GetOpenLuckyBag: %dms, SaveOpenLuckyBag: %dms, SaveOpenLuckyBagList: %dms, "+
+		"EnqueueMessage: %dms, SaveChat: %dms, Items: %d",
+		perfStats.totalTime,
+		perfStats.lockTime,
+		perfStats.cacheCheckTime,
+		perfStats.dbOperationsTime,
+		perfStats.getOpenLuckyBagTime,
+		perfStats.saveOpenLuckyBagTime,
+		perfStats.saveOpenLuckyBagListTime,
+		perfStats.enqueueMessageTime,
+		perfStats.saveChatTime,
+		len(grabEntityList))
 
 	if !hasSuccess {
 		return errors.New("Grab err.")

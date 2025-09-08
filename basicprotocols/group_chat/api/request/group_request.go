@@ -112,3 +112,9 @@ type SearchGroupMembersRequest struct {
 	Query   string `form:"query"`   // Search query (user name, metaId)
 	Size    int64  `form:"size"`    // Page size
 }
+
+// BatchUserInfoRequest Batch user info request
+type BatchUserInfoRequest struct {
+	Addresses []string `json:"addresses"` // List of user addresses
+	MetaIds   []string `json:"metaIds"`   // List of user metaIds
+}

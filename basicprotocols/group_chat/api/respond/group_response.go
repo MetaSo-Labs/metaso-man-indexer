@@ -300,6 +300,13 @@ type UserInfoResponse struct {
 	UserInfo *UserInfo `json:"userInfo"` // User information
 }
 
+// BatchUserInfoResponse Batch user information response
+type BatchUserInfoResponse struct {
+	Total  int64               `json:"total"`  // Total number of successful results
+	List   []*UserInfoResponse `json:"list"`   // List of user information
+	Errors []string            `json:"errors"` // List of error messages for failed lookups
+}
+
 // GroupSearchItem Group search result item
 type GroupSearchItem struct {
 	GroupId     string `json:"groupId"`     // Group ID

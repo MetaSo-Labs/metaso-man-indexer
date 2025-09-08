@@ -13,6 +13,8 @@ services:
     volumes:
       # Data persistence - map to external host directory
       - ../data/pebble_data:/man/pebble_data
+      # Logs persistence - map to external host directory
+      - ../data/log_chat:/man/log_chat
       # Configuration file mount (optional)
       - ./config_testnet.toml:/man/config_testnet.toml:ro
     environment:
