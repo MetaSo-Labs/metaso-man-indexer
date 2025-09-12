@@ -83,7 +83,7 @@ var (
 	// Sync queue
 	syncQueue chan syncTask
 	// Number of sync worker goroutines
-	syncWorkers = 5
+	syncWorkers = 10
 )
 
 // syncTask Sync task
@@ -97,7 +97,7 @@ type syncTask struct {
 // InitLuckyBagCache Initialize lucky bag cache
 func InitLuckyBagCache(ttl time.Duration) {
 	// Initialize sync queue
-	syncQueue = make(chan syncTask, 10000) // Buffer 10000 tasks
+	syncQueue = make(chan syncTask, 20000) // Buffer 20000 tasks
 
 	// Start sync worker goroutines
 	for i := 0; i < syncWorkers; i++ {

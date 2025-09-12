@@ -116,6 +116,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 		Img:                 luckyBag.Img,
 		ImgType:             luckyBag.ImgType,
 		Amount:              luckyBag.Amount,
+		LuckyTotalAmount:    luckyBag.LuckyTotalAmount,
+		LuckyTotalFee:       luckyBag.LuckyTotalFee,
+		FeeRate:             luckyBag.FeeRate,
 		Count:               luckyBag.Count,
 		ValidCount:          luckyBag.ValidCount,
 		UsedCount:           "0",
@@ -128,6 +131,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 		RequireCollectionId: luckyBag.RequireCollectionId,
 		LimitAmount:         luckyBag.LimitAmount,
 	}
+	if response.LuckyTotalAmount == "" || response.LuckyTotalAmount == "0" {
+		response.LuckyTotalAmount = luckyBag.Amount
+	}
 
 	usedCount := 0
 	// Convert PayList - Note that ProInfoPayList has fewer fields, need to fill default values
@@ -138,6 +144,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 			Amount:       payItem.Amount,
 			Address:      payItem.Address,
 			Used:         false,
+			LuckyAmount:  payItem.LuckyAmount,
+			LuckyFee:     payItem.LuckyFee,
+			LuckyFeeRate: payItem.LuckyFeeRate,
 			GradTxId:     "",
 			GradPinId:    "",
 			GradMetaId:   "",
@@ -147,6 +156,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 			ScriptPubKey: "",
 			IsBest:       false,
 			IsWithdraw:   false,
+		}
+		if infoPayList.LuckyAmount == "" || infoPayList.LuckyAmount == "0" {
+			infoPayList.LuckyAmount = payItem.Amount
 		}
 
 		// Check claimed lucky bags
@@ -415,6 +427,9 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Amount:              luckyBag.Amount,
+		LuckyTotalAmount:    luckyBag.LuckyTotalAmount,
+		LuckyTotalFee:       luckyBag.LuckyTotalFee,
+		FeeRate:             luckyBag.FeeRate,
 		Count:               luckyBag.Count,
 		ValidCount:          luckyBag.ValidCount,
 		Content:             luckyBag.Content,
@@ -428,7 +443,9 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 		RequireCollectionId: luckyBag.RequireCollectionId,
 		LimitAmount:         luckyBag.LimitAmount,
 	}
-
+	if response.LuckyTotalAmount == "" || response.LuckyTotalAmount == "0" {
+		response.LuckyTotalAmount = luckyBag.Amount
+	}
 	// Get unused UTXO list
 	for _, v := range luckyBag.PayList {
 		if !usedIndices[v.Index] {
@@ -437,6 +454,12 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 				Amount:       v.Amount,
 				Address:      v.Address,
 				ScriptPubKey: "", // Need to get from LuckyBagVouts
+				LuckyAmount:  v.LuckyAmount,
+				LuckyFee:     v.LuckyFee,
+				LuckyFeeRate: v.LuckyFeeRate,
+			}
+			if unused.LuckyAmount == "" || unused.LuckyAmount == "0" {
+				unused.LuckyAmount = v.Amount
 			}
 
 			// Get ScriptPubKey from LuckyBagVouts
@@ -686,9 +709,12 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 		}
 
 		unused := &respond.UnusedList{
-			Index:   v.Index,
-			Amount:  v.Amount,
-			Address: v.Address,
+			Index:        v.Index,
+			Amount:       v.Amount,
+			Address:      v.Address,
+			LuckyAmount:  v.LuckyAmount,
+			LuckyFee:     v.LuckyFee,
+			LuckyFeeRate: v.LuckyFeeRate,
 		}
 		unusedList = append(unusedList, unused)
 	}
@@ -708,10 +734,13 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 // commonGrabV2 Execute common logic for grabbing lucky bags (V2 with cache)
 func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.UnusedList, metaId, address string) error {
 	type grabEntity struct {
-		unusedIndex   int64
-		unusedAmount  string
-		unusedAddress string
-		tokenIndex    string
+		unusedIndex        int64
+		unusedAmount       string
+		unusedAddress      string
+		tokenIndex         string
+		unusedLuckyAmount  string
+		unusedLuckyFee     string
+		unusedLuckyFeeRate string
 	}
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
@@ -739,10 +768,13 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 				// Current user has already grabbed this lucky bag
 				has = true
 				grabEntityList = append(grabEntityList, &grabEntity{
-					unusedIndex:   unused.Index,
-					unusedAmount:  unused.Amount,
-					unusedAddress: unused.Address,
-					tokenIndex:    "",
+					unusedIndex:        unused.Index,
+					unusedAmount:       unused.Amount,
+					unusedAddress:      unused.Address,
+					tokenIndex:         "",
+					unusedLuckyAmount:  unused.LuckyAmount,
+					unusedLuckyFee:     unused.LuckyFee,
+					unusedLuckyFeeRate: unused.LuckyFeeRate,
 				})
 				break
 			}
@@ -757,10 +789,13 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 			if success {
 				has = true
 				grabEntityList = append(grabEntityList, &grabEntity{
-					unusedIndex:   unused.Index,
-					unusedAmount:  unused.Amount,
-					unusedAddress: unused.Address,
-					tokenIndex:    "",
+					unusedIndex:        unused.Index,
+					unusedAmount:       unused.Amount,
+					unusedAddress:      unused.Address,
+					tokenIndex:         "",
+					unusedLuckyAmount:  unused.LuckyAmount,
+					unusedLuckyFee:     unused.LuckyFee,
+					unusedLuckyFeeRate: unused.LuckyFeeRate,
 				})
 				break
 			}
@@ -818,6 +853,9 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 			Address:             address,
 			Index:               v.unusedIndex,
 			Amount:              v.unusedAmount,
+			LuckyAmount:         v.unusedLuckyAmount,
+			LuckyFee:            v.unusedLuckyFee,
+			LuckyFeeRate:        v.unusedLuckyFeeRate,
 			PkScript:            pkScript,
 			Vins:                vins,
 			Type:                luckyBag.Type,

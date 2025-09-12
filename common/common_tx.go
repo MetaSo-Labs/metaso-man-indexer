@@ -38,8 +38,9 @@ type TxInputUtxo struct {
 }
 
 type TxOutput struct {
-	Address string
-	Amount  int64
+	Address    string
+	Amount     int64
+	NeedAmount int64
 }
 
 func BuildMvcCommonTx(netParam *chaincfg2.Params, ins []*TxInputUtxo, outs []*TxOutput, changeAddress string, feeRate int64, isUnSign bool) (*wire2.MsgTx, error) {
@@ -126,6 +127,7 @@ func BuildMvcTransferAllTx(netParam *chaincfg2.Params, ins []*TxInputUtxo, out *
 	tx := wire2.NewMsgTx(2)
 	totalAmount := int64(0)
 	outAmount := int64(0)
+	needOutAmount := int64(out.NeedAmount)
 
 	addr, err := bsvutil2.DecodeAddress(out.Address, netParam)
 	if err != nil {
@@ -154,6 +156,14 @@ func BuildMvcTransferAllTx(netParam *chaincfg2.Params, ins []*TxInputUtxo, out *
 
 	txFee := int64(txTotalSize) * feeRate
 	outAmount = totalAmount - int64(txFee)
+
+	if needOutAmount > 0 {
+		outAmount = needOutAmount
+	}
+
+	if outAmount < 546 {
+		outAmount = 546
+	}
 
 	tx.TxOut[0].Value = outAmount
 
@@ -197,6 +207,7 @@ func BuildBtcTransferAllTx(netParam *chaincfg.Params, ins []*TxInputUtxo, out *T
 	tx := wire.NewMsgTx(2)
 	totalAmount := int64(0)
 	outAmount := int64(0)
+	needOutAmount := int64(out.NeedAmount)
 
 	addr, err := btcutil.DecodeAddress(out.Address, netParam)
 	if err != nil {
@@ -228,6 +239,12 @@ func BuildBtcTransferAllTx(netParam *chaincfg.Params, ins []*TxInputUtxo, out *T
 		txFee = int64(txTotalSize) * 120 / 100
 	}
 	outAmount = totalAmount - int64(txFee)
+	if needOutAmount > 0 {
+		outAmount = needOutAmount
+	}
+	if outAmount < 546 {
+		outAmount = 546
+	}
 
 	tx.TxOut[0].Value = outAmount
 

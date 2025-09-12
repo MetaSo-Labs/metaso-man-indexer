@@ -70,6 +70,7 @@ type GroupChatItem struct {
 	Content     string          `json:"content"`
 	ContentType string          `json:"contentType"`
 	Encryption  string          `json:"encryption"`
+	Version     string          `json:"version"`  // Version
 	ChatType    models.ChatType `json:"chatType"` //0-msg, 1-red, 2-img
 	Data        interface{}     `json:"data"`
 	ReplyPin    string          `json:"replyPin"`
@@ -92,6 +93,7 @@ type ReplyInfo struct {
 	Content     string          `json:"content"`
 	ContentType string          `json:"contentType"`
 	Encryption  string          `json:"encryption"`
+	Version     string          `json:"version"`     // Version
 	ChatType    models.ChatType `json:"chatType"`    //0-msg, 1-red, 2-img
 	Timestamp   int64           `json:"timestamp"`   //Chat record timestamp
 	Chain       string          `json:"chain"`       //Chain type
@@ -152,6 +154,7 @@ type ChatInfoItem struct {
 	CreateMetaId     string `json:"createMetaId"`     // Message creator's MetaId
 	CreateAddress    string `json:"createAddress"`    // Message creator's address
 	LastMessagePinId string `json:"lastMessagePinId"` // Latest message's PinId
+	Version          string `json:"version"`          // Version
 	BlockHeight      int64  `json:"blockHeight"`      // Block height
 	Chain            string `json:"chain"`            // Chain type
 	Index            int64  `json:"index"`            // Index default -1
@@ -199,6 +202,7 @@ type PrivateChatItem struct {
 	Content      string      `json:"content"`
 	ContentType  string      `json:"contentType"`
 	Encryption   string      `json:"encryption"`
+	Version      string      `json:"version"`  // Version
 	ChatType     int64       `json:"chatType"` // 0-msg, 1-red, 2-img
 	Data         interface{} `json:"data"`
 	ReplyPin     string      `json:"replyPin"`
@@ -228,6 +232,9 @@ type LuckyBagInfoResponse struct {
 	Img                 string         `json:"img"`
 	ImgType             string         `json:"imgType"`
 	Amount              string         `json:"amount"`
+	LuckyTotalAmount    string         `json:"luckyTotalAmount"`
+	LuckyTotalFee       string         `json:"luckyTotalFee"`
+	FeeRate             string         `json:"feeRate"`
 	Count               string         `json:"count"`
 	ValidCount          string         `json:"validCount"`
 	UsedCount           string         `json:"usedCount"`
@@ -244,6 +251,9 @@ type InfoPayList struct {
 	TxId         string           `json:"txId"`
 	Index        int64            `json:"index"`
 	Amount       string           `json:"amount"`
+	LuckyAmount  string           `json:"luckyAmount"`
+	LuckyFee     string           `json:"luckyFee"`
+	LuckyFeeRate string           `json:"luckyFeeRate"`
 	Address      string           `json:"address"`
 	Used         bool             `json:"used"`
 	GradPinId    string           `json:"gradPinId"`
@@ -272,6 +282,9 @@ type LuckyBagUnusedResponse struct {
 	GenType             int64         `json:"genType"`  // 0-normal, 1-internal, 2-external
 	GenState            int64         `json:"genState"` // 0-normal, 1-success, 2-failed
 	Amount              string        `json:"amount"`
+	LuckyTotalAmount    string        `json:"luckyTotalAmount"`
+	LuckyTotalFee       string        `json:"luckyTotalFee"`
+	FeeRate             string        `json:"feeRate"`
 	Count               string        `json:"count"`
 	ValidCount          string        `json:"validCount"`
 	Content             string        `json:"content"`
@@ -291,6 +304,9 @@ type UnusedList struct {
 	Amount       string `json:"amount"`
 	Address      string `json:"address"`
 	ScriptPubKey string `json:"scriptPubKey"`
+	LuckyAmount  string `json:"luckyAmount"`
+	LuckyFee     string `json:"luckyFee"`
+	LuckyFeeRate string `json:"luckyFeeRate"`
 }
 
 // UserInfoResponse User information response

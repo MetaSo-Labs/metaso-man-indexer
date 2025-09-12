@@ -630,6 +630,7 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 		Protocol:    pin.Path,
 		Content:     simpleMsg.Content,
 		ContentType: simpleMsg.ContentType,
+		Version:     pin.Version,
 		Encryption:  simpleMsg.Encrypt,
 		ChatType:    models.ChatTypeMsg, // Default to message type
 		ReplyPin:    simpleMsg.ReplyPin,
@@ -720,6 +721,7 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 		ChatType:    models.ChatTypeFile, // File type
 		ReplyPin:    simpleFileMsg.ReplyPin,
 		Timestamp:   pin.Timestamp,
+		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,
 	}
 

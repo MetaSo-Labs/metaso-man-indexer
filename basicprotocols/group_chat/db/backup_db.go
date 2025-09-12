@@ -175,6 +175,10 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupLuckyBagCodeAddressKeyCompletedCollection,
 		TalkPrivateChatBlockPinCollection,
 
+		// Error open and residue lucky bag related collections
+		TalkGroupOpenLuckyBagErrCollection,
+		TalkGroupResidueLuckyBagErrCollection,
+
 		// Private chat collections
 		TalkPrivateChatPinCollection,
 		TalkPrivateChatTimestampCollection,

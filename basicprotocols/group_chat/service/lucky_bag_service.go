@@ -30,6 +30,37 @@ import (
 	"github.com/tyler-smith/go-bip32"
 )
 
+// UpdateLuckyBagCacheAfterSave Update lucky bag cache after saving to database
+func UpdateLuckyBagCacheAfterSave(grabEntity *models.TalkGroupOpenLuckyBagV3, reclaimEntity *models.TalkGroupResidueLuckyBagV3) error {
+	// Update individual open lucky bag cache if grabEntity is provided
+	if grabEntity != nil {
+		// Check if the open lucky bag exists in cache before updating
+		_, err := cache_service.GetCacheOpenLuckyBag(grabEntity.GroupId, grabEntity.PinId)
+		if err == nil {
+			// Cache exists, update it
+			_, err = cache_service.SetCacheOpenLuckyBag(grabEntity.GroupId, grabEntity.PinId, grabEntity)
+			if err != nil {
+				log.Printf("[UpdateLuckyBagCacheAfterSave] Failed to update open lucky bag cache for %s: %v", grabEntity.PinId, err)
+			}
+		}
+	}
+
+	// Update individual residue lucky bag cache if reclaimEntity is provided
+	if reclaimEntity != nil {
+		// Check if the residue lucky bag exists in cache before updating
+		_, err := cache_service.GetCacheResidueLuckyBag(reclaimEntity.GroupId, reclaimEntity.PinId)
+		if err == nil {
+			// Cache exists, update it
+			_, err = cache_service.SetCacheResidueLuckyBag(reclaimEntity.GroupId, reclaimEntity.PinId, reclaimEntity)
+			if err != nil {
+				log.Printf("[UpdateLuckyBagCacheAfterSave] Failed to update residue lucky bag cache for %s: %v", reclaimEntity.PinId, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // luckyBagGrabMutexItem lock item for lucky bag grab operations
 type luckyBagGrabMutexItem struct {
 	mutex       *sync.Mutex
@@ -181,6 +212,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		Img:                 luckyBag.Img,
 		ImgType:             luckyBag.ImgType,
 		Amount:              luckyBag.Amount,
+		LuckyTotalAmount:    luckyBag.LuckyTotalAmount,
+		LuckyTotalFee:       luckyBag.LuckyTotalFee,
+		FeeRate:             luckyBag.FeeRate,
 		Count:               luckyBag.Count,
 		ValidCount:          luckyBag.ValidCount,
 		UsedCount:           "0",
@@ -193,6 +227,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		RequireCollectionId: luckyBag.RequireCollectionId,
 		LimitAmount:         luckyBag.LimitAmount,
 	}
+	if response.LuckyTotalAmount == "" || response.LuckyTotalAmount == "0" {
+		response.LuckyTotalAmount = luckyBag.Amount
+	}
 
 	usedCount := 0
 	// Convert PayList - Note that ProInfoPayList has fewer fields, need to fill default values
@@ -201,6 +238,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 			TxId:         luckyBag.TxId,
 			Index:        payItem.Index,
 			Amount:       payItem.Amount,
+			LuckyAmount:  payItem.LuckyAmount,
+			LuckyFee:     payItem.LuckyFee,
+			LuckyFeeRate: payItem.LuckyFeeRate,
 			Address:      payItem.Address,
 			Used:         false,
 			GradTxId:     "",
@@ -213,7 +253,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 			IsBest:       false,
 			IsWithdraw:   false,
 		}
-
+		if infoPayList.LuckyAmount == "" || infoPayList.LuckyAmount == "0" {
+			infoPayList.LuckyAmount = payItem.Amount
+		}
 		// Check claimed lucky bags
 		if openList != nil {
 			t = time.Now().UnixMilli()
@@ -396,6 +438,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Amount:              luckyBag.Amount,
+		LuckyTotalAmount:    luckyBag.LuckyTotalAmount,
+		LuckyTotalFee:       luckyBag.LuckyTotalFee,
+		FeeRate:             luckyBag.FeeRate,
 		Count:               luckyBag.Count,
 		ValidCount:          luckyBag.ValidCount,
 		Content:             luckyBag.Content,
@@ -409,6 +454,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		RequireCollectionId: luckyBag.RequireCollectionId,
 		LimitAmount:         luckyBag.LimitAmount,
 	}
+	if response.LuckyTotalAmount == "" || response.LuckyTotalAmount == "0" {
+		response.LuckyTotalAmount = luckyBag.Amount
+	}
 
 	// Get unused UTXO list
 	for _, v := range luckyBag.PayList {
@@ -418,6 +466,13 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 				Amount:       v.Amount,
 				Address:      v.Address,
 				ScriptPubKey: "", // Need to get from LuckyBagVouts
+				LuckyAmount:  v.LuckyAmount,
+				LuckyFee:     v.LuckyFee,
+				LuckyFeeRate: v.LuckyFeeRate,
+			}
+
+			if unused.LuckyAmount == "" || unused.LuckyAmount == "0" {
+				unused.LuckyAmount = v.Amount
 			}
 
 			// Get ScriptPubKey from LuckyBagVouts
@@ -642,9 +697,12 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		}
 
 		unused := &respond.UnusedList{
-			Index:   v.Index,
-			Amount:  v.Amount,
-			Address: v.Address,
+			Index:        v.Index,
+			Amount:       v.Amount,
+			Address:      v.Address,
+			LuckyAmount:  v.LuckyAmount,
+			LuckyFee:     v.LuckyFee,
+			LuckyFeeRate: v.LuckyFeeRate,
 		}
 		unusedList = append(unusedList, unused)
 	}
@@ -697,10 +755,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 	}{}
 
 	type grabEntity struct {
-		unusedIndex   int64
-		unusedAmount  string
-		unusedAddress string
-		tokenIndex    string
+		unusedIndex        int64
+		unusedAmount       string
+		unusedAddress      string
+		tokenIndex         string
+		unusedLuckyAmount  string
+		unusedLuckyFee     string
+		unusedLuckyFeeRate string
 	}
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
@@ -729,10 +790,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 				// Current user has already grabbed this lucky bag
 				has = true
 				grabEntityList = append(grabEntityList, &grabEntity{
-					unusedIndex:   unused.Index,
-					unusedAmount:  unused.Amount,
-					unusedAddress: unused.Address,
-					tokenIndex:    "",
+					unusedIndex:        unused.Index,
+					unusedAmount:       unused.Amount,
+					unusedAddress:      unused.Address,
+					tokenIndex:         "",
+					unusedLuckyAmount:  unused.LuckyAmount,
+					unusedLuckyFee:     unused.LuckyFee,
+					unusedLuckyFeeRate: unused.LuckyFeeRate,
 				})
 				break
 			}
@@ -747,10 +811,13 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			if success {
 				has = true
 				grabEntityList = append(grabEntityList, &grabEntity{
-					unusedIndex:   unused.Index,
-					unusedAmount:  unused.Amount,
-					unusedAddress: unused.Address,
-					tokenIndex:    "",
+					unusedIndex:        unused.Index,
+					unusedAmount:       unused.Amount,
+					unusedAddress:      unused.Address,
+					tokenIndex:         "",
+					unusedLuckyAmount:  unused.LuckyAmount,
+					unusedLuckyFee:     unused.LuckyFee,
+					unusedLuckyFeeRate: unused.LuckyFeeRate,
 				})
 				break
 			}
@@ -809,6 +876,9 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			Address:             address,
 			Index:               v.unusedIndex,
 			Amount:              v.unusedAmount,
+			LuckyAmount:         v.unusedLuckyAmount,
+			LuckyFee:            v.unusedLuckyFee,
+			LuckyFeeRate:        v.unusedLuckyFeeRate,
 			PkScript:            pkScript,
 			Vins:                vins,
 			Type:                luckyBag.Type,
@@ -991,6 +1061,30 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 	toAddress := grabEntity.Address
 	_ = toAddress
 
+	// txFeeRate := int64(1)
+	// if grabEntity.LuckyFeeRate != "" && grabEntity.LuckyFeeRate != "0" {
+	// 	normalizedAmount = normalizeScientificNotation(grabEntity.LuckyFeeRate)
+	// 	feeRate, err := strconv.ParseInt(normalizedAmount, 10, 64)
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to parse lucky fee rate: %v", err)
+	// 	}
+	// 	if feeRate >= 1 {
+	// 		txFeeRate = feeRate
+	// 	}
+	// }
+
+	outputAmount := int64(0)
+	if grabEntity.LuckyAmount != "" && grabEntity.LuckyAmount != "0" {
+		gradNormalizedAmount := normalizeScientificNotation(grabEntity.LuckyAmount)
+		outValue, err := strconv.ParseUint(gradNormalizedAmount, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse lucky amount: %v", err)
+		}
+		if outValue >= 546 {
+			outputAmount = int64(outValue)
+		}
+	}
+
 	input := common.TxInputUtxo{
 		TxId:     grabEntity.LuckyBagTxId,
 		TxIndex:  int64(grabEntity.Index),
@@ -1000,8 +1094,9 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		SignMode: common.SignModeLegacy,
 	}
 	output := common.TxOutput{
-		Address: toAddress,
-		Amount:  int64(value),
+		Address:    toAddress,
+		Amount:     int64(value),
+		NeedAmount: int64(outputAmount),
 	}
 
 	netParam := chainAdapter[grabEntity.Chain].GetNetParam()
@@ -1060,28 +1155,84 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		}
 		txRaw = hex.EncodeToString(b.Bytes())
 	}
+	// if grabEntity.Chain == "btc" {
+	// 	time.Sleep(1 * time.Second)
+	// }
 
-	resultTxId, err := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
+	// Broadcast transaction with retry mechanism
+	resultTxId, broadcastErr := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
 	if resultTxId != "" {
+		// Success case
 		grabEntity.GrabState = models.GrabStateOpenAndSend
 		grabEntity.GrabTxId = resultTxId
 		grabEntity.GrabMsg = "success"
-		log.Printf("[Grad]Success broadcast tx: %s, totalCount: %d", resultTxId, totalCount)
-	} else {
-		log.Printf("[Grad]Failure broadcast tx: %s, totalCount: %d", err.Error(), totalCount)
-		grabEntity.GrabState = models.GrabStateOpenAndSendErr
-		grabEntity.GrabMsg = err.Error()
+		// grabEntity.RetryCount = 0 // Reset retry count on success
+		log.Printf("[Grad][%s]Success broadcast tx: %s, totalCount: %d", grabEntity.Chain, resultTxId, totalCount)
 
-		// Check if error contains broadcast-related issues, if not, return the error
-		if !isBroadcastError(err) {
-			return fmt.Errorf("broadcast transaction failed: %v", err)
+		if grabEntity.Chain == "btc" {
+			net := ""
+			if common.TestNet == "1" {
+				net = "testnet"
+			}
+			_ = net
+			// common_service.BroadcastTx(net, txRaw)
 		}
+	} else {
+		// Failure case - increment retry count
+		grabEntity.RetryCount++
+		log.Printf("[Grad][%s]Failure broadcast tx: %s, retryCount: %d, totalCount: %d", grabEntity.Chain, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
+
+		// Update queue message with new retry count
+		err = chatDB.UpdateOpenLuckyBagQueueMessage(grabEntity.PinId, grabEntity.RetryCount, "")
+		if err != nil {
+			log.Printf("[Grad][%s]Failed to update queue message retry count: %v", grabEntity.Chain, err)
+		}
+
+		// Check if we've exceeded maximum retry attempts
+		if grabEntity.RetryCount >= 5 {
+			// Max retries exceeded, record error and save to error collection
+			grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Max retries exceeded (5), last error: %s", broadcastErr.Error())
+			grabEntity.GrabTxRaw = txRaw
+
+			// Save to error collection
+			err = chatDB.SaveOpenLuckyBagError(grabEntity.PinId, grabEntity.LuckyBagPinId)
+			if err != nil {
+				log.Printf("[Grad][%s]Failed to save open lucky bag error: %v", grabEntity.Chain, err)
+			} else {
+				log.Printf("[Grad][%s]Saved open lucky bag error record for pinId: %s", grabEntity.Chain, grabEntity.PinId)
+			}
+		} else {
+			fmt.Printf("[Grad][%s][%s]Retry broadcast tx: %s, retryCount: %d, totalCount: %d\n", grabEntity.Chain, grabEntity.PinId, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
+			// Still within retry limit, set error state but don't save to error collection yet
+			// grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Retry %d/5, error: %s", grabEntity.RetryCount, broadcastErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Check if error contains broadcast-related issues, if not, return the error
+			if !isBroadcastError(broadcastErr) {
+				return fmt.Errorf("broadcast transaction failed: %v", broadcastErr)
+			}
+		}
+
 	}
 
 	// Update grab lucky bag record in database
 	err = chatDB.SaveOpenLuckyBag(grabEntity)
 	if err != nil {
 		return fmt.Errorf("failed to save open lucky bag: %v", err)
+	}
+
+	// Update cache after saving to database
+	err = UpdateLuckyBagCacheAfterSave(grabEntity, nil)
+	if err != nil {
+		log.Printf("[disposingGrabLuckyBag] Failed to update cache after save: %v", err)
+		// Don't return error for cache update failure, as the main operation succeeded
 	}
 
 	return nil
@@ -1298,9 +1449,12 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 	for _, v := range luckyBag.PayList {
 		if !usedIndices[v.Index] {
 			unused := &respond.UnusedList{
-				Index:   v.Index,
-				Amount:  v.Amount,
-				Address: v.Address,
+				Index:        v.Index,
+				Amount:       v.Amount,
+				Address:      v.Address,
+				LuckyAmount:  v.LuckyAmount,
+				LuckyFee:     v.LuckyFee,
+				LuckyFeeRate: v.LuckyFeeRate,
 			}
 			unusedList = append(unusedList, unused)
 		}
@@ -1334,18 +1488,24 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 // commonReclaim Execute common logic for reclaiming remaining UTXOs from lucky bags
 func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.UnusedList, metaId, address string) error {
 	type reclaimEntity struct {
-		unusedIndex   int64
-		unusedAmount  string
-		unusedAddress string
+		unusedIndex        int64
+		unusedAmount       string
+		unusedAddress      string
+		unusedLuckyAmount  string
+		unusedLuckyFee     string
+		unusedLuckyFeeRate string
 	}
 	reclaimEntityList := make([]*reclaimEntity, 0)
 
 	// Collect all unused UTXOs
 	for _, unused := range unusedList {
 		reclaimEntityList = append(reclaimEntityList, &reclaimEntity{
-			unusedIndex:   unused.Index,
-			unusedAmount:  unused.Amount,
-			unusedAddress: unused.Address,
+			unusedIndex:        unused.Index,
+			unusedAmount:       unused.Amount,
+			unusedAddress:      unused.Address,
+			unusedLuckyAmount:  unused.LuckyAmount,
+			unusedLuckyFee:     unused.LuckyFee,
+			unusedLuckyFeeRate: unused.LuckyFeeRate,
 		})
 	}
 
@@ -1412,6 +1572,9 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			PkScript:            pkScript,
 			Amount:              v.unusedAmount,
 			Index:               v.unusedIndex,
+			LuckyAmount:         v.unusedLuckyAmount,
+			LuckyFee:            v.unusedLuckyFee,
+			LuckyFeeRate:        v.unusedLuckyFeeRate,
 			Vins:                vins,
 			UsedList:            proInfoPayList, // Initialize as empty list
 			Type:                luckyBag.Type,
@@ -1573,9 +1736,22 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		inputs = append(inputs, &input)
 	}
 
+	outputAmount := int64(0)
+	if reclaimEntity.LuckyAmount != "" && reclaimEntity.LuckyAmount != "0" {
+		reclaimNormalizedAmount := normalizeScientificNotation(reclaimEntity.LuckyAmount)
+		outValue, err := strconv.ParseUint(reclaimNormalizedAmount, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse lucky amount: %v", err)
+		}
+		if outValue >= 546 {
+			outputAmount = int64(outValue)
+		}
+	}
+
 	output := common.TxOutput{
-		Address: toAddress,
-		Amount:  int64(totalAmount),
+		Address:    toAddress,
+		Amount:     int64(totalAmount),
+		NeedAmount: outputAmount,
 	}
 
 	netParam := chainAdapter[reclaimEntity.Chain].GetNetParam()
@@ -1639,28 +1815,82 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		txRaw = hex.EncodeToString(b.Bytes())
 		break
 	}
+	if reclaimEntity.Chain == "btc" {
+		time.Sleep(1 * time.Second)
+	}
 
-	resultTxId, err := chainAdapter[reclaimEntity.Chain].BroadcastTx(txRaw)
+	// Broadcast transaction with retry mechanism
+	resultTxId, broadcastErr := chainAdapter[reclaimEntity.Chain].BroadcastTx(txRaw)
 	if resultTxId != "" {
+		// Success case
 		reclaimEntity.ReclaimState = models.GrabStateReclaimAndSend
 		reclaimEntity.ReclaimTxId = resultTxId
 		reclaimEntity.ReclaimMsg = "success"
-		// log.Printf("[Reclaim]Success broadcast tx: %s", resultTxId)
-	} else {
-		// log.Printf("[Reclaim]Failure broadcast tx: %s", err.Error())
-		reclaimEntity.ReclaimState = models.GrabStateReclaimAndSendErr
-		reclaimEntity.ReclaimMsg = err.Error()
+		// reclaimEntity.RetryCount = 0 // Reset retry count on success
+		log.Printf("[Reclaim][%s]Success broadcast tx: %s", reclaimEntity.Chain, resultTxId)
 
-		// Check if error contains broadcast-related issues, if not, return the error
-		if !isBroadcastError(err) {
-			return fmt.Errorf("broadcast transaction failed: %v", err)
+		if reclaimEntity.Chain == "btc" {
+			net := ""
+			if common.TestNet == "1" {
+				net = "testnet"
+			}
+			common_service.BroadcastTx(net, txRaw)
 		}
+	} else {
+		// Failure case - increment retry count
+		reclaimEntity.RetryCount++
+		log.Printf("[Reclaim][%s][%s]Failure broadcast tx: %s, retryCount: %d", reclaimEntity.Chain, reclaimEntity.PinId, broadcastErr.Error(), reclaimEntity.RetryCount)
+
+		// Update queue message with new retry count
+		err = chatDB.UpdateResidueLuckyBagQueueMessage(reclaimEntity.PinId, reclaimEntity.RetryCount, "")
+		if err != nil {
+			log.Printf("[Reclaim][%s]Failed to update queue message retry count: %v", reclaimEntity.Chain, err)
+		}
+
+		// Check if we've exceeded maximum retry attempts
+		if reclaimEntity.RetryCount >= 5 {
+			// Max retries exceeded, record error and save to error collection
+			reclaimEntity.ReclaimState = models.GrabStateReclaimAndSendErr
+			reclaimEntity.ReclaimMsg = fmt.Sprintf("Max retries exceeded (5), last error: %s", broadcastErr.Error())
+
+			// Save to error collection
+			err = chatDB.SaveResidueLuckyBagError(reclaimEntity.PinId, reclaimEntity.LuckyBagPinId)
+			if err != nil {
+				log.Printf("[Reclaim][%s]Failed to save residue lucky bag error: %v\n", reclaimEntity.Chain, err)
+			} else {
+				log.Printf("[Reclaim][%s]Saved residue lucky bag error record for pinId: %s\n", reclaimEntity.Chain, reclaimEntity.PinId)
+			}
+		} else {
+			fmt.Printf("[Reclaim][%s][%s]Retry broadcast tx: %s, retryCount: %d\n", reclaimEntity.Chain, reclaimEntity.PinId, broadcastErr.Error(), reclaimEntity.RetryCount)
+			// Still within retry limit, set error state but don't save to error collection yet
+			// reclaimEntity.ReclaimState = models.GrabStateReclaimAndSendErr
+			reclaimEntity.ReclaimMsg = fmt.Sprintf("Retry %d/5, error: %s", reclaimEntity.RetryCount, broadcastErr.Error())
+
+			// Update reclaim lucky bag record in database
+			err = chatDB.SaveResidueLuckyBag(reclaimEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save residue lucky bag: %v", err)
+			}
+
+			// Check if error contains broadcast-related issues, if not, return the error
+			if !isBroadcastError(broadcastErr) {
+				return fmt.Errorf("broadcast transaction failed: %v", broadcastErr)
+			}
+		}
+
 	}
 
 	// Update reclaim lucky bag record in database
 	err = chatDB.SaveResidueLuckyBag(reclaimEntity)
 	if err != nil {
 		return fmt.Errorf("failed to save residue lucky bag: %v", err)
+	}
+
+	// Update cache after saving to database
+	err = UpdateLuckyBagCacheAfterSave(nil, reclaimEntity)
+	if err != nil {
+		log.Printf("[disposingReclaimLuckyBag] Failed to update cache after save: %v", err)
+		// Don't return error for cache update failure, as the main operation succeeded
 	}
 
 	return nil

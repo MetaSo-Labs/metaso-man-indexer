@@ -182,16 +182,19 @@ type SimpleFileGroupChat struct {
 *
 */
 type SimpleGroupLuckyBag struct {
-	SubId               string            `json:"subId"`
-	GroupId             string            `json:"groupId"`
-	Code                string            `json:"code"`
-	Domain              string            `json:"domain"`
-	LuckyBagAddress     string            `json:"luckyBagAddress"`
-	CreateTime          interface{}       `json:"createTime"`
-	Content             string            `json:"content"`
-	Img                 string            `json:"img"`
-	ImgType             string            `json:"imgType"`
-	Amount              interface{}       `json:"amount"`
+	SubId           string      `json:"subId"`
+	GroupId         string      `json:"groupId"`
+	Code            string      `json:"code"`
+	Domain          string      `json:"domain"`
+	LuckyBagAddress string      `json:"luckyBagAddress"`
+	CreateTime      interface{} `json:"createTime"`
+	Content         string      `json:"content"`
+	Img             string      `json:"img"`
+	ImgType         string      `json:"imgType"`
+	Amount          interface{} `json:"amount"`  //Amount
+	FeeRate         interface{} `json:"feeRate"` //Fee rate， default 1.1
+	// LuckyTotalAmount    interface{}       `json:"luckyTotalAmount"` //
+	// LuckyTotalFee       interface{}       `json:"luckyTotalFee"`    //
 	Count               interface{}       `json:"count"`
 	PayList             []*ProInfoPayList `json:"payList"`
 	Type                string            `json:"type"`
@@ -200,6 +203,10 @@ type SimpleGroupLuckyBag struct {
 	RequireCollectionId string            `json:"requireCollectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount         interface{}       `json:"limitAmount"`
 }
+
+var (
+	OpenLuckyTxSize int64 = 210 //Open lucky bag tx size
+)
 
 /*
 *
@@ -213,9 +220,11 @@ type SimpleGroupLuckyBag struct {
 *
 */
 type ProInfoPayList struct {
-	Amount  interface{} `json:"amount"`
+	Amount  interface{} `json:"amount"` //Amount = LuckyAmount + LuckyFee
 	Address string      `json:"address"`
 	Index   interface{} `json:"index"`
+	// LuckyAmount interface{} `json:"luckyAmount"` //luckyAmount >= 800 satoshi
+	// LuckyFee    interface{} `json:"luckyFee"`
 }
 
 /*

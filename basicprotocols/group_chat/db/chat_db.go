@@ -1440,6 +1440,51 @@ func (cdb *ChatDB) DeleteOpenLuckyBagQueueMessage(pinId string) error {
 	return nil
 }
 
+// Update grab lucky bag queue message data
+func (cdb *ChatDB) UpdateOpenLuckyBagQueueMessage(pinId string, retryCount int64, status string) error {
+	iter, err := Pb[TalkGroupOpenLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	// Find queue message containing this pinId
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueOpenLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// Found matching pinId, update this queue message
+		if queueMessage.PinId == pinId {
+			// Update retry count and status
+			queueMessage.RetryCount = int(retryCount)
+			if status != "" {
+				queueMessage.Status = status
+			}
+
+			// Update the OpenLuckyBag object's RetryCount as well
+			if queueMessage.OpenLuckyBag != nil {
+				queueMessage.OpenLuckyBag.RetryCount = retryCount
+			}
+
+			// Marshal updated message
+			data, err := json.Marshal(queueMessage)
+			if err != nil {
+				return err
+			}
+
+			// Update in database
+			return Pb[TalkGroupOpenLuckyBagQueueCollection].Set(iter.Key(), data, pebble.Sync)
+		}
+	}
+
+	return fmt.Errorf("queue message with pinId %s not found", pinId)
+}
+
 // Reclaim lucky bag queue message item
 type QueueResidueLuckyBagMessage struct {
 	PinId           string                             `json:"pinId"`           // Message PinId
@@ -1522,6 +1567,51 @@ func (cdb *ChatDB) DeleteResidueLuckyBagQueueMessage(pinId string) error {
 	}
 
 	return nil
+}
+
+// Update reclaim lucky bag queue message data
+func (cdb *ChatDB) UpdateResidueLuckyBagQueueMessage(pinId string, retryCount int64, status string) error {
+	iter, err := Pb[TalkGroupResidueLuckyBagQueueCollection].NewIter(nil)
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	// Find queue message containing this pinId
+	for iter.First(); iter.Valid(); iter.Next() {
+		value := string(iter.Value())
+
+		var queueMessage QueueResidueLuckyBagMessage
+		err := json.Unmarshal([]byte(value), &queueMessage)
+		if err != nil {
+			continue
+		}
+
+		// Found matching pinId, update this queue message
+		if queueMessage.PinId == pinId {
+			// Update retry count and status
+			queueMessage.RetryCount = int(retryCount)
+			if status != "" {
+				queueMessage.Status = status
+			}
+
+			// Update the ResidueLuckyBag object's RetryCount as well
+			if queueMessage.ResidueLuckyBag != nil {
+				queueMessage.ResidueLuckyBag.RetryCount = retryCount
+			}
+
+			// Marshal updated message
+			data, err := json.Marshal(queueMessage)
+			if err != nil {
+				return err
+			}
+
+			// Update in database
+			return Pb[TalkGroupResidueLuckyBagQueueCollection].Set(iter.Key(), data, pebble.Sync)
+		}
+	}
+
+	return fmt.Errorf("queue message with pinId %s not found", pinId)
 }
 
 // Batch process queue messages (asynchronous update of group lists)
@@ -1704,6 +1794,7 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
+		Version:     pin.Version,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 	}
@@ -1915,6 +2006,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleFileGroupChat.ReplyPin,
 		Timestamp:   pin.Timestamp,
+		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,
 	}
 
@@ -1970,7 +2062,23 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		errPayList       []*models.ProInfoPayList = make([]*models.ProInfoPayList, 0)
 		luckyBagVouts    []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
 		errLuckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
+
+		hasLuckyFeeRate      bool  = false
+		txFeeRate            int64 = 1
+		openLuckyTxSize      int64 = protocols.OpenLuckyTxSize
+		openLuckyTxFee       int64 = 0
+		openLuckyTotalAmount int64 = 0
+		openLuckyTotalFee    int64 = 0
 	)
+
+	if simpleLuckyBag.FeeRate != nil && simpleLuckyBag.FeeRate != "0" && simpleLuckyBag.FeeRate != "" {
+		feeRate := toInt64(simpleLuckyBag.FeeRate)
+		if feeRate >= 1 {
+			txFeeRate = feeRate
+			hasLuckyFeeRate = true
+		}
+	}
+	openLuckyTxFee = openLuckyTxSize * txFeeRate
 
 	// Create a map to store PayList items by index for quick lookup
 	payListByIndex := make(map[int64]*models.ProInfoPayList)
@@ -1980,11 +2088,31 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	// First, process all PayList items
 	for _, pay := range simpleLuckyBag.PayList {
 		payAddressList = append(payAddressList, pay.Address)
+		itemLuckyAmount := toInt64(pay.Amount) - openLuckyTxFee
+		itemLuckyFee := openLuckyTxFee
+		itemLuckyFeeRate := toString(txFeeRate)
+		if itemLuckyAmount < 546 {
+			itemLuckyAmount = 546
+			itemLuckyFee = toInt64(pay.Amount) - itemLuckyAmount
+			itemLuckyFeeRate = toString(float64(itemLuckyFee) / float64(openLuckyTxSize))
+		}
+
 		payItem := &models.ProInfoPayList{
 			Amount:  toString(pay.Amount),
 			Address: pay.Address,
 			Index:   toInt64(pay.Index),
+			// LuckyAmount:  toString(itemLuckyAmount),
+			// LuckyFee:     toString(itemLuckyFee),
+			// LuckyFeeRate: itemLuckyFeeRate,
 		}
+		if hasLuckyFeeRate {
+			payItem.LuckyAmount = toString(itemLuckyAmount)
+			payItem.LuckyFee = toString(itemLuckyFee)
+			payItem.LuckyFeeRate = itemLuckyFeeRate
+		}
+
+		openLuckyTotalAmount += toInt64(payItem.LuckyAmount)
+		openLuckyTotalFee += toInt64(payItem.LuckyFee)
 		if _, ok := payListByIndex[toInt64(pay.Index)]; ok {
 			errPayList = append(errPayList, payItem)
 		} else {
@@ -2094,6 +2222,9 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Img:                 simpleLuckyBag.Img,
 		ImgType:             simpleLuckyBag.ImgType,
 		Amount:              formatInt64(simpleLuckyBag.Amount),
+		LuckyTotalAmount:    formatInt64(openLuckyTotalAmount),
+		LuckyTotalFee:       formatInt64(openLuckyTotalFee),
+		FeeRate:             formatInt64(txFeeRate),
 		Count:               toString(simpleLuckyBag.Count),
 		ValidCount:          toString(len(payList)),
 		ErrCount:            toString(count - int64(len(payList))),
@@ -2181,6 +2312,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
+		Version:     pin.Version,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection
@@ -3049,4 +3181,20 @@ func (cdb *ChatDB) moveLuckyBagCodeAddressKeyToCompleted(code, address string) e
 	}
 
 	return nil
+}
+
+// SaveOpenLuckyBagError saves open lucky bag error record to TalkGroupOpenLuckyBagErrCollection
+func (cdb *ChatDB) SaveOpenLuckyBagError(pinId string, luckyBagPinId string) error {
+	// Use PinId as key, LuckyBagPinId as value
+	key := []byte(pinId)
+	value := []byte(luckyBagPinId)
+	return Pb[TalkGroupOpenLuckyBagErrCollection].Set(key, value, pebble.Sync)
+}
+
+// SaveResidueLuckyBagError saves residue lucky bag error record to TalkGroupResidueLuckyBagErrCollection
+func (cdb *ChatDB) SaveResidueLuckyBagError(pinId string, luckyBagPinId string) error {
+	// Use PinId as key, LuckyBagPinId as value
+	key := []byte(pinId)
+	value := []byte(luckyBagPinId)
+	return Pb[TalkGroupResidueLuckyBagErrCollection].Set(key, value, pebble.Sync)
 }

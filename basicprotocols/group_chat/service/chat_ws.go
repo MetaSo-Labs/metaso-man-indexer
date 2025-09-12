@@ -103,6 +103,11 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 }
 
 func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
+	//if from equals to to, then not send both from and to
+	if chat.From == chat.To {
+		return
+	}
+
 	metaIdList := make([]string, 0)
 	metaIdList = append(metaIdList, chat.From)
 	metaIdList = append(metaIdList, chat.To)

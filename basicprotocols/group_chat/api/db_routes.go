@@ -87,6 +87,12 @@ func RegisterDbRoutes(router *gin.Engine) {
 			{
 				queueGroup.GET("/list", GetLuckyBagQueueList)
 			}
+
+			// Lucky bag error collection-related APIs
+			luckyBagGroup.GET("/error-keys", GetLuckyBagErrorCollectionKeys)
+			luckyBagGroup.GET("/pin", GetLuckyBagPinByPinId)
+			luckyBagGroup.GET("/code-address-key", GetLuckyBagCodeAddressKeyFromCompleted)
+			luckyBagGroup.POST("/retry", RetryFailedLuckyBagOperation)
 		}
 
 		// Residue lucky bag-related APIs

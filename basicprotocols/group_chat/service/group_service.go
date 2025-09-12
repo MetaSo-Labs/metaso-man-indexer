@@ -592,6 +592,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 			Content:     chat.Content,
 			ContentType: chat.ContentType,
 			Encryption:  chat.Encryption,
+			Version:     chat.Version,
 			ChatType:    chat.ChatType,
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
@@ -625,6 +626,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 					Content:     replyChat.Content,
 					ContentType: replyChat.ContentType,
 					Encryption:  replyChat.Encryption,
+					Version:     replyChat.Version,
 					ChatType:    replyChat.ChatType,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,
@@ -722,6 +724,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			Content:     chat.Content,
 			ContentType: chat.ContentType,
 			Encryption:  chat.Encryption,
+			Version:     chat.Version,
 			ChatType:    chat.ChatType,
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
@@ -755,6 +758,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 					Content:     replyChat.Content,
 					ContentType: replyChat.ContentType,
 					Encryption:  replyChat.Encryption,
+					Version:     replyChat.Version,
 					ChatType:    replyChat.ChatType,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,
@@ -1166,6 +1170,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				chatInfo, _ := chatDB.GetChatByPinId(latestChat.LastMessagePinId)
 				if chatInfo != nil {
 					chatInfoItem.Index = chatInfo.Index
+					chatInfoItem.Version = chatInfo.Version
 				}
 				perfStats.chatIndexTime += time.Now().UnixMilli() - t4
 			}
@@ -1201,6 +1206,7 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 				}
 				// Get private chat index
 				chatInfoItem.Index = latestPrivateChat.Index
+				chatInfoItem.Version = latestPrivateChat.Version
 			}
 		}
 
@@ -1274,6 +1280,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 			Content:      chat.Content,
 			ContentType:  chat.ContentType,
 			Encryption:   chat.Encryption,
+			Version:      chat.Version,
 			ChatType:     int64(chat.ChatType),
 			ReplyPin:     chat.ReplyPin,
 			ReplyInfo:    nil,
@@ -1298,6 +1305,7 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 					Content:     replyChat.Content,
 					ContentType: replyChat.ContentType,
 					Encryption:  replyChat.Encryption,
+					Version:     replyChat.Version,
 					ChatType:    replyChat.ChatType,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,

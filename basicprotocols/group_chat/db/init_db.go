@@ -65,6 +65,9 @@ const (
 	TalkGroupLuckyBagPinErrTimeoutResidueCollection    string = "talk_group_lucky_bag_pin_err_timeout_residue"    // key: pinId，value: luckyBagPinId
 	TalkGroupLuckyBagCodeAddressKeyCollection          string = "talk_group_lucky_bag_code_address_key"           //key: code_address, value: {key, code, luckyBagAddress, timestamp}
 	TalkGroupLuckyBagCodeAddressKeyCompletedCollection string = "talk_group_lucky_bag_code_address_key_completed" //key: code_address, value: {key, code, luckyBagAddress, timestamp}
+	// Error open and residue lucky bag
+	TalkGroupOpenLuckyBagErrCollection    string = "talk_group_open_lucky_bag_err"    // key: pinId，value: luckyBagPinId
+	TalkGroupResidueLuckyBagErrCollection string = "talk_group_residue_lucky_bag_err" // key: pinId，value: luckyBagPinId
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
@@ -269,6 +272,16 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkPrivateChatBlockPinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateChatBlockPinCollection, err)
+	}
+
+	// Initialize error open and residue lucky bag related databases
+	err = open(TalkGroupOpenLuckyBagErrCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupOpenLuckyBagErrCollection, err)
+	}
+	err = open(TalkGroupResidueLuckyBagErrCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupResidueLuckyBagErrCollection, err)
 	}
 
 	// Initialize private chat related databases

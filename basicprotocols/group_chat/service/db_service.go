@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"manindexer/basicprotocols/group_chat/db"
+	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/common_service"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/pebble"
 )
@@ -1900,4 +1902,345 @@ func GetGroupPersonListCollection(cursor, size int) (map[string]interface{}, err
 	}
 
 	return result, nil
+}
+
+// GetLuckyBagErrorCollectionKeys Get keys from lucky bag error collections with pagination
+func GetLuckyBagErrorCollectionKeys(collectionName string, cursor int, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+
+	// Validate collection name
+	if collectionName != db.TalkGroupOpenLuckyBagErrCollection && collectionName != db.TalkGroupResidueLuckyBagErrCollection {
+		return nil, fmt.Errorf("invalid collection name: %s", collectionName)
+	}
+
+	// Get collection
+	collection, exists := db.Pb[collectionName]
+	if !exists {
+		return nil, fmt.Errorf("collection %s not found", collectionName)
+	}
+
+	// Get total count
+	totalCount, err := collection.EstimateDiskUsage(nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate disk usage: %v", err)
+	}
+
+	// Get keys with pagination
+	var keys []string
+	var nextCursor int
+
+	iter, err := collection.NewIter(&pebble.IterOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Skip to cursor position
+	skipped := 0
+	for iter.First(); iter.Valid() && skipped < cursor; iter.Next() {
+		skipped++
+	}
+
+	// Collect keys
+	for iter.Valid() && len(keys) < size {
+		key := string(iter.Key())
+		keys = append(keys, key)
+		iter.Next()
+	}
+
+	// Check if there are more items
+	hasMore := iter.Valid()
+	if hasMore {
+		nextCursor = cursor + size
+	}
+
+	return map[string]interface{}{
+		"collection": collectionName,
+		"keys":       keys,
+		"total":      totalCount,
+		"cursor":     cursor,
+		"size":       size,
+		"hasMore":    hasMore,
+		"nextCursor": nextCursor,
+	}, nil
+}
+
+// GetLuckyBagPinByPinId Get lucky bag pin data by pinId from specified collection
+func GetLuckyBagPinByPinId(collectionName, pinId string) (map[string]interface{}, error) {
+	// Validate collection name
+	if collectionName != db.TalkGroupOpenLuckyBagPinCollection && collectionName != db.TalkGroupResidueLuckyBagPinCollection {
+		return nil, fmt.Errorf("invalid collection name: %s", collectionName)
+	}
+
+	// Get collection
+	collection, exists := db.Pb[collectionName]
+	if !exists {
+		return nil, fmt.Errorf("collection %s not found", collectionName)
+	}
+
+	// Get value by key
+	value, closer, err := collection.Get([]byte(pinId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, fmt.Errorf("pinId %s not found in collection %s", pinId, collectionName)
+		}
+		return nil, fmt.Errorf("failed to get value: %v", err)
+	}
+	defer closer.Close()
+
+	// Parse JSON value
+	var data map[string]interface{}
+	err = json.Unmarshal(value, &data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	return map[string]interface{}{
+		"collection": collectionName,
+		"pinId":      pinId,
+		"data":       data,
+	}, nil
+}
+
+// GetLuckyBagCodeAddressKeyFromCompleted Get lucky bag code address key from completed collection
+func GetLuckyBagCodeAddressKeyFromCompleted(code, address string) (map[string]interface{}, error) {
+	// Validate input parameters
+	if code == "" || address == "" {
+		return nil, fmt.Errorf("code and address cannot be empty")
+	}
+
+	// Construct key: code_address
+	key := code + "_" + address
+
+	// Get collection
+	collection, exists := db.Pb[db.TalkGroupLuckyBagCodeAddressKeyCompletedCollection]
+	if !exists {
+		return nil, fmt.Errorf("collection %s not found", db.TalkGroupLuckyBagCodeAddressKeyCompletedCollection)
+	}
+
+	// Get value by key
+	value, closer, err := collection.Get([]byte(key))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, fmt.Errorf("lucky bag code address key not found for code %s and address %s", code, address)
+		}
+		return nil, fmt.Errorf("failed to get code address key from completed collection: %v", err)
+	}
+	defer closer.Close()
+
+	// Parse JSON value
+	var codeAddressKey struct {
+		Key             string `json:"key"`
+		Code            string `json:"code"`
+		LuckyBagAddress string `json:"luckyBagAddress"`
+		Timestamp       int64  `json:"timestamp"`
+	}
+	err = json.Unmarshal(value, &codeAddressKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal code address key: %v", err)
+	}
+
+	// Return data without the private key for security
+	result := map[string]interface{}{
+		"code":            codeAddressKey.Code,
+		"luckyBagAddress": codeAddressKey.LuckyBagAddress,
+		"timestamp":       codeAddressKey.Timestamp,
+	}
+
+	return result, nil
+}
+
+// RetryFailedLuckyBagOperation Retry failed lucky bag operation by pinId
+func RetryFailedLuckyBagOperation(pinId string) (map[string]interface{}, error) {
+	// Validate input parameter
+	if pinId == "" {
+		return nil, fmt.Errorf("pinId cannot be empty")
+	}
+
+	// First try to get from TalkGroupOpenLuckyBagErrCollection
+	openErrCollection, exists := db.Pb[db.TalkGroupOpenLuckyBagErrCollection]
+	if exists {
+		value, closer, err := openErrCollection.Get([]byte(pinId))
+		if err == nil {
+			defer closer.Close()
+			luckyBagPinId := string(value)
+
+			// Get the original open lucky bag record
+			openCollection, exists := db.Pb[db.TalkGroupOpenLuckyBagPinCollection]
+			if exists {
+				openValue, openCloser, err := openCollection.Get([]byte(pinId))
+				if err == nil {
+					defer openCloser.Close()
+
+					// Parse the open lucky bag record
+					var openLuckyBag models.TalkGroupOpenLuckyBagV3
+					err = json.Unmarshal(openValue, &openLuckyBag)
+					if err == nil {
+						// Update grabState to 1 (centralized open)
+						openLuckyBag.GrabState = 1
+						openLuckyBag.RetryCount = 0
+
+						// Save updated record
+						updatedData, err := json.Marshal(openLuckyBag)
+						if err == nil {
+							err = openCollection.Set([]byte(pinId), updatedData, pebble.Sync)
+							if err == nil {
+								// Requeue to TalkGroupOpenLuckyBagQueueCollection
+								err = requeueOpenLuckyBag(&openLuckyBag)
+								if err == nil {
+									// Remove from error collection
+									openErrCollection.Delete([]byte(pinId), pebble.Sync)
+
+									return map[string]interface{}{
+										"type":          "open",
+										"pinId":         pinId,
+										"luckyBagPinId": luckyBagPinId,
+										"message":       "Successfully requeued open lucky bag operation",
+									}, nil
+								} else {
+									return nil, fmt.Errorf("failed to requeue open lucky bag: %v", err)
+								}
+							} else {
+								return nil, fmt.Errorf("failed to save updated data to open collection: %v", err)
+							}
+						} else {
+							return nil, fmt.Errorf("failed to marshal updated data: %v", err)
+						}
+					}
+				} else {
+					return nil, fmt.Errorf("failed to get value from open collection: %v", err)
+				}
+			}
+		} else {
+			return nil, fmt.Errorf("failed to get value from open error collection: %v", err)
+		}
+	}
+
+	// If not found in open error collection, try TalkGroupResidueLuckyBagErrCollection
+	residueErrCollection, exists := db.Pb[db.TalkGroupResidueLuckyBagErrCollection]
+	if exists {
+		value, closer, err := residueErrCollection.Get([]byte(pinId))
+		if err == nil {
+			defer closer.Close()
+			luckyBagPinId := string(value)
+
+			// Get the original residue lucky bag record
+			residueCollection, exists := db.Pb[db.TalkGroupResidueLuckyBagPinCollection]
+			if exists {
+				residueValue, residueCloser, err := residueCollection.Get([]byte(pinId))
+				if err == nil {
+					defer residueCloser.Close()
+
+					// Parse the residue lucky bag record
+					var residueLuckyBag models.TalkGroupResidueLuckyBagV3
+					err = json.Unmarshal(residueValue, &residueLuckyBag)
+					if err == nil {
+						// Update reclaimState to 1 (centralized reclaim)
+						residueLuckyBag.ReclaimState = 1
+						residueLuckyBag.RetryCount = 0
+
+						// Save updated record
+						updatedData, err := json.Marshal(residueLuckyBag)
+						if err == nil {
+							err = residueCollection.Set([]byte(pinId), updatedData, pebble.Sync)
+							if err == nil {
+								// Requeue to TalkGroupResidueLuckyBagQueueCollection
+								err = requeueResidueLuckyBag(&residueLuckyBag)
+								if err == nil {
+									// Remove from error collection
+									residueErrCollection.Delete([]byte(pinId), pebble.Sync)
+
+									return map[string]interface{}{
+										"type":          "residue",
+										"pinId":         pinId,
+										"luckyBagPinId": luckyBagPinId,
+										"message":       "Successfully requeued residue lucky bag operation",
+									}, nil
+								} else {
+									return nil, fmt.Errorf("failed to requeue residue lucky bag: %v", err)
+								}
+							} else {
+								return nil, fmt.Errorf("failed to save updated data to residue collection: %v", err)
+							}
+						} else {
+							return nil, fmt.Errorf("failed to marshal updated data: %v", err)
+						}
+					} else {
+						return nil, fmt.Errorf("failed to unmarshal residue lucky bag record: %v", err)
+					}
+				} else {
+					return nil, fmt.Errorf("failed to get value from residue collection: %v", err)
+				}
+			}
+		} else {
+			return nil, fmt.Errorf("failed to get value from residue error collection: %v", err)
+		}
+	}
+
+	return nil, fmt.Errorf("pinId %s not found in any error collection", pinId)
+}
+
+// requeueOpenLuckyBag requeue open lucky bag to queue collection
+func requeueOpenLuckyBag(openLuckyBag *models.TalkGroupOpenLuckyBagV3) error {
+	// Create queue message
+	queueMessage := map[string]interface{}{
+		"pinId":        openLuckyBag.PinId,
+		"openLuckyBag": openLuckyBag,
+		"timestamp":    time.Now().Unix(),
+		"retryCount":   0,
+		"status":       "pending",
+	}
+
+	// Marshal queue message
+	data, err := json.Marshal(queueMessage)
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue message: %v", err)
+	}
+
+	// Use timestamp_pinId as key
+	key := fmt.Sprintf("%d_%s", time.Now().Unix(), openLuckyBag.PinId)
+
+	// Get queue collection
+	queueCollection, exists := db.Pb[db.TalkGroupOpenLuckyBagQueueCollection]
+	if !exists {
+		return fmt.Errorf("queue collection %s not found", db.TalkGroupOpenLuckyBagQueueCollection)
+	}
+
+	// Save to queue
+	return queueCollection.Set([]byte(key), data, pebble.Sync)
+}
+
+// requeueResidueLuckyBag requeue residue lucky bag to queue collection
+func requeueResidueLuckyBag(residueLuckyBag *models.TalkGroupResidueLuckyBagV3) error {
+	// Create queue message
+	queueMessage := map[string]interface{}{
+		"pinId":           residueLuckyBag.PinId,
+		"residueLuckyBag": residueLuckyBag,
+		"timestamp":       time.Now().Unix(),
+		"retryCount":      0,
+		"status":          "pending",
+	}
+
+	// Marshal queue message
+	data, err := json.Marshal(queueMessage)
+	if err != nil {
+		return fmt.Errorf("failed to marshal queue message: %v", err)
+	}
+
+	// Use timestamp_pinId as key
+	key := fmt.Sprintf("%d_%s", time.Now().Unix(), residueLuckyBag.PinId)
+
+	// Get queue collection
+	queueCollection, exists := db.Pb[db.TalkGroupResidueLuckyBagQueueCollection]
+	if !exists {
+		return fmt.Errorf("queue collection %s not found", db.TalkGroupResidueLuckyBagQueueCollection)
+	}
+
+	// Save to queue
+	return queueCollection.Set([]byte(key), data, pebble.Sync)
 }

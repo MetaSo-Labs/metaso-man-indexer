@@ -1362,6 +1362,146 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/api/db/luckybag/error-keys": {
+            "get": {
+                "description": "Get keys from lucky bag error collections with pagination",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag error collection keys",
+                "parameters": [
+                    {"type": "string", "description": "Collection name (talk_group_open_lucky_bag_err or talk_group_residue_lucky_bag_err)", "name": "collection", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor for pagination (default: 0)", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size (default: 20)", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return keys list",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "success": {"type": "boolean"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "collection": {"type": "string"},
+                                        "keys": {"type": "array", "items": {"type": "string"}},
+                                        "total": {"type": "integer"},
+                                        "cursor": {"type": "integer"},
+                                        "size": {"type": "integer"},
+                                        "hasMore": {"type": "boolean"},
+                                        "nextCursor": {"type": "integer"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/pin": {
+            "get": {
+                "description": "Get lucky bag pin data by pinId from specified collection",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag pin data by pinId",
+                "parameters": [
+                    {"type": "string", "description": "Collection name (talk_group_open_lucky_bag_pin or talk_group_residue_lucky_bag_pin)", "name": "collection", "in": "query", "required": true},
+                    {"type": "string", "description": "PinId to search for", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return pin data",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "success": {"type": "boolean"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "collection": {"type": "string"},
+                                        "pinId": {"type": "string"},
+                                        "data": {"type": "object"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "404": {"description": "PinId not found", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/code-address-key": {
+            "get": {
+                "description": "Get lucky bag code address key from completed collection by code and address",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Get lucky bag code address key from completed collection",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag code", "name": "code", "in": "query", "required": true},
+                    {"type": "string", "description": "Lucky bag address", "name": "address", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return code address key data",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "success": {"type": "boolean"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "code": {"type": "string"},
+                                        "luckyBagAddress": {"type": "string"},
+                                        "timestamp": {"type": "integer"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "404": {"description": "Code address key not found", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/retry": {
+            "post": {
+                "description": "Retry failed lucky bag operation by pinId from error collections",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Retry failed lucky bag operation",
+                "parameters": [
+                    {"type": "string", "description": "PinId of the failed lucky bag operation", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retried lucky bag operation",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "success": {"type": "boolean"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "type": {"type": "string", "description": "Operation type: open or residue"},
+                                        "pinId": {"type": "string"},
+                                        "luckyBagPinId": {"type": "string"},
+                                        "message": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "404": {"description": "PinId not found in error collections", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/socket/stats": {
             "get": {
                 "description": "Get Socket connection statistics including total connections, active connections, etc.",

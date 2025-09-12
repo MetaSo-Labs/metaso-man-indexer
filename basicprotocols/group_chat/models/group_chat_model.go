@@ -175,6 +175,7 @@ type TalkGroupChatV3 struct {
 	Protocol    string          `json:"protocol"`
 	Content     string          `json:"content"`
 	ContentType string          `json:"contentType"`
+	Version     string          `json:"version"` // Version
 	Encryption  string          `json:"encryption"`
 	ChatType    ChatType        `json:"chatType"`    //0-msg, 1-red, 2-img
 	InsideIndex ChatInsideIndex `json:"insideIndex"` //0-in, 1-out
@@ -219,7 +220,10 @@ type TalkGroupLuckyBagV3 struct {
 	Content               string            `json:"content"`
 	Img                   string            `json:"img"`
 	ImgType               string            `json:"imgType"`
+	FeeRate               string            `json:"feeRate"`
 	Amount                string            `json:"amount"`
+	LuckyTotalAmount      string            `json:"luckyTotalAmount"`
+	LuckyTotalFee         string            `json:"luckyTotalFee"`
 	Count                 string            `json:"count"`
 	ValidCount            string            `json:"validCount"`
 	ErrCount              string            `json:"errCount"`
@@ -240,10 +244,13 @@ type TalkGroupLuckyBagV3 struct {
 	State                 int               `json:"state"`       // 1-pending, 2-completed, 3-timeout residue, 4-err, 5-err timeout residue
 }
 type ProInfoPayList struct {
-	Amount   string `json:"amount"`
-	Address  string `json:"address"`
-	PkScript string `json:"pkScript"`
-	Index    int64  `json:"index"`
+	Amount       string `json:"amount"`
+	Address      string `json:"address"`
+	PkScript     string `json:"pkScript"`
+	Index        int64  `json:"index"`
+	LuckyAmount  string `json:"luckyAmount"`
+	LuckyFee     string `json:"luckyFee"`
+	LuckyFeeRate string `json:"luckyFeeRate"`
 }
 type LuckyBagOutput struct {
 	ScriptPubKey string `json:"scriptPubKey"`
@@ -282,6 +289,9 @@ type TalkGroupOpenLuckyBagV3 struct {
 	Address             string    `json:"address"`
 	Index               int64     `json:"index"`
 	Amount              string    `json:"amount"`
+	LuckyAmount         string    `json:"luckyAmount"`
+	LuckyFee            string    `json:"luckyFee"`
+	LuckyFeeRate        string    `json:"luckyFeeRate"`
 	PkScript            string    `json:"pkScript"`
 	Vins                []*TxIn   `json:"vins"`
 	Type                string    `json:"type"`
@@ -297,6 +307,8 @@ type TalkGroupOpenLuckyBagV3 struct {
 	GrabState           GrabState `json:"grabState"`   // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal, 4-reclaim, 5-reclaim and sent, 6-reclaim and sent abnormal
 	GrabTxId            string    `json:"grabTxId"`    //
 	GrabMsg             string    `json:"grabMsg"`     //
+	RetryCount          int64     `json:"retryCount"`  // Retry count
+	GrabTxRaw           string    `json:"grabTxRaw"`   // Grab tx raw
 }
 type TxIn struct {
 	OutTxID string `json:"outTxId"` // out-txId where it is located
@@ -324,6 +336,9 @@ type TalkGroupResidueLuckyBagV3 struct {
 	GenState            int64             `json:"genState"` // 0-normal, 1-success, 2-failed
 	PkScript            string            `json:"pkScript"`
 	Amount              string            `json:"amount"`
+	LuckyAmount         string            `json:"luckyAmount"`
+	LuckyFee            string            `json:"luckyFee"`
+	LuckyFeeRate        string            `json:"luckyFeeRate"`
 	Index               int64             `json:"index"`
 	UsedList            []*ProInfoPayList `json:"usedList"`
 	Vins                []*TxIn           `json:"vins"`
@@ -339,6 +354,7 @@ type TalkGroupResidueLuckyBagV3 struct {
 	ReclaimState        GrabState         `json:"reclaimState"` // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal
 	ReclaimTxId         string            `json:"reclaimTxId"`  //
 	ReclaimMsg          string            `json:"reclaimMsg"`   //
+	RetryCount          int64             `json:"retryCount"`   // Retry count
 }
 
 // User group list item + user private chat list item
@@ -393,6 +409,7 @@ type TalkPrivateChatV3 struct {
 	Content     string     `json:"content"`
 	ContentType string     `json:"contentType"`
 	Encryption  string     `json:"encryption"`
+	Version     string     `json:"version"`  // Version
 	ChatType    ChatType   `json:"chatType"` //0-msg, 1-red, 3-img
 	ReplyPin    string     `json:"replyPin"`
 	ReplyInfo   *ReplyInfo `json:"replyInfo"`

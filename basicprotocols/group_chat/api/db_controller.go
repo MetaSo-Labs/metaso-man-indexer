@@ -9,6 +9,7 @@ import (
 	lucky_bag_service "manindexer/basicprotocols/group_chat/service"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -1494,4 +1495,218 @@ func GetGroupPersonListCollection(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// GetLuckyBagErrorCollectionKeys Get keys from lucky bag error collections with pagination
+// @Summary Get lucky bag error collection keys
+// @Description Get paginated list of keys from TalkGroupOpenLuckyBagErrCollection or TalkGroupResidueLuckyBagErrCollection
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param collection query string true "Collection name (talk_group_open_lucky_bag_err or talk_group_residue_lucky_bag_err)"
+// @Param cursor query int false "Cursor for pagination (default: 0)"
+// @Param size query int false "Page size (default: 20)"
+// @Success 200 {object} map[string]interface{} "Success response with keys list"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /db/lucky-bag-error-keys [get]
+func GetLuckyBagErrorCollectionKeys(ctx *gin.Context) {
+	collection := ctx.Query("collection")
+	if collection == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "collection parameter is required",
+		})
+		return
+	}
+
+	cursor := 0
+	if cursorStr := ctx.Query("cursor"); cursorStr != "" {
+		if c, err := strconv.Atoi(cursorStr); err == nil {
+			cursor = c
+		}
+	}
+
+	size := 20
+	if sizeStr := ctx.Query("size"); sizeStr != "" {
+		if s, err := strconv.Atoi(sizeStr); err == nil {
+			size = s
+		}
+	}
+
+	result, err := service.GetLuckyBagErrorCollectionKeys(collection, cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetLuckyBagPinByPinId Get lucky bag pin data by pinId from specified collection
+// @Summary Get lucky bag pin data by pinId
+// @Description Get lucky bag pin data from TalkGroupOpenLuckyBagPinCollection or TalkGroupResidueLuckyBagPinCollection by pinId
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param collection query string true "Collection name (talk_group_open_lucky_bag_pin or talk_group_residue_lucky_bag_pin)"
+// @Param pinId query string true "PinId to search for"
+// @Success 200 {object} map[string]interface{} "Success response with pin data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 404 {object} map[string]interface{} "PinId not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /db/lucky-bag-pin [get]
+func GetLuckyBagPinByPinId(ctx *gin.Context) {
+	collection := ctx.Query("collection")
+	if collection == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "collection parameter is required",
+		})
+		return
+	}
+
+	pinId := ctx.Query("pinId")
+	if pinId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "pinId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.GetLuckyBagPinByPinId(collection, pinId)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			ctx.JSON(404, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		} else {
+			ctx.JSON(500, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetLuckyBagCodeAddressKeyFromCompleted Get lucky bag code address key from completed collection
+// @Summary Get lucky bag code address key from completed collection
+// @Description Get lucky bag code address key from completed collection by code and address
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param code query string true "Lucky bag code"
+// @Param address query string true "Lucky bag address"
+// @Success 200 {object} map[string]interface{} "Successfully return code address key data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 404 {object} map[string]interface{} "Code address key not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/luckybag/code-address-key [get]
+func GetLuckyBagCodeAddressKeyFromCompleted(ctx *gin.Context) {
+	// Get query parameters
+	code := ctx.Query("code")
+	address := ctx.Query("address")
+
+	// Validate required parameters
+	if code == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "code parameter is required",
+		})
+		return
+	}
+
+	if address == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "address parameter is required",
+		})
+		return
+	}
+
+	// Call service method
+	result, err := service.GetLuckyBagCodeAddressKeyFromCompleted(code, address)
+	if err != nil {
+		// Check if it's a not found error
+		if strings.Contains(err.Error(), "not found") {
+			ctx.JSON(404, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		} else {
+			ctx.JSON(500, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// RetryFailedLuckyBagOperation Retry failed lucky bag operation by pinId
+// @Summary Retry failed lucky bag operation
+// @Description Retry failed lucky bag operation by pinId from error collections
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param pinId query string true "PinId of the failed lucky bag operation"
+// @Success 200 {object} map[string]interface{} "Successfully retried lucky bag operation"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 404 {object} map[string]interface{} "PinId not found in error collections"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/luckybag/retry [post]
+func RetryFailedLuckyBagOperation(ctx *gin.Context) {
+	// Get query parameter
+	pinId := ctx.Query("pinId")
+
+	// Validate required parameter
+	if pinId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "pinId parameter is required",
+		})
+		return
+	}
+
+	// Call service method
+	result, err := service.RetryFailedLuckyBagOperation(pinId)
+	if err != nil {
+		// Check if it's a not found error
+		if strings.Contains(err.Error(), "not found") {
+			ctx.JSON(404, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		} else {
+			ctx.JSON(500, gin.H{
+				"success": false,
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
 }
