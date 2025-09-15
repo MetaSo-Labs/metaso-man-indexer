@@ -34,6 +34,18 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get group chat records by start timestamp range (ascending order)
 		group.GET("/group-chat-list-by-start-time", GetGroupChatListByStartTime)
 
+		// Get channel chat records (V3 with improved performance)
+		group.GET("/channel-chat-list-v3", GetChannelChatListV3)
+
+		// Get channel chat records by index range (ascending order)
+		group.GET("/channel-chat-list-by-index", GetChannelChatListByIndex)
+
+		// Get channel chat records by start timestamp range (ascending order)
+		group.GET("/channel-chat-list-by-start-time", GetChannelChatListByStartTime)
+
+		// Get group channel list
+		group.GET("/group-channel-list", GetGroupChannelList)
+
 		// Get private chat records
 		group.GET("/private-chat-list", GetPrivateChatList)
 
@@ -51,6 +63,7 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Get current maximum chat index
 		group.GET("/max-group-chat-index", GetCurrentMaxGroupChatIndex)
+		group.GET("/max-group-channel-chat-index", GetCurrentMaxGroupChannelChatIndex)
 		group.GET("/max-private-chat-index", GetCurrentMaxPrivateChatIndex)
 
 		// Group search routes

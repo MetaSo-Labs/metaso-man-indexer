@@ -1178,7 +1178,23 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 			// common_service.BroadcastTx(net, txRaw)
 		}
 	} else {
-		// Failure case - increment retry count
+		// Check if error is "too-long-mempool-chain" - skip retry counting for this error
+		if strings.Contains(strings.ToLower(broadcastErr.Error()), "too-long-mempool-chain") {
+			log.Printf("[Grad][%s]Too-long-mempool-chain error, skipping retry count increment: %s, totalCount: %d", grabEntity.Chain, broadcastErr.Error(), totalCount)
+			// Don't increment retry count, just log and continue
+			grabEntity.GrabMsg = fmt.Sprintf("Too-long-mempool-chain error, will retry later: %s", broadcastErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Return nil to continue processing in next cycle
+			return fmt.Errorf("too-long-mempool-chain error, skipping retry count increment: %s", broadcastErr.Error())
+		}
+
+		// Failure case - increment retry count for other errors
 		grabEntity.RetryCount++
 		log.Printf("[Grad][%s]Failure broadcast tx: %s, retryCount: %d, totalCount: %d", grabEntity.Chain, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
 
@@ -1838,6 +1854,22 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 		}
 	} else {
 		// Failure case - increment retry count
+		// Check if error is "too-long-mempool-chain" - skip retry counting for this error
+		if strings.Contains(strings.ToLower(broadcastErr.Error()), "too-long-mempool-chain") {
+			log.Printf("[Grad][%s]Too-long-mempool-chain error, skipping retry count increment: %s", reclaimEntity.Chain, broadcastErr.Error())
+			// Don't increment retry count, just log and continue
+			reclaimEntity.ReclaimMsg = fmt.Sprintf("Too-long-mempool-chain error, will retry later: %s", broadcastErr.Error())
+
+			// Update residue lucky bag record in database
+			err = chatDB.SaveResidueLuckyBag(reclaimEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save residue lucky bag: %v", err)
+			}
+
+			// Return nil to continue processing in next cycle
+			return fmt.Errorf("too-long-mempool-chain error, skipping retry count increment: %s", broadcastErr.Error())
+		}
+
 		reclaimEntity.RetryCount++
 		log.Printf("[Reclaim][%s][%s]Failure broadcast tx: %s, retryCount: %d", reclaimEntity.Chain, reclaimEntity.PinId, broadcastErr.Error(), reclaimEntity.RetryCount)
 

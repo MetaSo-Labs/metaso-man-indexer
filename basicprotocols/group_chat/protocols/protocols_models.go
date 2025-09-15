@@ -88,14 +88,36 @@ type SimpleGroupCreate struct {
 	GroupNote       string      `json:"groupNote"`
 	GroupIcon       string      `json:"groupIcon"`
 	Timestamp       interface{} `json:"timestamp"`
-	GroupType       interface{} `json:"groupType"`    //Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
+	GroupType       interface{} `json:"groupType"`    //Group message type, "0" not encrypted "1" encrypted encryption using AES encryption algorithm
 	Status          interface{} `json:"status"`       //"1" when not encrypted is "1", when encrypted is encrypted information, reserved field
-	JoinType        interface{} `json:"type"`         //Join method, 1 is password, 2 is nft, 3-FT limit
+	JoinType        interface{} `json:"type"`         //Group Join method, 0:free-mode, 1:password-mode, 2:nft-limit-mode, 3:FT-limit-mode, 4:launch-mode
 	TickId          string      `json:"tickId"`       //FT-limit requires temporarily mrc20
 	CollectionId    string      `json:"collectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount     interface{} `json:"limitAmount"`
 	ChatSettingType interface{} `json:"chatSettingType"` //Used to set speech restrictions, 0-everyone, 1-administrators
 	DeleteStatus    interface{} `json:"deleteStatus"`    //Delete status, 0-normal, 1-deleted
+}
+
+/*
+*
+	{
+	  "groupId": "{groupId}",
+	  "channelId": "{}" //When modifying, use
+	  "channelName": "", //Channel name
+	  "channelIcon": "", //Channel icon
+	  "channelNote": "", //Channel note
+	  "channelType": 1, // channelType: 0-normal, 1-launch
+	}
+*
+*/
+
+type SimpleGroupChannel struct {
+	GroupId     string `json:"groupId"`
+	ChannelId   string `json:"channelId"` //When modifying, use
+	ChannelName string `json:"channelName"`
+	ChannelIcon string `json:"channelIcon"`
+	ChannelNote string `json:"channelNote"`
+	ChannelType int64  `json:"channelType"` // channelType: 0-normal, 1-launch
 }
 
 /*
@@ -108,7 +130,9 @@ type SimpleGroupCreate struct {
 	  "contentType": "text",
 	  "encryption": "none",
 	  "timestamp": 1234567890,
-	  "replyTx": "txId"
+	  "replyTx": "txId",
+
+	  "channelId": "" // optional
 	}
 
 *
@@ -121,6 +145,8 @@ type SimpleGroupChat struct {
 	Encryption  string      `json:"encryption"`
 	Timestamp   interface{} `json:"timestamp"`
 	ReplyPin    string      `json:"replyPin"`
+
+	ChannelId string `json:"channelId"`
 }
 
 /*
@@ -134,7 +160,9 @@ type SimpleGroupChat struct {
 	  "fileType": "png/jpg/gif",
 	  "nickName": "User nickname",
 	  "timestamp": 1234567890,
-	  "replyTx": "txId"
+	  "replyTx": "txId",
+
+	  "channelId": "" // optional
 	}
 
 *
@@ -148,6 +176,8 @@ type SimpleFileGroupChat struct {
 	NickName  string      `json:"nickName"`
 	Timestamp interface{} `json:"timestamp"`
 	ReplyPin  string      `json:"replyPin"`
+
+	ChannelId string `json:"channelId"`
 }
 
 /*
@@ -176,7 +206,9 @@ type SimpleFileGroupChat struct {
 	  "requireType": 0,
 	  "requireTickId": "tickId",
 	  "requireCollectionId": "collectionId",
-	  "limitAmount": 100
+	  "limitAmount": 100,
+
+	  "channelId": "" // optional
 	}
 
 *
@@ -202,6 +234,8 @@ type SimpleGroupLuckyBag struct {
 	RequireTickId       string            `json:"requireTickId"`       //FT-limit requires temporarily mrc20
 	RequireCollectionId string            `json:"requireCollectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount         interface{}       `json:"limitAmount"`
+
+	ChannelId string `json:"channelId"`
 }
 
 var (
@@ -340,6 +374,66 @@ type SimpleGroupRemoveUser struct {
 	Timestamp    interface{} `json:"timestamp"`
 }
 
+/*
+*
+
+	{
+		"groupId": "{groupId}",
+		"admins": [
+			"metaid-1",
+			"metaid-2",
+			"metaid-3",
+			...
+		]
+	}
+
+*
+*/
+type SimpleGroupAdmin struct {
+	GroupId string   `json:"groupId"`
+	Admins  []string `json:"admins"`
+}
+
+/*
+*
+
+		{
+		"groupId": "{groupId}",
+		"users": [
+			"metaid-1",
+			"metaid-2",
+			"metaid-3",
+			...
+		]
+	}
+
+*
+*/
+type SimpleGroupBlock struct {
+	GroupId string   `json:"groupId"`
+	Users   []string `json:"users"`
+}
+
+/*
+*
+
+		{
+		"groupId": "{groupId}",
+		"users": [
+			"metaid-1",
+			"metaid-2",
+			"metaid-3",
+			...
+		]
+	}
+
+*
+*/
+type SimpleGroupWhitelist struct {
+	GroupId string   `json:"groupId"`
+	Users   []string `json:"users"`
+}
+
 //private chat
 /*
 SimpleMsg
@@ -404,6 +498,7 @@ const (
 	MonitorSimpleCommunity            = "SimpleCommunity"
 	MonitorSimpleCommunityJoin        = "SimpleCommunityJoin"
 	MonitorSimpleGroupCreate          = "SimpleGroupCreate"
+	MonitorSimpleGroupChannel         = "SimpleGroupChannel"
 	MonitorSimpleGroupJoin            = "SimpleGroupJoin"
 	MonitorSimpleGroupChat            = "SimpleGroupChat"
 	MonitorSimpleFileGroupChat        = "SimpleFileGroupChat"
@@ -411,6 +506,9 @@ const (
 	MonitorSimpleGroupOpenLuckyBag    = "SimpleGroupOpenLuckyBag"
 	MonitorSimpleGroupResidueLuckyBag = "SimpleGroupResidueLuckyBag"
 	MonitorSimpleGroupRemoveUser      = "SimpleGroupRemoveUser"
+	MonitorSimpleGroupAdmin           = "SimpleGroupAdmin"
+	MonitorSimpleGroupBlock           = "SimpleGroupBlock"
+	MonitorSimpleGroupWhitelist       = "SimpleGroupWhitelist"
 
 	MonitorSimpleMsg          = "SimpleMsg"
 	MonitorSimpleFileMsg      = "SimpleFileMsg"

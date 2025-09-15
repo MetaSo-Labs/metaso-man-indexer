@@ -44,7 +44,7 @@ func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 	InitGiftCache(expireTime)
 
 	// initialize user info cache
-	InitUserInfoCache(expireTime)
+	InitUserInfoCache(30 * time.Minute)
 
 	// initialize group member cache
 	InitGroupMemberCache(30 * time.Minute)

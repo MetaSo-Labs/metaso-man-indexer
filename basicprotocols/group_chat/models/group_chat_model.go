@@ -98,36 +98,42 @@ type TalkGroupPersonList struct {
 }
 
 type TalkGroupModel struct {
-	GroupId       string `json:"groupId"`       // Room ID unique
-	CommunityId   string `json:"communityId"`   // Community ID unique
-	TxId          string `json:"txId"`          // Room's TxId
-	PinId         string `json:"pinId"`         // Room's PinId
-	RoomPublicKey string `json:"roomPublicKey"` // Room public key
-	RoomName      string `json:"roomName"`      // Room creation name
-	RoomNote      string `json:"roomNote"`      // Room creation announcement
-	RoomIcon      string `json:"roomIcon"`      // Room creation icon
-	RoomType      string `json:"roomType"`      // Room creation type "1" not encrypted "2" encrypted encryption using AES encryption algorithm
-	RoomStatus    string `json:"roomStatus"`    // "1" when not encrypted is "1", when encrypted is encrypted information, reserved field
-	RoomJoinType  string `json:"roomJoinType"`  // Join method, 1 is password, 2 is nft
-	// RoomCodeHash          string `json:"roomCodeHash"`          // Has value when roomJoinType is 2, codeHash
-	// RoomGenesis           string `json:"roomGenesis"`           // Has value when roomJoinType is 2, genesis
-	// RoomLimitAmount       int64  `json:"roomLimitAmount"`       // Has value when roomJoinType is 2, token limit
-	// RoomGenesisSeriesName string `json:"roomGenesisSeriesName"` // Has value when roomJoinType is 2, genesis
-	RoomAvatarUrl string `json:"roomAvatarUrl"` // Room avatar URL
-	// RoomNinePersonHash string `json:"roomNinePersonHash"` // Total hash value of metaId of first 9 people in the room
-	// RoomNewestTxId        string `json:"roomNewestTxId"`        // TxId of the latest chat content in the room
-	// RoomNewestMetaId      string `json:"roomNewestMetaId"`      // MetaId of the latest chat content in the room
-	// RoomNewestProtocol    string `json:"roomNewestProtocol"`    // Protocol type of the latest chat content in the room
-	// RoomNewestContent     string `json:"roomNewestContent"`     // Latest chat content in the room
-	// RoomNewestTimestamp   int64  `json:"roomNewestTimestamp"`   // Timestamp of the latest chat in the room
+	GroupId           string `json:"groupId"`           // Room ID unique
+	CommunityId       string `json:"communityId"`       // Community ID unique
+	TxId              string `json:"txId"`              // Room's TxId
+	PinId             string `json:"pinId"`             // Room's PinId
+	RoomPublicKey     string `json:"roomPublicKey"`     // Room public key
+	RoomName          string `json:"roomName"`          // Room creation name
+	RoomNote          string `json:"roomNote"`          // Room creation announcement
+	RoomIcon          string `json:"roomIcon"`          // Room creation icon
+	RoomType          string `json:"roomType"`          // Group message type, "0" not encrypted "1" encrypted encryption using AES encryption algorithm
+	RoomStatus        string `json:"roomStatus"`        // "1" when not encrypted is "1", when encrypted is encrypted information, reserved field
+	RoomJoinType      string `json:"roomJoinType"`      // Group Join method, 0:free-mode, 1:password-mode, 2:nft-limit-mode, 3:FT-limit-mode, 4:launch-mode
+	RoomAvatarUrl     string `json:"roomAvatarUrl"`     // Room avatar URL
 	CreateUserMetaId  string `json:"createUserMetaId"`  // MetaId of the creator
 	CreateUserAddress string `json:"createUserAddress"` // Address of the creator
 	ChatSettingType   int64  `json:"chatSettingType"`   // Used to set speech restrictions, 0-everyone, 1-administrators
-	// ValidState            ValidState `json:"validState"`                       // Verify if valid
-	Chain        string `json:"chain"`        // Chain type
-	DeleteStatus int64  `json:"deleteStatus"` // Delete status, 0-normal, 1-deleted
-	Timestamp    int64  `json:"timestamp"`    // Timestamp when creating the room
-	BlockHeight  int64  `json:"blockHeight"`  // Block height
+	Chain             string `json:"chain"`             // Chain type
+	DeleteStatus      int64  `json:"deleteStatus"`      // Delete status, 0-normal, 1-deleted
+	Timestamp         int64  `json:"timestamp"`         // Timestamp when creating the room
+	BlockHeight       int64  `json:"blockHeight"`       // Block height
+}
+
+type TalkGroupChannelModel struct {
+	ChannelId         string `json:"channelId"`         // Channel ID unique
+	GroupId           string `json:"groupId"`           // Group ID unique
+	TxId              string `json:"txId"`              // Channel's TxId
+	PinId             string `json:"pinId"`             // Channel's PinId
+	ChannelName       string `json:"channelName"`       // Channel name
+	ChannelNote       string `json:"channelNote"`       // Channel announcement
+	ChannelIcon       string `json:"channelIcon"`       // Channel icon
+	ChannelType       int64  `json:"channelType"`       // Channel type: 0-normal, 1-launch
+	CreateUserMetaId  string `json:"createUserMetaId"`  // MetaId of the creator
+	CreateUserAddress string `json:"createUserAddress"` // Address of the creator
+	Chain             string `json:"chain"`             // Chain type
+	DeleteStatus      int64  `json:"deleteStatus"`      // Delete status, 0-normal, 1-deleted
+	Timestamp         int64  `json:"timestamp"`         // Timestamp when creating the channel
+	BlockHeight       int64  `json:"blockHeight"`       // Block height
 }
 
 type TalkGroupTxV3 struct {
@@ -166,6 +172,7 @@ const (
 type TalkGroupChatV3 struct {
 	CommunityId string          `json:"communityId"` // Community ID unique
 	GroupId     string          `json:"groupId"`     // Room ID unique
+	ChannelId   string          `json:"channelId"`   // Channel ID unique
 	TxId        string          `json:"txId"`
 	PinId       string          `json:"pinId"` //
 	MetaId      string          `json:"metaId"`
@@ -185,10 +192,12 @@ type TalkGroupChatV3 struct {
 	Chain       string          `json:"chain"`       // Chain type
 	BlockHeight int64           `json:"blockHeight"` // Block height
 	Index       int64           `json:"index"`       // Index default -1
+	OutReason   string          `json:"outReason"`   // Out reason
 }
 
 type ReplyInfo struct {
 	TxId        string          `json:"txId"`
+	ChannelId   string          `json:"channelId"`
 	PinId       string          `json:"pinId"`
 	MetaId      string          `json:"metaId"`
 	NickName    string          `json:"nickName"`
@@ -205,6 +214,7 @@ type ReplyInfo struct {
 type TalkGroupLuckyBagV3 struct {
 	CommunityId           string            `json:"communityId"` // Room ID unique
 	GroupId               string            `json:"groupId"`     // Channel ID unique
+	ChannelId             string            `json:"channelId"`   // Channel ID unique
 	TxId                  string            `json:"txId"`
 	PinId                 string            `json:"pinId"` //
 	MetaId                string            `json:"metaId"`
@@ -275,6 +285,7 @@ const (
 type TalkGroupOpenLuckyBagV3 struct {
 	CommunityId         string    `json:"communityId"` // Room ID unique
 	GroupId             string    `json:"groupId"`     // Channel ID unique
+	ChannelId           string    `json:"channelId"`   // Channel ID unique
 	TxId                string    `json:"txId"`
 	PinId               string    `json:"pinId"` //
 	MetaId              string    `json:"metaId"`
@@ -322,6 +333,7 @@ type TxIn struct {
 type TalkGroupResidueLuckyBagV3 struct {
 	CommunityId         string            `json:"communityId"` // Room ID unique
 	GroupId             string            `json:"groupId"`     // Channel ID unique
+	ChannelId           string            `json:"channelId"`   // Channel ID unique
 	TxId                string            `json:"txId"`
 	PinId               string            `json:"pinId"` //
 	MetaId              string            `json:"metaId"`
@@ -501,4 +513,77 @@ type TalkPrivateChatBlock struct {
 type TalkPrivateChatBlockList struct {
 	MetaId string                  `json:"metaId"` // User MetaId
 	Items  []*TalkPrivateChatBlock `json:"items"`  // List of block items
+}
+
+// Group admin record item
+type GroupAdminItem struct {
+	AdminPinId     string   `json:"adminPinId"`     // Admin PinId
+	AdminType      string   `json:"adminType"`      // Admin type: set, remove
+	AdminTimestamp int64    `json:"adminTimestamp"` // Admin timestamp
+	Admins         []string `json:"admins"`         // List of admin MetaIds
+	SetByMetaId    string   `json:"setByMetaId"`    // MetaId of user who set admins
+	SetByAddress   string   `json:"setByAddress"`   // Address of user who set admins
+	BlockHeight    int64    `json:"blockHeight"`    // Block height
+	Chain          string   `json:"chain"`          // Chain type
+}
+
+// Group admin list
+type GroupAdminList struct {
+	GroupId string            `json:"groupId"` // Group ID
+	Items   []*GroupAdminItem `json:"items"`   // Admin record list
+}
+
+// Group block record item
+type GroupBlockItem struct {
+	BlockPinId     string   `json:"blockPinId"`     // Block PinId
+	BlockType      string   `json:"blockType"`      // Block type: set, remove
+	BlockTimestamp int64    `json:"blockTimestamp"` // Block timestamp
+	BlockedUsers   []string `json:"blockedUsers"`   // List of blocked user MetaIds
+	SetByMetaId    string   `json:"setByMetaId"`    // MetaId of user who set block list
+	SetByAddress   string   `json:"setByAddress"`   // Address of user who set block list
+	BlockHeight    int64    `json:"blockHeight"`    // Block height
+	Chain          string   `json:"chain"`          // Chain type
+}
+
+// Group block list
+type GroupBlockList struct {
+	GroupId string            `json:"groupId"` // Group ID
+	Items   []*GroupBlockItem `json:"items"`   // Block record list
+}
+
+// Group whitelist record item
+type GroupWhitelistItem struct {
+	WhitelistPinId     string   `json:"whitelistPinId"`     // Whitelist PinId
+	WhitelistType      string   `json:"whitelistType"`      // Whitelist type: set, remove
+	WhitelistTimestamp int64    `json:"whitelistTimestamp"` // Whitelist timestamp
+	WhitelistUsers     []string `json:"whitelistUsers"`     // List of whitelist user MetaIds
+	SetByMetaId        string   `json:"setByMetaId"`        // MetaId of user who set whitelist
+	SetByAddress       string   `json:"setByAddress"`       // Address of user who set whitelist
+	BlockHeight        int64    `json:"blockHeight"`        // Block height
+	Chain              string   `json:"chain"`              // Chain type
+}
+
+// Group whitelist list
+type GroupWhitelistList struct {
+	GroupId string                `json:"groupId"` // Group ID
+	Items   []*GroupWhitelistItem `json:"items"`   // Whitelist record list
+}
+
+// Channel latest chat message model
+type TalkGroupChannelLatestChat struct {
+	ChannelId        string   `json:"channelId"`        // Channel ID
+	Timestamp        int64    `json:"timestamp"`        // Latest message timestamp
+	ChatType         ChatType `json:"chatType"`         // Message type
+	Content          string   `json:"content"`          // Message content summary
+	CreateAddress    string   `json:"createAddress"`    // Address of message creator
+	LastMessagePinId string   `json:"lastMessagePinId"` // PinId of latest message
+	MetaId           string   `json:"metaId"`           // MetaId of message creator
+	TxId             string   `json:"txId"`             // Message's TxId
+	PinId            string   `json:"pinId"`            // Message's PinId
+	Protocol         string   `json:"protocol"`         // Protocol type
+	ContentType      string   `json:"contentType"`      // Content type
+	Encryption       string   `json:"encryption"`       // Encryption information
+	ReplyPin         string   `json:"replyPin"`         // PinId of reply message
+	Chain            string   `json:"chain"`            // Chain type
+	BlockHeight      int64    `json:"blockHeight"`      // Block height
 }

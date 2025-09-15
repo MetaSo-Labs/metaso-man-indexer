@@ -975,6 +975,119 @@ func GetGroupChatIndexList(cursor, size int, groupId string) (map[string]interfa
 	}, nil
 }
 
+// GetGroupChannelChatIndexList Get TalkGroupChannelChatIndexCollection list with cursor pagination and reverse order
+func GetGroupChannelChatIndexList(cursor, size int, channelId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChannelChatIndexCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChannelChatIndexCollection)
+	}
+
+	var results []map[string]interface{}
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if channelId != "" {
+		prefix := channelId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if channelId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get records in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		// Parse key: groupId_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		parsedChannelId := ""
+		index := ""
+		if len(keyParts) >= 2 {
+			parsedChannelId = keyParts[0]
+			// Remove leading zeros and get the actual index
+			indexStr := strings.TrimLeft(keyParts[1], "0")
+			if indexStr == "" {
+				indexStr = "0" // If all zeros, treat as 0
+			}
+			index = indexStr
+		}
+
+		// Parse value: pinId_chatType_timestamp_isSet
+		valueParts := strings.Split(value, "_")
+		pinId := ""
+		chatType := ""
+		timestamp := ""
+		isSet := ""
+		if len(valueParts) >= 4 {
+			pinId = valueParts[0]
+			chatType = valueParts[1]
+			timestamp = valueParts[2]
+			isSet = valueParts[3]
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":       key,
+			"value":     value,
+			"channelId": parsedChannelId,
+			"index":     index,
+			"pinId":     pinId,
+			"chatType":  chatType,
+			"timestamp": timestamp,
+			"isSet":     isSet,
+		})
+	}
+
+	return map[string]interface{}{
+		"total":   total,
+		"cursor":  cursor,
+		"size":    size,
+		"results": results,
+	}, nil
+}
+
 // GetPrivateChatIndexList Get TalkPrivateChatIndexCollection list with cursor pagination and reverse order
 func GetPrivateChatIndexList(cursor, size int, fromTo string) (map[string]interface{}, error) {
 	if cursor < 0 {
@@ -1178,6 +1291,93 @@ func GetGroupChatIndexKeys(cursor, size int, groupId string) (map[string]interfa
 	}, nil
 }
 
+// GetGroupChannelChatIndexKeys Get TalkGroupChannelChatIndexCollection key list with cursor pagination
+func GetGroupChannelChatIndexKeys(cursor, size int, channelId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChannelChatIndexCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChannelChatIndexCollection)
+	}
+
+	var results []string
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if channelId != "" {
+		prefix := channelId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if channelId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get keys in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		// Process the key to remove zero-padding for better readability
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) >= 2 {
+			// Remove leading zeros from the index part
+			indexStr := strings.TrimLeft(keyParts[1], "0")
+			if indexStr == "" {
+				indexStr = "0" // If all zeros, treat as 0
+			}
+			processedKey := keyParts[0] + "_" + indexStr
+			results = append(results, processedKey)
+		} else {
+			results = append(results, key)
+		}
+	}
+
+	return map[string]interface{}{
+		"total":  total,
+		"cursor": cursor,
+		"size":   size,
+		"keys":   results,
+	}, nil
+}
+
 // GetGroupChatTimestamp2OutList Get TalkGroupChatTimestamp2OutCollection list with cursor pagination and reverse order
 func GetGroupChatTimestamp2OutList(cursor, size int, groupId string) (map[string]interface{}, error) {
 	if cursor < 0 {
@@ -1219,6 +1419,86 @@ func GetGroupChatTimestamp2OutList(cursor, size int, groupId string) (map[string
 
 	// First, count total records
 	if groupId != "" {
+		// Count records with prefix
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	} else {
+		// Count all records
+		for iter.First(); iter.Valid(); iter.Next() {
+			total++
+		}
+	}
+
+	// Then, get records in reverse order with cursor pagination
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		if count < skip {
+			count++
+			continue
+		}
+
+		if len(results) >= size {
+			break
+		}
+
+		key := string(iter.Key())
+		value := string(iter.Value())
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": value,
+		})
+	}
+
+	return map[string]interface{}{
+		"total":   total,
+		"cursor":  cursor,
+		"size":    size,
+		"results": results,
+	}, nil
+}
+
+// GetGroupChatTimestamp2OutList Get TalkGroupChannelChatTimestamp2OutCollection list with cursor pagination and reverse order
+func GetGroupChannelChatTimestampOutList(cursor, size int, channelId string) (map[string]interface{}, error) {
+	if cursor < 0 {
+		cursor = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+
+	dbInstance, exists := db.Pb[db.TalkGroupChannelChatTimestamp2OutCollection]
+	if !exists {
+		return nil, fmt.Errorf("database %s does not exist", db.TalkGroupChannelChatTimestamp2OutCollection)
+	}
+
+	var results []map[string]interface{}
+	var iter *pebble.Iterator
+	var err error
+
+	// If groupId is provided, use prefix filtering
+	if channelId != "" {
+		prefix := channelId + "_"
+		iter, err = dbInstance.NewIter(&pebble.IterOptions{
+			LowerBound: []byte(prefix),
+			UpperBound: []byte(prefix + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+		})
+	} else {
+		iter, err = dbInstance.NewIter(nil)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Calculate skip count
+	skip := cursor
+	count := 0
+	total := 0
+
+	// First, count total records
+	if channelId != "" {
 		// Count records with prefix
 		for iter.First(); iter.Valid(); iter.Next() {
 			total++
@@ -2243,4 +2523,406 @@ func requeueResidueLuckyBag(residueLuckyBag *models.TalkGroupResidueLuckyBagV3) 
 
 	// Save to queue
 	return queueCollection.Set([]byte(key), data, pebble.Sync)
+}
+
+// RetryFailedLuckyBagOperationsByLuckyBagId Retry failed lucky bag operations by lucky bag ID
+func RetryFailedLuckyBagOperationsByLuckyBagId(luckyBagId string) (map[string]interface{}, error) {
+	// Validate input parameter
+	if luckyBagId == "" {
+		return nil, fmt.Errorf("luckyBagId cannot be empty")
+	}
+
+	// Get error collection
+	openErrCollection, exists := db.Pb[db.TalkGroupOpenLuckyBagErrCollection]
+	if !exists {
+		return nil, fmt.Errorf("error collection %s not found", db.TalkGroupOpenLuckyBagErrCollection)
+	}
+
+	// Get open lucky bag pin collection to match lucky bag ID
+	openPinCollection, exists := db.Pb[db.TalkGroupOpenLuckyBagPinCollection]
+	if !exists {
+		return nil, fmt.Errorf("open lucky bag pin collection %s not found", db.TalkGroupOpenLuckyBagPinCollection)
+	}
+
+	var retryResults []map[string]interface{}
+	var retryErrors []string
+
+	// Iterate through error collection to find matching lucky bag IDs
+	iter, err := openErrCollection.NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		errorPinId := string(iter.Key())
+
+		// Get the open lucky bag record to check if it belongs to the target lucky bag
+		openValue, openCloser, err := openPinCollection.Get([]byte(errorPinId))
+		if err == nil {
+			defer openCloser.Close()
+
+			// Parse the open lucky bag record
+			var openLuckyBag models.TalkGroupOpenLuckyBagV3
+			err = json.Unmarshal(openValue, &openLuckyBag)
+			if err == nil && openLuckyBag.LuckyBagPinId == luckyBagId {
+				// This record matches the target lucky bag ID, retry it
+				result, err := RetryFailedLuckyBagOperation(errorPinId)
+				if err != nil {
+					retryErrors = append(retryErrors, fmt.Sprintf("Failed to retry pinId %s: %v", errorPinId, err))
+				} else {
+					retryResults = append(retryResults, result)
+				}
+			}
+		} else {
+			fmt.Printf("Failed to get value from open collection: %v", err)
+		}
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"luckyBagId":   luckyBagId,
+		"totalFound":   len(retryResults) + len(retryErrors),
+		"successCount": len(retryResults),
+		"errorCount":   len(retryErrors),
+		"retryResults": retryResults,
+		"retryErrors":  retryErrors,
+	}
+
+	if len(retryErrors) > 0 {
+		response["message"] = fmt.Sprintf("Retried %d operations, %d succeeded, %d failed", len(retryResults)+len(retryErrors), len(retryResults), len(retryErrors))
+	} else {
+		response["message"] = fmt.Sprintf("Successfully retried %d operations", len(retryResults))
+	}
+
+	return response, nil
+}
+
+// Group admin, block, and whitelist related query methods
+
+// QueryGroupAdminCollection Get TalkGroupAdminCollection data with pagination
+func QueryGroupAdminCollection(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	var results []map[string]interface{}
+
+	// Create iterator for TalkGroupAdminCollection
+	iter, err := db.Pb[db.TalkGroupAdminCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+	total := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		total++
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkGroupAdminCollection,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+		"total":      total,
+	}
+
+	return result, nil
+}
+
+// QueryGroupBlockCollection Get TalkGroupBlockCollection data with pagination
+func QueryGroupBlockCollection(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	var results []map[string]interface{}
+
+	// Create iterator for TalkGroupBlockCollection
+	iter, err := db.Pb[db.TalkGroupBlockCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+	total := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		total++
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkGroupBlockCollection,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+		"total":      total,
+	}
+
+	return result, nil
+}
+
+// QueryGroupWhitelistCollection Get TalkGroupWhitelistCollection data with pagination
+func QueryGroupWhitelistCollection(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	var results []map[string]interface{}
+
+	// Create iterator for TalkGroupWhitelistCollection
+	iter, err := db.Pb[db.TalkGroupWhitelistCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	count := 0
+	skipCount := 0
+	total := 0
+
+	// Iterate through all keys
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		total++
+
+		// Skip until cursor
+		if skipCount < cursor {
+			skipCount++
+			continue
+		}
+
+		// Check if we've reached the size limit
+		if count >= size {
+			break
+		}
+
+		value := string(iter.Value())
+
+		// Try to parse JSON
+		var jsonData interface{}
+		if err := json.Unmarshal(iter.Value(), &jsonData); err != nil {
+			// If not JSON, use string directly
+			jsonData = value
+		}
+
+		results = append(results, map[string]interface{}{
+			"key":   key,
+			"value": jsonData,
+		})
+		count++
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + count
+	if count < size {
+		nextCursor = -1 // No more data
+	}
+
+	result := map[string]interface{}{
+		"collection": db.TalkGroupWhitelistCollection,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      count,
+		"data":       results,
+		"total":      total,
+	}
+
+	return result, nil
+}
+
+// QueryGroupAdminByGroupId Get TalkGroupAdminCollection data by groupId
+func QueryGroupAdminByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupAdminCollection
+	value, closer, err := db.Pb[db.TalkGroupAdminCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group admin data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
+// QueryGroupBlockByGroupId Get TalkGroupBlockCollection data by groupId
+func QueryGroupBlockByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupBlockCollection
+	value, closer, err := db.Pb[db.TalkGroupBlockCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group block data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
+// QueryGroupWhitelistByGroupId Get TalkGroupWhitelistCollection data by groupId
+func QueryGroupWhitelistByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupWhitelistCollection
+	value, closer, err := db.Pb[db.TalkGroupWhitelistCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group whitelist data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
 }

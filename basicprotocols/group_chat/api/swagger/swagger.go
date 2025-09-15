@@ -223,6 +223,113 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/channel-chat-list-v3": {
+            "get": {
+                "description": "Get channel chat records using GetChatsByChannelIdAndEndTimestampRange3 (test version with IterOptions for improved performance)",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get channel chat records (V3 with improved performance)",
+                "parameters": [
+                    {"type": "string", "description": "Channel ID", "name": "channelId", "in": "query", "required": true},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": false},
+                    {"type": "integer", "description": "Cursor, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "integer", "description": "Timestamp for pagination", "name": "timestamp", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return channel chat records", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/channel-chat-list-by-index": {
+            "get": {
+                "description": "Get channel chat records by index range (ascending order) using TalkGroupChannelChatIndexCollection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get channel chat records by index range",
+                "parameters": [
+                    {"type": "string", "description": "Channel ID", "name": "channelId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Start index for pagination, default is 0", "name": "startIndex", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return channel chat records by index", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupChatResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/channel-chat-list-by-start-time": {
+            "get": {
+                "description": "Get channel chat records by start timestamp range (ascending order) using TalkGroupChannelChatTimestamp2Collection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get channel chat records by start timestamp range",
+                "parameters": [
+                    {"type": "string", "description": "Channel ID", "name": "channelId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Start timestamp for pagination, default is 0", "name": "startTimestamp", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return channel chat records by start timestamp", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupChatResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/group-channel-list": {
+            "get": {
+                "description": "Get group channel list by group ID from TalkGroupChannelCollection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group channel list",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Cursor for pagination, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return group channel list", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupChannelResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
         "/group-chat/private-chat-list": {
             "get": {
                 "description": "Get private chat records between two users, support timestamp pagination",
@@ -481,6 +588,22 @@ func SetupSwagger(router *gin.Engine) {
                 ],
                 "responses": {
                     "200": {"description": "Successfully return maximum group chat index", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/max-group-channel-chat-index": {
+            "get": {
+                "description": "Get the current maximum index for a channel's chat records",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get current maximum group channel chat index",
+                "parameters": [
+                    {"type": "string", "description": "Channel ID", "name": "channelId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return maximum group channel chat index", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
@@ -1031,6 +1154,89 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/db/chat/timestamp2/out/channel": {
+            "get": {
+                "description": "Get channel chat timestamp2 out collection list with pagination and reverse order",
+                "produces": ["application/json"],
+                "tags": ["Database Queries"],
+                "summary": "Get channel chat timestamp2 out list",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor position, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "string", "description": "Channel ID for filtering", "name": "channelId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return channel chat timestamp2 out list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/db/chat/index/channel": {
+            "get": {
+                "description": "Get channel chat index collection list with pagination and reverse order",
+                "produces": ["application/json"],
+                "tags": ["Database Queries"],
+                "summary": "Get channel chat index list",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor position, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "string", "description": "Channel ID for filtering", "name": "channelId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return channel chat index list", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/db/chat/index/channel/keys": {
+            "get": {
+                "description": "Get channel chat index collection key list with pagination",
+                "produces": ["application/json"],
+                "tags": ["Database Queries"],
+                "summary": "Get channel chat index keys",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor position, default is 0", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false},
+                    {"type": "string", "description": "Channel ID for filtering", "name": "channelId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return channel chat index keys", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Check if the group chat service is running properly",
+                "produces": ["application/json"],
+                "tags": ["System"],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Service is healthy",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer"},
+                                "message": {"type": "string"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {"type": "string"},
+                                        "service": {"type": "string"},
+                                        "timestamp": {"type": "integer"},
+                                        "uptime": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/db/chat/index/group": {
             "get": {
                 "description": "Get TalkGroupChatIndexCollection list with cursor pagination and reverse order",
@@ -1498,6 +1704,56 @@ func SetupSwagger(router *gin.Engine) {
                     },
                     "400": {"description": "Bad request", "schema": {"type": "object"}},
                     "404": {"description": "PinId not found in error collections", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/retry-by-luckybag-id": {
+            "post": {
+                "description": "Retry all failed lucky bag operations for a specific lucky bag ID from error collections",
+                "produces": ["application/json"],
+                "tags": ["Database Query"],
+                "summary": "Retry failed lucky bag operations by lucky bag ID",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag ID to retry failed operations for", "name": "luckyBagId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retried lucky bag operations",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "success": {"type": "boolean"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "luckyBagId": {"type": "string", "description": "Lucky bag ID that was processed"},
+                                        "totalFound": {"type": "integer", "description": "Total number of failed operations found"},
+                                        "successCount": {"type": "integer", "description": "Number of operations successfully retried"},
+                                        "errorCount": {"type": "integer", "description": "Number of operations that failed to retry"},
+                                        "retryResults": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "type": {"type": "string", "description": "Operation type: open or residue"},
+                                                    "pinId": {"type": "string"},
+                                                    "luckyBagPinId": {"type": "string"},
+                                                    "message": {"type": "string"}
+                                                }
+                                            }
+                                        },
+                                        "retryErrors": {
+                                            "type": "array",
+                                            "items": {"type": "string", "description": "Error messages for failed retry attempts"}
+                                        },
+                                        "message": {"type": "string", "description": "Summary message of the retry operation"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
                     "500": {"description": "Internal server error", "schema": {"type": "object"}}
                 }
             }
@@ -2432,32 +2688,72 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
-        "/health": {
-            "get": {
-                "description": "Check if the group chat service is running properly",
-                "produces": ["application/json"],
-                "tags": ["System"],
-                "summary": "Health check endpoint",
-                "responses": {
-                    "200": {
-                        "description": "Service is healthy",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "code": {"type": "integer"},
-                                "message": {"type": "string"},
-                                "data": {
-                                    "type": "object",
-                                    "properties": {
-                                        "status": {"type": "string"},
-                                        "service": {"type": "string"},
-                                        "timestamp": {"type": "integer"},
-                                        "uptime": {"type": "string"}
-                                    }
-                                }
-                            }
-                        }
-                    }
+        "GroupChannelResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/GroupChannelItem"
+                    },
+                    "description": "Channel list"
+                }
+            }
+        },
+        "GroupChannelItem": {
+            "type": "object",
+            "properties": {
+                "channelId": {
+                    "type": "string",
+                    "description": "Channel ID"
+                },
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "channelName": {
+                    "type": "string",
+                    "description": "Channel name"
+                },
+                "channelIcon": {
+                    "type": "string",
+                    "description": "Channel icon"
+                },
+                "channelNote": {
+                    "type": "string",
+                    "description": "Channel note"
+                },
+                "channelType": {
+                    "type": "integer",
+                    "description": "Channel type: 0-normal, 1-launch"
+                },
+                "createUserMetaId": {
+                    "type": "string",
+                    "description": "Create user MetaId"
+                },
+                "createUserAddress": {
+                    "type": "string",
+                    "description": "Create user address"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Index"
                 }
             }
         }

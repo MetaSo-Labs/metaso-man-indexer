@@ -41,11 +41,3 @@ func RespErr(err error, timestamp int64, code int) Message {
 		Data:           nil,
 	}
 }
-
-// MaxIndexResponse represents the maximum index response for chat collections
-type MaxIndexResponse struct {
-	GroupId    string `json:"groupId,omitempty"`    // Group ID (for group chat)
-	FromMetaId string `json:"fromMetaId,omitempty"` // From MetaId (for private chat)
-	ToMetaId   string `json:"toMetaId,omitempty"`   // To MetaId (for private chat)
-	MaxIndex   int64  `json:"maxIndex"`             // Current maximum index
-}

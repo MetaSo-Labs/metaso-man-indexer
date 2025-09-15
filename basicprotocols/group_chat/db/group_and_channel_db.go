@@ -17,11 +17,12 @@ import (
 
 // Group search cache item
 type GroupSearchCacheItem struct {
-	GroupId   string `json:"groupId"`   // Group ID
-	GroupName string `json:"groupName"` // Group name
-	GroupIcon string `json:"groupIcon"` // Group icon
-	PinId     string `json:"pinId"`     // Pin ID
-	Timestamp int64  `json:"timestamp"` // Timestamp
+	GroupId     string `json:"groupId"`     // Group ID
+	MemberCount int64  `json:"memberCount"` // Member count
+	GroupName   string `json:"groupName"`   // Group name
+	GroupIcon   string `json:"groupIcon"`   // Group icon
+	PinId       string `json:"pinId"`       // Pin ID
+	Timestamp   int64  `json:"timestamp"`   // Timestamp
 }
 
 // Group database operations
@@ -211,6 +212,18 @@ func (gdb *GroupDB) DeleteGroupCommunity(communityId, groupId string) error {
 	return Pb[TalkGroupCommunityCollection].Delete(key, pebble.Sync)
 }
 
+// Save group channel association
+func (gdb *GroupDB) SaveGroupChannel(channel *models.TalkGroupChannelModel) error {
+	data, err := json.Marshal(channel)
+	if err != nil {
+		return err
+	}
+
+	// Use GroupId_ChannelId as primary key
+	key := []byte(channel.GroupId + "_" + channel.ChannelId)
+	return Pb[TalkGroupChannelCollection].Set(key, data, pebble.Sync)
+}
+
 // Get group list by community ID
 func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGroupModel, error) {
 	var groups []*models.TalkGroupModel
@@ -285,10 +298,18 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 		protocol := strings.Replace(path, "/protocols/", "", -1)
 		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupCreate) {
 			return gdb.processGroupCreate(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupChannel) {
+			return gdb.processGroupChannelCreate(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupJoin) {
 			return gdb.processGroupJoin(pin)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupRemoveUser) {
 			return gdb.processGroupRemoveUser(pin)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupAdmin) {
+			return gdb.processGroupAdmin(pin, "")
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupBlock) {
+			return gdb.processGroupBlock(pin, "")
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
+			return gdb.processGroupWhitelist(pin, "")
 		}
 	case "modify":
 		// Check ParentPath
@@ -296,6 +317,14 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 		parentProtocol := strings.Replace(parentPath, "/protocols/", "", -1)
 		if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupCreate) {
 			return gdb.processGroupModify(pin)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupChannel) {
+			return gdb.processGroupChannelModify(pin)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupAdmin) {
+			return gdb.processGroupAdminModify(pin)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupBlock) {
+			return gdb.processGroupBlockModify(pin)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
+			return gdb.processGroupWhitelistModify(pin)
 		}
 		return nil
 	default:
@@ -1874,6 +1903,542 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 	return nil
 }
 
+// Process group admin setting
+func (gdb *GroupDB) processGroupAdmin(pin *pin.PinInscription, operation string) error {
+	// Parse protocol data
+	var simpleGroupAdmin protocols.SimpleGroupAdmin
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupAdmin)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupAdmin.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the admin setting is the group creator
+	if group.CreateUserAddress != pin.CreateAddress {
+		return errors.New("only group creator can set admins")
+	}
+
+	if operation == "" {
+		operation = "create"
+	}
+	// Add admin record to group admin list
+	err = gdb.addGroupAdminToGroupList(simpleGroupAdmin.GroupId, pin.Id, operation, pin, simpleGroupAdmin.Admins)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process group admin modify
+func (gdb *GroupDB) processGroupAdminModify(pin *pin.PinInscription) error {
+	return gdb.processGroupAdmin(pin, "modify")
+}
+
+// Process group block setting
+func (gdb *GroupDB) processGroupBlock(pin *pin.PinInscription, operation string) error {
+	// Parse protocol data
+	var simpleGroupBlock protocols.SimpleGroupBlock
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupBlock)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator or admin
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupBlock.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the block setting is the group creator or admin
+	if group.CreateUserAddress != pin.CreateAddress {
+		// Check if user is admin
+		isAdmin, err := gdb.IsUserAdmin(simpleGroupBlock.GroupId, pin.CreateMetaId, pin.Timestamp)
+		if err != nil {
+			return err
+		}
+		if !isAdmin {
+			return errors.New("only group creator or admin can set block list")
+		}
+	}
+
+	if operation == "" {
+		operation = "create"
+	}
+	// Add block record to group block list
+	err = gdb.addGroupBlockToGroupList(simpleGroupBlock.GroupId, pin.Id, operation, pin, simpleGroupBlock.Users)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process group block modify
+func (gdb *GroupDB) processGroupBlockModify(pin *pin.PinInscription) error {
+	return gdb.processGroupBlock(pin, "modify")
+}
+
+// Process group whitelist setting
+func (gdb *GroupDB) processGroupWhitelist(pin *pin.PinInscription, operation string) error {
+	// Parse protocol data
+	var simpleGroupWhitelist protocols.SimpleGroupWhitelist
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupWhitelist)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator or admin
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupWhitelist.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the whitelist setting is the group creator or admin
+	if group.CreateUserAddress != pin.CreateAddress {
+		// Check if user is admin
+		isAdmin, err := gdb.IsUserAdmin(simpleGroupWhitelist.GroupId, pin.CreateMetaId, pin.Timestamp)
+		if err != nil {
+			return err
+		}
+		if !isAdmin {
+			return errors.New("only group creator or admin can set whitelist")
+		}
+	}
+
+	if operation == "" {
+		operation = "create"
+	}
+	// Add whitelist record to group whitelist list
+	err = gdb.addGroupWhitelistToGroupList(simpleGroupWhitelist.GroupId, pin.Id, operation, pin, simpleGroupWhitelist.Users)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process group whitelist modify
+func (gdb *GroupDB) processGroupWhitelistModify(pin *pin.PinInscription) error {
+	return gdb.processGroupWhitelist(pin, "modify")
+}
+
+// Get group admin list
+func (gdb *GroupDB) getGroupAdminList(groupId string) (*models.GroupAdminList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupAdminCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupAdminList{GroupId: groupId, Items: []*models.GroupAdminItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var adminList models.GroupAdminList
+	err = json.Unmarshal(value, &adminList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &adminList, nil
+}
+
+// Save group admin list
+func (gdb *GroupDB) saveGroupAdminList(adminList *models.GroupAdminList) error {
+	data, err := json.Marshal(adminList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(adminList.GroupId)
+	return Pb[TalkGroupAdminCollection].Set(key, data, pebble.Sync)
+}
+
+// Add group admin record to group admin list
+func (gdb *GroupDB) addGroupAdminToGroupList(
+	groupId, pinId, adminType string,
+	pin *pin.PinInscription, admins []string) error {
+	// Add lock for TalkGroupAdminCollection operations
+	mutex := GetGroupAdminMutex(groupId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Get existing admin list
+	existingList, err := gdb.getGroupAdminList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Create new admin record item
+	newItem := &models.GroupAdminItem{
+		AdminPinId:     pinId,
+		AdminType:      adminType,
+		AdminTimestamp: pin.Timestamp,
+		Admins:         admins,
+		SetByMetaId:    pin.CreateMetaId,
+		SetByAddress:   pin.CreateAddress,
+		BlockHeight:    pin.GenesisHeight,
+		Chain:          pin.ChainName,
+	}
+
+	// Check if admin record already exists
+	found := false
+	for i, item := range existingList.Items {
+		// Determine if already exists by AdminPinId (because each admin has different PinId)
+		if item.AdminPinId == pinId {
+			// Update existing item
+			existingList.Items[i] = newItem
+			found = true
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// Sort by timestamp in reverse order
+	gdb.sortGroupAdminListByTimestamp(existingList)
+
+	// Save updated admin list
+	return gdb.saveGroupAdminList(existingList)
+}
+
+// Sort group admin list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupAdminListByTimestamp(adminList *models.GroupAdminList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(adminList.Items)-1; i++ {
+		for j := 0; j < len(adminList.Items)-1-i; j++ {
+			if adminList.Items[j].AdminTimestamp > adminList.Items[j+1].AdminTimestamp {
+				adminList.Items[j], adminList.Items[j+1] = adminList.Items[j+1], adminList.Items[j]
+			}
+		}
+	}
+}
+
+// Get group block list
+func (gdb *GroupDB) getGroupBlockList(groupId string) (*models.GroupBlockList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupBlockCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupBlockList{GroupId: groupId, Items: []*models.GroupBlockItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var blockList models.GroupBlockList
+	err = json.Unmarshal(value, &blockList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockList, nil
+}
+
+// Save group block list
+func (gdb *GroupDB) saveGroupBlockList(blockList *models.GroupBlockList) error {
+	data, err := json.Marshal(blockList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(blockList.GroupId)
+	return Pb[TalkGroupBlockCollection].Set(key, data, pebble.Sync)
+}
+
+// Add group block record to group block list
+func (gdb *GroupDB) addGroupBlockToGroupList(
+	groupId, pinId, blockType string,
+	pin *pin.PinInscription, blockedUsers []string) error {
+	// Add lock for TalkGroupBlockCollection operations
+	mutex := GetGroupBlockMutex(groupId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Get existing block list
+	existingList, err := gdb.getGroupBlockList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Create new block record item
+	newItem := &models.GroupBlockItem{
+		BlockPinId:     pinId,
+		BlockType:      blockType,
+		BlockTimestamp: pin.Timestamp,
+		BlockedUsers:   blockedUsers,
+		SetByMetaId:    pin.CreateMetaId,
+		SetByAddress:   pin.CreateAddress,
+		BlockHeight:    pin.GenesisHeight,
+		Chain:          pin.ChainName,
+	}
+
+	// Check if block record already exists
+	found := false
+	for i, item := range existingList.Items {
+		// Determine if already exists by BlockPinId (because each block has different PinId)
+		if item.BlockPinId == pinId {
+			// Update existing item
+			existingList.Items[i] = newItem
+			found = true
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// Sort by timestamp in reverse order
+	gdb.sortGroupBlockListByTimestamp(existingList)
+
+	// Save updated block list
+	return gdb.saveGroupBlockList(existingList)
+}
+
+// Sort group block list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupBlockListByTimestamp(blockList *models.GroupBlockList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(blockList.Items)-1; i++ {
+		for j := 0; j < len(blockList.Items)-1-i; j++ {
+			if blockList.Items[j].BlockTimestamp > blockList.Items[j+1].BlockTimestamp {
+				blockList.Items[j], blockList.Items[j+1] = blockList.Items[j+1], blockList.Items[j]
+			}
+		}
+	}
+}
+
+// Get group whitelist list
+func (gdb *GroupDB) getGroupWhitelistList(groupId string) (*models.GroupWhitelistList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupWhitelistCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupWhitelistList{GroupId: groupId, Items: []*models.GroupWhitelistItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var whitelistList models.GroupWhitelistList
+	err = json.Unmarshal(value, &whitelistList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &whitelistList, nil
+}
+
+// Save group whitelist list
+func (gdb *GroupDB) saveGroupWhitelistList(whitelistList *models.GroupWhitelistList) error {
+	data, err := json.Marshal(whitelistList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(whitelistList.GroupId)
+	return Pb[TalkGroupWhitelistCollection].Set(key, data, pebble.Sync)
+}
+
+// Add group whitelist record to group whitelist list
+func (gdb *GroupDB) addGroupWhitelistToGroupList(
+	groupId, pinId, whitelistType string,
+	pin *pin.PinInscription, whitelistUsers []string) error {
+	// Add lock for TalkGroupWhitelistCollection operations
+	mutex := GetGroupWhitelistMutex(groupId)
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Get existing whitelist list
+	existingList, err := gdb.getGroupWhitelistList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Create new whitelist record item
+	newItem := &models.GroupWhitelistItem{
+		WhitelistPinId:     pinId,
+		WhitelistType:      whitelistType,
+		WhitelistTimestamp: pin.Timestamp,
+		WhitelistUsers:     whitelistUsers,
+		SetByMetaId:        pin.CreateMetaId,
+		SetByAddress:       pin.CreateAddress,
+		BlockHeight:        pin.GenesisHeight,
+		Chain:              pin.ChainName,
+	}
+
+	// Check if whitelist record already exists
+	found := false
+	for i, item := range existingList.Items {
+		// Determine if already exists by WhitelistPinId (because each whitelist has different PinId)
+		if item.WhitelistPinId == pinId {
+			// Update existing item
+			existingList.Items[i] = newItem
+			found = true
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// Sort by timestamp in reverse order
+	gdb.sortGroupWhitelistListByTimestamp(existingList)
+
+	// Save updated whitelist list
+	return gdb.saveGroupWhitelistList(existingList)
+}
+
+// Sort group whitelist list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupWhitelistListByTimestamp(whitelistList *models.GroupWhitelistList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(whitelistList.Items)-1; i++ {
+		for j := 0; j < len(whitelistList.Items)-1-i; j++ {
+			if whitelistList.Items[j].WhitelistTimestamp > whitelistList.Items[j+1].WhitelistTimestamp {
+				whitelistList.Items[j], whitelistList.Items[j+1] = whitelistList.Items[j+1], whitelistList.Items[j]
+			}
+		}
+	}
+}
+
+// Check if user is admin of the group at specific timestamp
+func (gdb *GroupDB) IsUserAdmin(groupId, metaId string, pinTimestamp int64) (bool, error) {
+	// Get group admin list
+	adminList, err := gdb.getGroupAdminList(groupId)
+	if err != nil {
+		return false, err
+	}
+	if adminList == nil || len(adminList.Items) == 0 {
+		return false, nil
+	}
+
+	// Data is already sorted by timestamp in ascending order
+	// Find the admin record that was effective at the given timestamp
+	var effectiveAdminItem *models.GroupAdminItem
+	for _, item := range adminList.Items {
+		// Find the latest admin record that was set before or at the pinTimestamp
+		if item.AdminTimestamp <= pinTimestamp {
+			effectiveAdminItem = item
+		} else {
+			// Since data is sorted by timestamp, we can break here
+			break
+		}
+	}
+
+	// If no effective admin record found, user is not admin
+	if effectiveAdminItem == nil {
+		return false, nil
+	}
+
+	// Check if metaId is in the effective admin list
+	for _, adminMetaId := range effectiveAdminItem.Admins {
+		if adminMetaId == metaId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Check if user is blocked in the group at specific timestamp
+func (gdb *GroupDB) IsUserBlock(groupId, metaId string, pinTimestamp int64) (bool, error) {
+	// Get group block list
+	blockList, err := gdb.getGroupBlockList(groupId)
+	if err != nil {
+		return false, err
+	}
+	if blockList == nil || len(blockList.Items) == 0 {
+		return false, nil
+	}
+
+	// Data is already sorted by timestamp in ascending order
+	// Find the block record that was effective at the given timestamp
+	var effectiveBlockItem *models.GroupBlockItem
+	for _, item := range blockList.Items {
+		// Find the latest block record that was set before or at the pinTimestamp
+		if item.BlockTimestamp <= pinTimestamp {
+			effectiveBlockItem = item
+		} else {
+			// Since data is sorted by timestamp, we can break here
+			break
+		}
+	}
+
+	// If no effective block record found, user is not blocked
+	if effectiveBlockItem == nil {
+		return false, nil
+	}
+
+	// Check if metaId is in the effective block list
+	for _, blockedMetaId := range effectiveBlockItem.BlockedUsers {
+		if blockedMetaId == metaId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Check if user is whitelisted in the group at specific timestamp
+func (gdb *GroupDB) IsUserWhitelist(groupId, metaId string, pinTimestamp int64) (bool, error) {
+	// Get group whitelist list
+	whitelistList, err := gdb.getGroupWhitelistList(groupId)
+	if err != nil {
+		return false, err
+	}
+	if whitelistList == nil || len(whitelistList.Items) == 0 {
+		return false, nil
+	}
+
+	// Data is already sorted by timestamp in ascending order
+	// Find the whitelist record that was effective at the given timestamp
+	var effectiveWhitelistItem *models.GroupWhitelistItem
+	for _, item := range whitelistList.Items {
+		// Find the latest whitelist record that was set before or at the pinTimestamp
+		if item.WhitelistTimestamp <= pinTimestamp {
+			effectiveWhitelistItem = item
+		} else {
+			// Since data is sorted by timestamp, we can break here
+			break
+		}
+	}
+
+	// If no effective whitelist record found, user is not whitelisted
+	if effectiveWhitelistItem == nil {
+		return false, nil
+	}
+
+	// Check if metaId is in the effective whitelist
+	for _, whitelistMetaId := range effectiveWhitelistItem.WhitelistUsers {
+		if whitelistMetaId == metaId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // startCacheUpdateGoroutine starts the cache update goroutine
 func (gdb *GroupDB) startCacheUpdateGoroutine() {
 	// Execute initial cache update immediately on startup
@@ -1996,7 +2561,7 @@ func (gdb *GroupDB) triggerCacheUpdate(groupId string) {
 }
 
 // SearchGroups searches groups by name or ID using fuzzy search
-func (gdb *GroupDB) SearchGroups(query string, limit int) ([]*GroupSearchCacheItem, error) {
+func (gdb *GroupDB) SearchGroups(query string, limit int, memberCountMin int) ([]*GroupSearchCacheItem, error) {
 	if query == "" {
 		return nil, errors.New("search query cannot be empty")
 	}
@@ -2020,6 +2585,17 @@ func (gdb *GroupDB) SearchGroups(query string, limit int) ([]*GroupSearchCacheIt
 
 	// Search through the temporary copy
 	for _, item := range cacheCopy {
+
+		if memberCountMin > 0 {
+			memberCount, err := gdb.GetGroupMemberCountFromList(item.GroupId)
+			if err != nil {
+				continue
+			}
+			if memberCount <= int64(memberCountMin) {
+				continue
+			}
+			item.MemberCount = memberCount
+		}
 		// Check if group name or ID contains the query (case-insensitive)
 		if strings.Contains(strings.ToLower(item.GroupName), queryLower) ||
 			strings.Contains(strings.ToLower(item.GroupId), queryLower) {
@@ -2061,4 +2637,304 @@ func (gdb *GroupDB) GetSearchCacheStats() map[string]interface{} {
 // StopCacheGoroutine stops the cache update goroutine
 func (gdb *GroupDB) StopCacheGoroutine() {
 	close(gdb.stopCacheChan)
+}
+
+// ==================== Channel Related Methods ====================
+
+// Save channel info
+func (gdb *GroupDB) SaveChannelInfo(channel *models.TalkGroupChannelModel) error {
+	// First get existing channel info
+	existingChannel, err := gdb.GetChannelInfoByChannelId(channel.ChannelId)
+	if err != nil {
+		return err
+	}
+
+	// If no existing data, save directly
+	if existingChannel == nil {
+		data, err := json.Marshal(channel)
+		if err != nil {
+			return err
+		}
+		key := []byte(channel.ChannelId)
+		err = Pb[TalkGroupChannelInfoCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Determine if update is needed
+	shouldUpdate := false
+
+	// 1. First check if pinId is the same
+	if existingChannel.PinId == channel.PinId {
+		// pinId is the same, check if blockHeight is different
+		if existingChannel.BlockHeight != channel.BlockHeight {
+			shouldUpdate = true
+		}
+	} else {
+		// pinId is different, compare timestamp
+		if channel.Timestamp > existingChannel.Timestamp {
+			shouldUpdate = true
+		}
+	}
+
+	// If update is needed, save new data
+	if shouldUpdate {
+		data, err := json.Marshal(channel)
+		if err != nil {
+			return err
+		}
+		key := []byte(channel.ChannelId)
+		err = Pb[TalkGroupChannelInfoCollection].Set(key, data, pebble.Sync)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// No update needed, return directly
+	return nil
+}
+
+// Get channel info by ChannelId
+func (gdb *GroupDB) GetChannelInfoByChannelId(channelId string) (*models.TalkGroupChannelModel, error) {
+	key := []byte(channelId)
+	value, closer, err := Pb[TalkGroupChannelInfoCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var channel models.TalkGroupChannelModel
+	err = json.Unmarshal(value, &channel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &channel, nil
+}
+
+// Save channel version info
+func (gdb *GroupDB) SaveChannelVersionInfo(channel *models.TalkGroupChannelModel) error {
+	data, err := json.Marshal(channel)
+	if err != nil {
+		return err
+	}
+
+	// Use ChannelId_PinId as primary key
+	key1 := []byte(channel.ChannelId + "_" + channel.PinId)
+	err = Pb[TalkGroupChannelVersionInfoCollection].Set(key1, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Use PinId_ChannelId as primary key
+	key2 := []byte(channel.PinId + "_" + channel.ChannelId)
+	return Pb[TalkGroupChannelVersionInfoCollection].Set(key2, data, pebble.Sync)
+}
+
+// Get channel version info by ChannelId and PinId
+func (gdb *GroupDB) GetChannelVersionInfoByChannelIdAndPinId(channelId, pinId string) (*models.TalkGroupChannelModel, error) {
+	key := []byte(channelId + "_" + pinId)
+	value, closer, err := Pb[TalkGroupChannelVersionInfoCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var channel models.TalkGroupChannelModel
+	err = json.Unmarshal(value, &channel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &channel, nil
+}
+
+// Get channel version info by PinId and ChannelId
+func (gdb *GroupDB) GetChannelVersionInfoByPinIdAndChannelId(pinId, channelId string) (*models.TalkGroupChannelModel, error) {
+	key := []byte(pinId + "_" + channelId)
+	value, closer, err := Pb[TalkGroupChannelVersionInfoCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var channel models.TalkGroupChannelModel
+	err = json.Unmarshal(value, &channel)
+	if err != nil {
+		return nil, err
+	}
+
+	return &channel, nil
+}
+
+// Get channels by group ID from TalkGroupChannelCollection
+func (gdb *GroupDB) GetChannelsByGroupId(groupId string) ([]*models.TalkGroupChannelModel, error) {
+	var channels []*models.TalkGroupChannelModel
+
+	// Use prefix query, because key is groupId_channelId format
+	prefix := []byte(groupId + "_")
+	iter, err := Pb[TalkGroupChannelCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with groupId_
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var channel models.TalkGroupChannelModel
+		err := json.Unmarshal(iter.Value(), &channel)
+		if err != nil {
+			continue
+		}
+		channels = append(channels, &channel)
+	}
+
+	return channels, nil
+}
+
+// Delete channel
+func (gdb *GroupDB) DeleteChannel(channelId string) error {
+	key := []byte(channelId)
+	return Pb[TalkGroupChannelInfoCollection].Delete(key, pebble.Sync)
+}
+
+// Process channel creation
+func (gdb *GroupDB) processGroupChannelCreate(pin *pin.PinInscription) error {
+	// Parse protocol data
+	var simpleGroupChannel protocols.SimpleGroupChannel
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
+	if err != nil {
+		return err
+	}
+
+	// Verify that the group exists and user has permission
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupChannel.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the channel creation is the group creator or admin
+	if group.CreateUserAddress != pin.CreateAddress {
+		// Check if user is admin
+		// isAdmin, err := gdb.IsUserAdmin(simpleGroupChannel.GroupId, pin.CreateMetaId, pin.Timestamp)
+		// if err != nil {
+		// 	return err
+		// }
+		// if !isAdmin {
+		// 	return errors.New("only group creator or admin can create channels")
+		// }
+		return errors.New("only group creator can create channels")
+	}
+
+	// Create channel model
+	channel := &models.TalkGroupChannelModel{
+		ChannelId:         pin.Id,
+		GroupId:           simpleGroupChannel.GroupId,
+		TxId:              pin.Id[:len(pin.Id)-2],
+		PinId:             pin.Id,
+		ChannelName:       simpleGroupChannel.ChannelName,
+		ChannelNote:       simpleGroupChannel.ChannelNote,
+		ChannelIcon:       simpleGroupChannel.ChannelIcon,
+		ChannelType:       simpleGroupChannel.ChannelType,
+		CreateUserMetaId:  pin.CreateMetaId,
+		CreateUserAddress: pin.CreateAddress,
+		Chain:             pin.ChainName,
+		DeleteStatus:      0, // Default to normal
+		Timestamp:         pin.Timestamp,
+		BlockHeight:       pin.GenesisHeight,
+	}
+
+	// Save to version info table
+	err = gdb.SaveChannelVersionInfo(channel)
+	if err != nil {
+		return err
+	}
+
+	// Save to basic info table
+	err = gdb.SaveChannelInfo(channel)
+	if err != nil {
+		return err
+	}
+
+	// Save group channel association
+	err = gdb.SaveGroupChannel(channel)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process channel modification
+func (gdb *GroupDB) processGroupChannelModify(pin *pin.PinInscription) error {
+	// Parse protocol data
+	var simpleGroupChannel protocols.SimpleGroupChannel
+	err := json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
+	if err != nil {
+		return err
+	}
+
+	// Get existing channel info
+	existingChannel, err := gdb.GetChannelInfoByChannelId(simpleGroupChannel.ChannelId)
+	if err != nil {
+		return err
+	}
+
+	if existingChannel == nil {
+		return errors.New("channel not found in db, no modify")
+	}
+
+	// Verify that the user initiating the modification is the channel creator or group admin
+	if existingChannel.CreateUserAddress != pin.CreateAddress {
+		// Check if user is group admin
+		// isAdmin, err := gdb.IsUserAdmin(existingChannel.GroupId, pin.CreateMetaId, pin.Timestamp)
+		// if err != nil {
+		// 	return err
+		// }
+		// if !isAdmin {
+		// 	return errors.New("only channel creator or group admin can modify channels")
+		// }
+		return errors.New("only channel creator can modify channels")
+	}
+
+	// Update channel info
+	existingChannel.ChannelName = simpleGroupChannel.ChannelName
+	existingChannel.ChannelNote = simpleGroupChannel.ChannelNote
+	existingChannel.ChannelIcon = simpleGroupChannel.ChannelIcon
+	existingChannel.ChannelType = simpleGroupChannel.ChannelType
+	existingChannel.TxId = pin.Id[:len(pin.Id)-2] // Remove last two characters
+	existingChannel.PinId = pin.Id
+	existingChannel.Timestamp = pin.Timestamp
+	existingChannel.BlockHeight = pin.GenesisHeight
+
+	// Save to version info table
+	err = gdb.SaveChannelVersionInfo(existingChannel)
+	if err != nil {
+		return err
+	}
+
+	// Save to basic info table
+	err = gdb.SaveChannelInfo(existingChannel)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

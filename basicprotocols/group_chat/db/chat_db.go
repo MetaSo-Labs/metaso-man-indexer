@@ -26,6 +26,7 @@ import (
 type QueueChatMessage struct {
 	PinId      string                  `json:"pinId"`      // Message PinId
 	GroupId    string                  `json:"groupId"`    // Group ID
+	ChannelId  string                  `json:"channelId"`  // Channel ID
 	Chat       *models.TalkGroupChatV3 `json:"chat"`       // Chat message
 	Timestamp  int64                   `json:"timestamp"`  // Enqueue timestamp
 	RetryCount int                     `json:"retryCount"` // Retry count
@@ -35,6 +36,7 @@ type QueueChatMessage struct {
 // Chat database operations
 type ChatDB struct {
 	pb                   *Pebble
+	gdb                  *GroupDB // Reference to GroupDB for admin/block/whitelist checks
 	luckyBagListMutexMap sync.Map
 	processingMutex      sync.Mutex
 	isProcessing         bool
@@ -53,6 +55,10 @@ func NewChatDB(pb *Pebble) *ChatDB {
 	go cdb.startCleanupGoroutine()
 
 	return cdb
+}
+
+func (cdb *ChatDB) SetGdb(gdb *GroupDB) {
+	cdb.gdb = gdb
 }
 
 // getLuckyBagMutex get or create lucky bag mutex
@@ -1189,6 +1195,94 @@ func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestCh
 	return &latestChat, nil
 }
 
+// Update group channel latest chat record
+func (cdb *ChatDB) updateGroupChannelLatestChat(channelId string, chat *models.TalkGroupChatV3) error {
+	// First get existing latest chat record
+	existingLatestChat, err := cdb.GetGroupChannelLatestChat(channelId)
+	if err != nil {
+		return err
+	}
+
+	// Create new latest chat record
+	newLatestChat := &models.TalkGroupChannelLatestChat{
+		ChannelId:        channelId,
+		Timestamp:        chat.Timestamp,
+		ChatType:         chat.ChatType,
+		Content:          chat.Content,
+		CreateAddress:    chat.Address,
+		LastMessagePinId: chat.PinId,
+		MetaId:           chat.MetaId,
+		TxId:             chat.TxId,
+		PinId:            chat.PinId,
+		Protocol:         chat.Protocol,
+		ContentType:      chat.ContentType,
+		Encryption:       chat.Encryption,
+		ReplyPin:         chat.ReplyPin,
+		Chain:            chat.Chain,
+		BlockHeight:      chat.BlockHeight,
+	}
+
+	// If no existing data, save directly
+	if existingLatestChat == nil {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(channelId)
+		return Pb[TalkGroupChannelLatestChatCollection].Set(key, data, pebble.Sync)
+	}
+
+	// Determine if update is needed
+	shouldUpdate := false
+
+	// 1. First check if pinId is the same
+	if existingLatestChat.LastMessagePinId == chat.PinId {
+		// pinId is the same, check if blockHeight is different
+		if existingLatestChat.BlockHeight != chat.BlockHeight {
+			shouldUpdate = true
+		}
+	} else {
+		// pinId is different, compare timestamp
+		if chat.Timestamp > existingLatestChat.Timestamp {
+			shouldUpdate = true
+		}
+	}
+
+	// If update is needed, save new data
+	if shouldUpdate {
+		data, err := json.Marshal(newLatestChat)
+		if err != nil {
+			return err
+		}
+		key := []byte(channelId)
+		return Pb[TalkGroupChannelLatestChatCollection].Set(key, data, pebble.Sync)
+	}
+
+	// No update needed, return directly
+	return nil
+}
+
+// Get group channel latest chat record
+func (cdb *ChatDB) GetGroupChannelLatestChat(channelId string) (*models.TalkGroupChannelLatestChat, error) {
+	key := []byte(channelId)
+	value, closer, err := Pb[TalkGroupChannelLatestChatCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var latestChat models.TalkGroupChannelLatestChat
+	err = json.Unmarshal(value, &latestChat)
+	if err != nil {
+		return nil, err
+	}
+
+	return &latestChat, nil
+}
+
 // Update single member's group list
 func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *models.TalkGroupChatV3) error {
 	// Get mutex for this MetaId to prevent concurrent updates
@@ -1626,18 +1720,34 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 	for _, message := range messages {
 		hasError := false
 
-		// Update group list for all members in the group
-		err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB)
-		if err != nil {
-			log.Printf("Failed to update group members context list for pinId %s: %v", message.PinId, err)
-			hasError = true
-		}
+		if message.ChannelId != "" {
+			err = cdb.updateGroupChannelLatestChat(message.ChannelId, message.Chat)
+			if err != nil {
+				log.Printf("Failed to update group channel latest chat for pinId %s: %v", message.PinId, err)
+				hasError = true
+			}
 
-		// Update chat index
-		err = cdb.UpdateChatIndex(message.Chat)
-		if err != nil {
-			log.Printf("Failed to update chat index for pinId %s: %v", message.PinId, err)
-			hasError = true
+			// Update channel chat index
+			err = cdb.UpdateChannelChatIndex(message.Chat)
+			if err != nil {
+				log.Printf("Failed to update channel chat index for pinId %s: %v", message.PinId, err)
+				hasError = true
+			}
+
+		} else {
+			// Update group list for all members in the group
+			err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB)
+			if err != nil {
+				log.Printf("Failed to update group members context list for pinId %s: %v", message.PinId, err)
+				hasError = true
+			}
+
+			// Update chat index
+			err = cdb.UpdateChatIndex(message.Chat)
+			if err != nil {
+				log.Printf("Failed to update chat index for pinId %s: %v", message.PinId, err)
+				hasError = true
+			}
 		}
 
 		// Only delete queue message if both operations succeeded
@@ -1648,6 +1758,7 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 				log.Printf("Failed to delete queue message for pinId %s: %v", message.PinId, err)
 			}
 		}
+
 	}
 
 	return nil
@@ -1782,6 +1893,7 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	// Create chat message model
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleGroupChat.GroupId,
+		ChannelId:   simpleGroupChat.ChannelId,
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		MetaId:      pin.CreateMetaId,
@@ -1805,18 +1917,16 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		return err
 	}
 
-	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
+	if chat.ChannelId != "" {
+		// This is a channel chat
+		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+	} else {
+		// This is a group chat
+		err = cdb.processChatTimestampAndEnqueue(chat)
+	}
 	if err != nil {
 		return err
-	}
-
-	// Enqueue message for asynchronous group list updates
-	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(chat)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -1921,33 +2031,220 @@ func (cdb *ChatDB) getUserGroupState(metaId, groupId string, chatTimestamp int64
 	}
 }
 
-// Save chat timestamp index (decide which collection to save to based on user state)
-func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
-	// Get user's state in group
+// Check if chat message should be placed in group (not in OutCollection)
+// Returns true if message should be in group, false if should be in OutCollection
+// Also returns the reason if message should be in OutCollection
+func (cdb *ChatDB) shouldPlaceMessageInGroup(chat *models.TalkGroupChatV3) (bool, string, error) {
+	// Get group info to check RoomJoinType
+	// groupInfo, err := cdb.getGroupInfo(chat.GroupId)
+	// if err != nil {
+	// 	// If getting group info fails, default to placing in group
+	// 	return true, "", nil
+	// }
+
+	// // Check if group is in launch-mode (RoomJoinType = "4")
+	// if groupInfo != nil && groupInfo.RoomJoinType == "4" {
+	// 	if cdb.gdb != nil {
+	// 		// Check if user is admin
+	// 		isAdmin, err := cdb.gdb.IsUserAdmin(chat.GroupId, chat.MetaId, chat.Timestamp)
+	// 		if err != nil {
+	// 			// If getting admin status fails, default to placing in group
+	// 			return true, "", nil
+	// 		}
+	// 		if isAdmin {
+	// 			return true, "", nil
+	// 		}
+
+	// 		// Check if group has whitelist and user is not whitelisted
+	// 		isWhitelisted, err := cdb.gdb.IsUserWhitelist(chat.GroupId, chat.MetaId, chat.Timestamp)
+	// 		if err != nil {
+	// 			// If getting whitelist status fails, default to placing in group
+	// 			return true, "", nil
+	// 		}
+	// 		if isWhitelisted {
+	// 			return true, "", nil
+	// 		}
+	// 	}
+	// 	// Group is in launch-mode, message should be placed in OutCollection
+	// 	reason := "group is in launch-mode, messages are not displayed in group"
+	// 	return false, reason, nil
+	// }
+
+	// Check if user is blocked in the group
+	if cdb.gdb != nil {
+		isBlocked, err := cdb.gdb.IsUserBlock(chat.GroupId, chat.MetaId, chat.Timestamp)
+		if err != nil {
+			// If getting block status fails, default to placing in group
+			return true, "", nil
+		}
+		if isBlocked {
+			// User is blocked, message should be placed in OutCollection
+			reason := "user is blocked in the group"
+			return false, reason, nil
+		}
+	}
+
+	// Group is not in launch-mode, check user's state in group
 	groupState, err := cdb.getUserGroupState(chat.MetaId, chat.GroupId, chat.Timestamp)
 	if err != nil {
-		// If getting state fails, default to saving to normal collection
+		// If getting state fails, default to placing in group
+		return true, "", nil
+	}
+
+	// Check if user is in group
+	if groupState == models.RoomStateIn {
+		// User is in group, message should be placed in group
+		return true, "", nil
+	} else {
+		// User is not in group, message should be placed in OutCollection
+		reason := fmt.Sprintf("user is not in group, groupState: %d", groupState)
+		return false, reason, nil
+	}
+}
+
+// Check if chat message should be placed in channel (not in OutCollection)
+// Returns true if message should be in channel, false if should be in OutCollection
+// Also returns the reason if message should be in OutCollection
+func (cdb *ChatDB) shouldPlaceMessageInChannel(chat *models.TalkGroupChatV3) (bool, string, error) {
+	// Get channel info to check ChannelType
+	channelInfo, err := cdb.getChannelInfo(chat.ChannelId)
+	if err != nil {
+		// If getting group info fails, default to placing in group
+		return true, "", nil
+	}
+
+	// Check if group is in launch-mode (RoomJoinType = "4")
+	if channelInfo != nil && channelInfo.ChannelType == 1 {
+		if cdb.gdb != nil {
+			// Check if user is admin
+			isAdmin, err := cdb.gdb.IsUserAdmin(chat.GroupId, chat.MetaId, chat.Timestamp)
+			if err != nil {
+				// If getting admin status fails, default to placing in group
+				return true, "", nil
+			}
+			if isAdmin {
+				return true, "", nil
+			}
+
+			// Check if group has whitelist and user is not whitelisted
+			isWhitelisted, err := cdb.gdb.IsUserWhitelist(chat.GroupId, chat.MetaId, chat.Timestamp)
+			if err != nil {
+				// If getting whitelist status fails, default to placing in group
+				return true, "", nil
+			}
+			if isWhitelisted {
+				return true, "", nil
+			}
+		}
+		// Channel is in launch-mode, message should be placed in OutCollection
+		reason := "channel is in launch-mode, messages are not displayed in channel"
+		return false, reason, nil
+	}
+
+	// Check if user is blocked in the group
+	if cdb.gdb != nil {
+		isBlocked, err := cdb.gdb.IsUserBlock(chat.GroupId, chat.MetaId, chat.Timestamp)
+		if err != nil {
+			// If getting block status fails, default to placing in group
+			return true, "", nil
+		}
+		if isBlocked {
+			// User is blocked, message should be placed in OutCollection
+			reason := "user is blocked in the channel"
+			return false, reason, nil
+		}
+	}
+
+	// Group is not in launch-mode, check user's state in group
+	groupState, err := cdb.getUserGroupState(chat.MetaId, chat.GroupId, chat.Timestamp)
+	if err != nil {
+		// If getting state fails, default to placing in group
+		return true, "", nil
+	}
+
+	// Check if user is in group
+	if groupState == models.RoomStateIn {
+		// User is in group, message should be placed in group
+		return true, "", nil
+	} else {
+		// User is not in group, message should be placed in OutCollection
+		reason := fmt.Sprintf("user is not in group, groupState: %d", groupState)
+		return false, reason, nil
+	}
+}
+
+// Get group info by group ID (helper method)
+func (cdb *ChatDB) getGroupInfo(groupId string) (*models.TalkGroupModel, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupInfoCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var groupInfo models.TalkGroupModel
+	err = json.Unmarshal(value, &groupInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &groupInfo, nil
+}
+
+// Get channel info by channel ID (helper method)
+func (cdb *ChatDB) getChannelInfo(channelId string) (*models.TalkGroupChannelModel, error) {
+	key := []byte(channelId)
+	value, closer, err := Pb[TalkGroupChannelInfoCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var channelInfo models.TalkGroupChannelModel
+	err = json.Unmarshal(value, &channelInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	return &channelInfo, nil
+}
+
+// Save chat timestamp index (decide which collection to save to based on user state and group type)
+func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
+	// Check if message should be placed in group
+	t := time.Now().UnixMilli()
+	shouldPlaceInGroup, outReason, err := cdb.shouldPlaceMessageInGroup(chat)
+	fmt.Println("[indexer]SaveChatTimestampWithState time:", time.Now().UnixMilli()-t)
+	if err != nil {
+		// If check fails, default to saving to normal collection
 		return true, cdb.SaveChatTimestamp(chat)
 	}
 
 	// Construct timestamp index value: pinId_chatType_timestamp
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
-	// Decide which collection to save to based on user state
+	// Decide which collection to save to based on shouldPlaceInGroup
 	var (
 		collection  string
 		collection2 string
 		isGoEnqueue bool = true
 	)
-	if groupState == models.RoomStateIn {
-		// User is in group, save to normal collection
+	if shouldPlaceInGroup {
+		// Message should be in group, save to normal collection
 		collection = TalkGroupChatTimestampCollection
 		collection2 = TalkGroupChatTimestamp2Collection
 	} else {
-		// User is not in group, save to invalid collection
+		// Message should not be in group, save to invalid collection
 		collection = TalkGroupChatTimestampOutCollection
 		collection2 = TalkGroupChatTimestamp2OutCollection
 		isGoEnqueue = false
+		chat.OutReason = outReason
 	}
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
@@ -1963,9 +2260,10 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (boo
 		return isGoEnqueue, err
 	}
 
-	if groupState == models.RoomStateIn {
+	if shouldPlaceInGroup {
 		go dealGroupChatItem(chat)
 	}
+
 	return isGoEnqueue, nil
 }
 
@@ -1994,6 +2292,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	// Create chat message model
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleFileGroupChat.GroupId,
+		ChannelId:   simpleFileGroupChat.ChannelId,
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		MetaId:      pin.CreateMetaId,
@@ -2016,18 +2315,16 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		return err
 	}
 
-	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
+	if chat.ChannelId != "" {
+		// This is a channel chat
+		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+	} else {
+		// This is a group chat
+		err = cdb.processChatTimestampAndEnqueue(chat)
+	}
 	if err != nil {
 		return err
-	}
-
-	// Enqueue message for asynchronous group list updates
-	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(chat)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -2206,6 +2503,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	redEnvelope := &models.TalkGroupLuckyBagV3{
 		CommunityId:         "", // Need to get from group info
 		GroupId:             simpleLuckyBag.GroupId,
+		ChannelId:           simpleLuckyBag.ChannelId,
 		TxId:                pin.Id[:len(pin.Id)-2],
 		PinId:               pin.Id,
 		MetaId:              pin.CreateMetaId,
@@ -2298,6 +2596,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	// Create chat message model (for group chat display)
 	chat := &models.TalkGroupChatV3{
 		GroupId:     simpleLuckyBag.GroupId,
+		ChannelId:   simpleLuckyBag.ChannelId,
 		TxId:        pin.Id[:len(pin.Id)-2],
 		PinId:       pin.Id,
 		MetaId:      pin.CreateMetaId,
@@ -2321,18 +2620,16 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		return err
 	}
 
-	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
+	if chat.ChannelId != "" {
+		// This is a channel chat
+		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+	} else {
+		// This is a group chat
+		err = cdb.processChatTimestampAndEnqueue(chat)
+	}
 	if err != nil {
 		return err
-	}
-
-	// Enqueue message for asynchronous group list updates
-	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(chat)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -3015,6 +3312,244 @@ func (cdb *ChatDB) GetChatsByGroupIdAndStartTimestampRange(groupId string, start
 	return chats, lastTimestamp, nil
 }
 
+// ==================== Channel Chat Query Methods ====================
+
+// GetChatsByChannelIdAndEndTimestampRange3 gets chat messages by channel ID and end timestamp range (descending order)
+// This function handles the key format: channelId_timestamp+number(6)
+// Example: channelId_1755500889000001 (timestamp 1755500889 + random 000001)
+// Returns chat list, next timestamp, and error
+func (cdb *ChatDB) GetChatsByChannelIdAndEndTimestampRange3(channelId string, endTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this channel
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(channelId + "_"),
+		UpperBound: []byte(channelId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChannelChatTimestamp2Collection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	nextTimestamp := int64(0)
+
+	// Construct query start key: channelId_endTimestamp
+	// Since key format is now channelId_timestamp+number(6), we can use proper range scanning
+	// Example: channelId_1755500889000001 (timestamp 1755500889 + random 000001)
+	startKey := []byte(channelId + "_" + strconv.FormatInt(endTimestamp, 10))
+
+	// Seek to start key and iterate backwards
+	for iter.SeekLT(startKey); iter.Valid(); iter.Prev() {
+		key := string(iter.Key())
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndEndTimestampRange3 key: %s\n", key)
+
+		// Parse key to extract timestamp
+		// Key format: channelId_timestamp+number(6)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
+		timestampStr := keyParts[1]
+		timestampKeyInt, _ := strconv.ParseInt(timestampStr, 10, 64)
+
+		// Parse value: pinId_chatType_timestamp_number
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 4 {
+			continue
+		}
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndEndTimestampRange3 timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		// Update next timestamp for pagination (this will be the timestamp of the last message we return)
+		if nextTimestamp == 0 || timestampKeyInt < nextTimestamp {
+			nextTimestamp = timestampKeyInt
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, nextTimestamp, nil
+}
+
+// GetChatsByChannelIdAndStartIndexRange gets chat messages by channel ID and index range (ascending order)
+// This function handles the key format: channelId_index (with zero-padding)
+// Example: channelId_0000000000000000000000000000000000000001
+// Returns chat list, last index, and error
+func (cdb *ChatDB) GetChatsByChannelIdAndStartIndexRange(channelId string, startIndex int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this channel
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(channelId + "_"),
+		UpperBound: []byte(channelId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChannelChatIndexCollection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	lastIndex := int64(0)
+
+	// Construct query start key: channelId_startIndex (with zero-padding)
+	// Since key format is channelId_index with zero-padding, we can use proper range scanning
+	// Example: channelId_0000000000000000000000000000000000000001
+	startKey := []byte(channelId + "_" + fmt.Sprintf("%040d", startIndex))
+
+	// Seek to start key and iterate forwards
+	for iter.SeekGE(startKey); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndStartIndexRange key: %s\n", key)
+
+		// Parse key to extract index
+		// Key format: channelId_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract index from key (remove leading zeros)
+		indexStr := strings.TrimLeft(keyParts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		index, err := strconv.ParseInt(indexStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// Skip messages before our start index (since we're going forwards)
+		if index < startIndex {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_isSet
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 4 {
+			continue
+		}
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndStartIndexRange index: %d, pinId: %s\n", index, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if index > lastIndex {
+			lastIndex = index
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, lastIndex, nil
+}
+
+// GetChatsByChannelIdAndStartTimestampRange gets chat messages by channel ID and start timestamp range (ascending order)
+// This function handles the key format: channelId_timestamp+number(6)
+// Example: channelId_1755500889000001 (timestamp 1755500889 + random 000001)
+// Returns chat list, last time, and error
+func (cdb *ChatDB) GetChatsByChannelIdAndStartTimestampRange(channelId string, startTimestamp int64, size int64) ([]*models.TalkGroupChatV3, int64, error) {
+	var chats []*models.TalkGroupChatV3
+
+	// Create iter options to limit the range to only keys for this channel
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(channelId + "_"),
+		UpperBound: []byte(channelId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkGroupChannelChatTimestamp2Collection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	lastTimestamp := int64(0)
+
+	// Construct query start key: channelId_startTimestamp
+	// Since key format is now channelId_timestamp+number(6), we can use proper range scanning
+	// Example: channelId_1755500889000001 (timestamp 1755500889 + random 000001)
+	startKey := []byte(channelId + "_" + strconv.FormatInt(startTimestamp, 10))
+
+	// Seek to start key and iterate forwards
+	for iter.SeekGE(startKey); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndStartTimestampRange key: %s\n", key)
+
+		// Parse key to extract timestamp
+		// Key format: channelId_timestamp+number(6)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+
+		// Extract timestamp from key (remove the last 6 digits which is the random number)
+		timestampStr := keyParts[1]
+		timestampKeyInt, _ := strconv.ParseInt(timestampStr, 10, 64)
+
+		// Skip messages before our start timestamp (since we're going forwards)
+		if timestampKeyInt < startTimestamp {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_number
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 4 {
+			continue
+		}
+		pinId := valueParts[0]
+		// fmt.Printf("[CHAT_DB] GetChatsByChannelIdAndStartTimestampRange timestampStr: %s, pinId: %s\n", timestampStr, pinId)
+
+		// Get complete chat message
+		chat, err := cdb.GetChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if timestampKeyInt > lastTimestamp {
+			lastTimestamp = timestampKeyInt
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, lastTimestamp, nil
+}
+
 // LuckyBagCodeAddressKey represents the structure stored in TalkGroupLuckyBagCodeAddressKeyCollection
 type LuckyBagCodeAddressKey struct {
 	Key             string `json:"key"`             // Private key
@@ -3197,4 +3732,248 @@ func (cdb *ChatDB) SaveResidueLuckyBagError(pinId string, luckyBagPinId string) 
 	key := []byte(pinId)
 	value := []byte(luckyBagPinId)
 	return Pb[TalkGroupResidueLuckyBagErrCollection].Set(key, value, pebble.Sync)
+}
+
+// ==================== Chat Processing Helper Methods ====================
+
+// Process chat timestamp and enqueue for group chats
+func (cdb *ChatDB) processChatTimestampAndEnqueue(chat *models.TalkGroupChatV3) error {
+	// Save timestamp index (decide which collection to save to based on user state)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	if err != nil {
+		return err
+	}
+
+	// Enqueue message for asynchronous group list updates
+	if isGoEnqueue {
+		err = cdb.EnqueueChatMessage(chat)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Process chat timestamp and enqueue for channel chats
+func (cdb *ChatDB) processChannelChatTimestampAndEnqueue(chat *models.TalkGroupChatV3) error {
+	// Save timestamp index (decide which collection to save to based on user state)
+	isGoEnqueue, err := cdb.SaveChannelChatTimestampWithState(chat)
+	if err != nil {
+		return err
+	}
+
+	// Enqueue message for asynchronous channel list updates
+	if isGoEnqueue {
+		err = cdb.EnqueueChannelChatMessage(chat)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Save channel chat timestamp index (decide which collection to save to based on user state and channel type)
+func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
+	// Check if message should be placed in channel
+	t := time.Now().UnixMilli()
+	shouldPlaceInChannel, outReason, err := cdb.shouldPlaceMessageInChannel(chat)
+	fmt.Println("[indexer]SaveChannelChatTimestampWithState time:", time.Now().UnixMilli()-t)
+	if err != nil {
+		// If check fails, default to saving to normal collection
+		return true, cdb.SaveChannelChatTimestamp(chat)
+	}
+
+	// Decide which collection to save to based on shouldPlaceInChannel
+	var (
+		collection2 string
+		isGoEnqueue bool = true
+	)
+	if shouldPlaceInChannel {
+		// Message should be in channel, save to normal collection
+		collection2 = TalkGroupChannelChatTimestamp2Collection
+	} else {
+		// Message should not be in channel, save to invalid collection
+		collection2 = TalkGroupChannelChatTimestamp2OutCollection
+		isGoEnqueue = false
+		chat.OutReason = outReason
+	}
+
+	// Use ChannelId_Timestamp as primary key to support timestamp range queries
+	// For collection2, we need to handle array format
+	err = cdb.saveChannelChatTimestamp2WithCollection(chat, collection2)
+	if err != nil {
+		return isGoEnqueue, err
+	}
+
+	if shouldPlaceInChannel {
+		go dealGroupChatItem(chat)
+	}
+
+	return isGoEnqueue, nil
+}
+
+// Enqueue channel chat message for asynchronous processing
+func (cdb *ChatDB) EnqueueChannelChatMessage(chat *models.TalkGroupChatV3) error {
+	queueMessage := &QueueChatMessage{
+		PinId:      chat.PinId,
+		GroupId:    chat.GroupId,
+		ChannelId:  chat.ChannelId,
+		Chat:       chat,
+		Timestamp:  time.Now().Unix(),
+		RetryCount: 0,
+		Status:     "pending",
+	}
+
+	data, err := json.Marshal(queueMessage)
+	if err != nil {
+		return err
+	}
+
+	// Use timestamp_pinId as primary key to support processing in time order
+	key := []byte(strconv.FormatInt(queueMessage.Timestamp, 10) + "_" + chat.PinId)
+	return Pb[TalkGroupChatQueueCollection].Set(key, data, pebble.Sync)
+}
+
+// Save channel chat timestamp (helper method for channel chats)
+func (cdb *ChatDB) SaveChannelChatTimestamp(chat *models.TalkGroupChatV3) error {
+	// Generate a 6-digit random number for uniqueness
+	randomNum := generateRandomNumber(6)
+
+	// Construct timestamp index value: pinId_chatType_timestamp
+	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_" + randomNum
+
+	// Use ChannelId_Timestamp as primary key to support timestamp range queries
+	key := []byte(chat.ChannelId + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
+	return Pb[TalkGroupChannelChatTimestamp2Collection].Set(key, []byte(value), pebble.Sync)
+}
+
+// Save channel chat timestamp2 with collection (helper method)
+func (cdb *ChatDB) saveChannelChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string) error {
+	// Generate a 6-digit random number for uniqueness
+	randomNum := generateRandomNumber(6)
+
+	// Use ChannelId_Timestamp as primary key to support timestamp range queries
+	key := []byte(chat.ChannelId + "_" + strconv.FormatInt(chat.Timestamp, 10) + randomNum)
+
+	// For now, we'll use the same logic as group chats but with channel-specific collections
+	// You may need to adjust this based on your specific channel timestamp handling requirements
+	return Pb[collection].Set(key, []byte(chat.PinId+"_"+strconv.FormatInt(int64(chat.ChatType), 10)+"_"+strconv.FormatInt(chat.Timestamp, 10)+"_"+randomNum), pebble.Sync)
+}
+
+// ==================== Channel Chat Index Methods ====================
+
+// UpdateChannelChatIndex updates the chat index for channel chats
+func (cdb *ChatDB) UpdateChannelChatIndex(chat *models.TalkGroupChatV3) error {
+	// Get the next index for this channel
+	nextIndex, err := cdb.getNextChannelChatIndex(chat.ChannelId)
+	if err != nil {
+		return err
+	}
+
+	// Update the chat message with the new index
+	chat.Index = nextIndex
+
+	log.Printf("[UpdateChannelChatIndex]nextIndex: %d", nextIndex)
+
+	// Save the updated chat message
+	err = cdb.SaveChat(chat)
+	if err != nil {
+		return err
+	}
+
+	// Save the index mapping with zero-padded index for proper sorting
+	indexKey := chat.ChannelId + "_" + fmt.Sprintf("%040d", nextIndex)
+	indexValue := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10) + "_1"
+
+	return Pb[TalkGroupChannelChatIndexCollection].Set([]byte(indexKey), []byte(indexValue), pebble.Sync)
+}
+
+// getNextChannelChatIndex gets the next available index for a channel
+func (cdb *ChatDB) getNextChannelChatIndex(channelId string) (int64, error) {
+	iter, err := Pb[TalkGroupChannelChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(channelId + "_"),
+		UpperBound: []byte(channelId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this channel (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this channel, start with index 1
+	if lastKey == nil {
+		return 1, nil
+	}
+
+	// Extract index from the last key (channelId_index with zero-padding)
+	keyStr := string(lastKey)
+
+	log.Printf("[getNextChannelChatIndex]keyStr: %s", keyStr)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 2 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index + 1, nil
+		}
+	}
+
+	// Fallback: if parsing fails, start with index 1
+	return 1, nil
+}
+
+// GetCurrentMaxChannelChatIndex gets the current maximum index for a channel
+func (cdb *ChatDB) GetCurrentMaxChannelChatIndex(channelId string) (int64, error) {
+	iter, err := Pb[TalkGroupChannelChatIndexCollection].NewIter(&pebble.IterOptions{
+		LowerBound: []byte(channelId + "_"),
+		UpperBound: []byte(channelId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	// Find the last key for this channel (since keys are sorted, the last one has the highest index)
+	var lastKey []byte
+
+	// Use Last() to get the last key in the range
+	if iter.Last(); iter.Valid() {
+		lastKey = iter.Key()
+	}
+
+	// If no keys found for this channel, return 0
+	if lastKey == nil {
+		return 0, nil
+	}
+
+	// Extract index from the last key (channelId_index with zero-padding)
+	keyStr := string(lastKey)
+
+	log.Printf("[GetCurrentMaxChannelChatIndex]keyStr: %s", keyStr)
+	parts := strings.Split(keyStr, "_")
+	if len(parts) >= 2 {
+		// Remove leading zeros and parse the index
+		indexStr := strings.TrimLeft(parts[1], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		if index, err := strconv.ParseInt(indexStr, 10, 64); err == nil {
+			return index, nil
+		}
+	}
+
+	// Fallback: if parsing fails, return 0
+	return 0, nil
 }

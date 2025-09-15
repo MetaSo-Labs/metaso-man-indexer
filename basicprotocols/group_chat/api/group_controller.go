@@ -872,6 +872,36 @@ func GetCurrentMaxGroupChatIndex(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Get current maximum group channel chat index
+// @Description Get the current maximum index for a group's chat records
+// @Produce json
+// @Param channelId query string true "Channel ID"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.MaxIndexResponse} "Successfully return maximum group chat index"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/max-group-channel-chat-index [get]
+func GetCurrentMaxGroupChannelChatIndex(c *gin.Context) {
+	var (
+		t         = time.Now().UnixMilli()
+		channelId = c.DefaultQuery("channelId", "")
+	)
+
+	if channelId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("channelId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.GetCurrentMaxGroupChannelChatIndex(channelId)
+	if err != nil {
+		log.Printf("Failed to get current max group channel chat index for channelId %s: %v", channelId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
 // @Summary Get current maximum private chat index
 // @Description Get the current maximum index for a private conversation between two users
 // @Produce json
@@ -1189,4 +1219,112 @@ func HealthCheck(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(healthData, t))
+}
+
+// ==================== Channel Chat Controller Methods ====================
+
+// GetChannelChatListV3 Get channel chat records using GetChatsByChannelIdAndEndTimestampRange3 (test version with IterOptions for improved performance)
+func GetChannelChatListV3(c *gin.Context) {
+	var req request.FetchChannelChatListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, respond.RespErr(err, time.Now().UnixMilli(), 400))
+		return
+	}
+
+	if req.ChannelId == "" {
+		c.JSON(http.StatusBadRequest, respond.Message{
+			Code:    400,
+			Message: "ChannelId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	result, err := service.FetchChannelChatListV3(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, respond.RespErr(err, time.Now().UnixMilli(), 500))
+		return
+	}
+
+	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
+}
+
+// GetChannelChatListByIndex Get channel chat records by index range (ascending order) using TalkGroupChannelChatIndexCollection
+func GetChannelChatListByIndex(c *gin.Context) {
+	var req request.FetchChannelChatListByIndexRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, respond.RespErr(err, time.Now().UnixMilli(), 400))
+		return
+	}
+
+	if req.ChannelId == "" {
+		c.JSON(http.StatusBadRequest, respond.Message{
+			Code:    400,
+			Message: "ChannelId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	result, err := service.FetchChannelChatListByIndex(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, respond.RespErr(err, time.Now().UnixMilli(), 500))
+		return
+	}
+
+	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
+}
+
+// GetChannelChatListByStartTime Get channel chat records by start timestamp range (ascending order) using TalkGroupChannelChatTimestamp2Collection
+func GetChannelChatListByStartTime(c *gin.Context) {
+	var req request.FetchChannelChatListByStartTimeRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, respond.RespErr(err, time.Now().UnixMilli(), 400))
+		return
+	}
+
+	if req.ChannelId == "" {
+		c.JSON(http.StatusBadRequest, respond.Message{
+			Code:    400,
+			Message: "ChannelId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	result, err := service.FetchChannelChatListByStartTime(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, respond.RespErr(err, time.Now().UnixMilli(), 500))
+		return
+	}
+
+	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
+}
+
+// ==================== Group Channel Controller Methods ====================
+
+// GetGroupChannelList Get group channel list by group ID
+func GetGroupChannelList(c *gin.Context) {
+	var req request.FetchGroupChannelListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, respond.RespErr(err, time.Now().UnixMilli(), 400))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSON(http.StatusBadRequest, respond.Message{
+			Code:    400,
+			Message: "GroupId is required",
+			Data:    nil,
+		})
+		return
+	}
+
+	result, err := service.FetchGroupChannelList(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, respond.RespErr(err, time.Now().UnixMilli(), 500))
+		return
+	}
+
+	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
 }

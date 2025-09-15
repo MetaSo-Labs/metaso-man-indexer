@@ -807,6 +807,46 @@ func GetGroupChatIndexList(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
 }
 
+// @Summary Get group chat index list
+// @Description Get TalkGroupChatIndexCollection list with cursor pagination and reverse order
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param groupId query string false "Group ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group chat index list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/index/group [get]
+func GetGroupChannelChatIndexList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	channelId := ctx.Query("channelId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChannelChatIndexList(cursor, size, channelId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
 // @Summary Get private chat index list
 // @Description Get TalkPrivateChatIndexCollection list with cursor pagination and reverse order
 // @Tags Database Query
@@ -887,6 +927,46 @@ func GetGroupChatIndexKeys(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
 }
 
+// @Summary Get group channel chat index keys
+// @Description Get TalkGroupChatIndexCollection key list with cursor pagination
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param channelId query string false "Channel ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group channel chat index keys"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/index/channel/keys [get]
+func GetGroupChannelChatIndexKeys(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	channelId := ctx.Query("channelId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChannelChatIndexKeys(cursor, size, channelId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
 // @Summary Get group chat timestamp2 out list
 // @Description Get TalkGroupChatTimestamp2OutCollection list with cursor pagination and reverse order
 // @Tags Database Query
@@ -919,6 +999,46 @@ func GetGroupChatTimestamp2OutList(ctx *gin.Context) {
 	}
 
 	results, err := service.GetGroupChatTimestamp2OutList(cursor, size, groupId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(results, t))
+}
+
+// @Summary Get group channel chat timestamp2 out list
+// @Description Get TalkGroupChannelChatTimestamp2OutCollection list with cursor pagination and reverse order
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor, starting from 0" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Param channelId query string false "Channel ID for filtering (optional)"
+// @Success 200 {object} map[string]interface{} "Group channel chat timestamp2 out list"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/chat/timestamp2/out/channel [get]
+func GetGroupChannelChatTimestampOutList(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+	channelId := ctx.Query("channelId")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("cursor parameter must be a number"), t, 1))
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("size parameter must be a number"), t, 1))
+		return
+	}
+
+	results, err := service.GetGroupChannelChatTimestampOutList(cursor, size, channelId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -1702,6 +1822,283 @@ func RetryFailedLuckyBagOperation(ctx *gin.Context) {
 				"error":   err.Error(),
 			})
 		}
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// RetryFailedLuckyBagOperationsByLuckyBagId Retry failed lucky bag operations by lucky bag ID
+// @Summary Retry failed lucky bag operations by lucky bag ID
+// @Description Retry failed lucky bag operations by lucky bag ID from error collections
+// @Tags Database Query
+// @Accept json
+// @Produce json
+// @Param luckyBagId query string true "Lucky bag ID to retry failed operations for"
+// @Success 200 {object} map[string]interface{} "Successfully retried lucky bag operations"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/luckybag/retry-by-luckybag-id [post]
+func RetryFailedLuckyBagOperationsByLuckyBagId(ctx *gin.Context) {
+	// Get query parameter
+	luckyBagId := ctx.Query("luckyBagId")
+
+	// Validate required parameter
+	if luckyBagId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "luckyBagId parameter is required",
+		})
+		return
+	}
+
+	// Call service method
+	result, err := service.RetryFailedLuckyBagOperationsByLuckyBagId(luckyBagId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupAdminCollection Get TalkGroupAdminCollection data with pagination
+// @Summary Get group admin collection data
+// @Description Get TalkGroupAdminCollection data with pagination support
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor for pagination" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Success response with paginated data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-admin-collection [get]
+func GetGroupAdminCollection(ctx *gin.Context) {
+	cursor := 0
+	size := 20
+
+	if cursorStr := ctx.Query("cursor"); cursorStr != "" {
+		if parsed, err := strconv.Atoi(cursorStr); err == nil {
+			cursor = parsed
+		}
+	}
+
+	if sizeStr := ctx.Query("size"); sizeStr != "" {
+		if parsed, err := strconv.Atoi(sizeStr); err == nil {
+			size = parsed
+		}
+	}
+
+	result, err := service.QueryGroupAdminCollection(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupBlockCollection Get TalkGroupBlockCollection data with pagination
+// @Summary Get group block collection data
+// @Description Get TalkGroupBlockCollection data with pagination support
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor for pagination" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Success response with paginated data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-block-collection [get]
+func GetGroupBlockCollection(ctx *gin.Context) {
+	cursor := 0
+	size := 20
+
+	if cursorStr := ctx.Query("cursor"); cursorStr != "" {
+		if parsed, err := strconv.Atoi(cursorStr); err == nil {
+			cursor = parsed
+		}
+	}
+
+	if sizeStr := ctx.Query("size"); sizeStr != "" {
+		if parsed, err := strconv.Atoi(sizeStr); err == nil {
+			size = parsed
+		}
+	}
+
+	result, err := service.QueryGroupBlockCollection(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupWhitelistCollection Get TalkGroupWhitelistCollection data with pagination
+// @Summary Get group whitelist collection data
+// @Description Get TalkGroupWhitelistCollection data with pagination support
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param cursor query int false "Cursor for pagination" default(0)
+// @Param size query int false "Number of items per page" default(20)
+// @Success 200 {object} map[string]interface{} "Success response with paginated data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-whitelist-collection [get]
+func GetGroupWhitelistCollection(ctx *gin.Context) {
+	cursor := 0
+	size := 20
+
+	if cursorStr := ctx.Query("cursor"); cursorStr != "" {
+		if parsed, err := strconv.Atoi(cursorStr); err == nil {
+			cursor = parsed
+		}
+	}
+
+	if sizeStr := ctx.Query("size"); sizeStr != "" {
+		if parsed, err := strconv.Atoi(sizeStr); err == nil {
+			size = parsed
+		}
+	}
+
+	result, err := service.QueryGroupWhitelistCollection(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupAdminByGroupId Get TalkGroupAdminCollection data by groupId
+// @Summary Get group admin data by group ID
+// @Description Get TalkGroupAdminCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group admin data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-admin/{groupId} [get]
+func GetGroupAdminByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupAdminByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupBlockByGroupId Get TalkGroupBlockCollection data by groupId
+// @Summary Get group block data by group ID
+// @Description Get TalkGroupBlockCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group block data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-block/{groupId} [get]
+func GetGroupBlockByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupBlockByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupWhitelistByGroupId Get TalkGroupWhitelistCollection data by groupId
+// @Summary Get group whitelist data by group ID
+// @Description Get TalkGroupWhitelistCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group whitelist data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group-whitelist/{groupId} [get]
+func GetGroupWhitelistByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupWhitelistByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
 		return
 	}
 

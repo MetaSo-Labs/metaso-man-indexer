@@ -118,3 +118,36 @@ type BatchUserInfoRequest struct {
 	Addresses []string `json:"addresses"` // List of user addresses
 	MetaIds   []string `json:"metaIds"`   // List of user metaIds
 }
+
+// ==================== Channel Chat Request Types ====================
+
+// FetchChannelChatListRequest Get channel chat records request
+type FetchChannelChatListRequest struct {
+	ChannelId string `form:"channelId"` // Channel ID
+	// Cursor    int64  `form:"cursor"`    // Cursor for pagination
+	Size      int64 `form:"size"`      // Page size
+	Timestamp int64 `form:"timestamp"` // Timestamp for pagination
+}
+
+// FetchChannelChatListByIndexRequest Get channel chat records by index range request
+type FetchChannelChatListByIndexRequest struct {
+	ChannelId  string `form:"channelId"`  // Channel ID
+	StartIndex int64  `form:"startIndex"` // Start index for pagination
+	Size       int64  `form:"size"`       // Page size
+}
+
+// FetchChannelChatListByStartTimeRequest Get channel chat records by start timestamp range request
+type FetchChannelChatListByStartTimeRequest struct {
+	ChannelId      string `form:"channelId"`      // Channel ID
+	StartTimestamp int64  `form:"startTimestamp"` // Start timestamp for pagination
+	Size           int64  `form:"size"`           // Page size
+}
+
+// ==================== Group Channel Request Types ====================
+
+// FetchGroupChannelListRequest Get group channel list request
+type FetchGroupChannelListRequest struct {
+	GroupId string `form:"groupId"` // Group ID
+	Cursor  int64  `form:"cursor"`  // Cursor for pagination
+	Size    int64  `form:"size"`    // Page size
+}

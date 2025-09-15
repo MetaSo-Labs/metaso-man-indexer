@@ -386,3 +386,41 @@ type GroupAndUserSearchResponse struct {
 	Total int64                     `json:"total"` // Total number of results
 	List  []*GroupAndUserSearchItem `json:"list"`  // Search results
 }
+
+// MaxIndexResponse represents the maximum index response for chat collections
+type MaxIndexResponse struct {
+	GroupId    string `json:"groupId,omitempty"`    // Group ID (for group chat)
+	ChannelId  string `json:"channelId,omitempty"`  // Channel ID (for group channel chat)
+	FromMetaId string `json:"fromMetaId,omitempty"` // From MetaId (for private chat)
+	ToMetaId   string `json:"toMetaId,omitempty"`   // To MetaId (for private chat)
+	MaxIndex   int64  `json:"maxIndex"`             // Current maximum index
+}
+
+// GroupChannelResponse represents the response for group channel list
+type GroupChannelResponse struct {
+	Total int64               `json:"total"` // Total count
+	List  []*GroupChannelItem `json:"list"`  // Channel list
+}
+
+// GroupChannelItem represents a single group channel item
+type GroupChannelItem struct {
+	ChannelId              string `json:"channelId"`              // Channel ID
+	GroupId                string `json:"groupId"`                // Group ID
+	ChannelName            string `json:"channelName"`            // Channel name
+	ChannelIcon            string `json:"channelIcon"`            // Channel icon
+	ChannelNote            string `json:"channelNote"`            // Channel note
+	ChannelType            int64  `json:"channelType"`            // Channel type: 0-normal, 1-launch
+	ChannelNewestTxId      string `json:"channelNewestTxId"`      //Channel's latest chat content txId
+	ChannelNewestPinId     string `json:"channelNewestPinId"`     //Channel's latest chat content pinId
+	ChannelNewestMetaId    string `json:"channelNewestMetaId"`    //Channel's latest chat content MetaId
+	ChannelNewestUserName  string `json:"channelNewestUserName"`  //Channel's latest chat content MetaId
+	ChannelNewestProtocol  string `json:"channelNewestProtocol"`  //Channel's latest chat content protocol type
+	ChannelNewestContent   string `json:"channelNewestContent"`   //Channel's latest chat content
+	ChannelNewestTimestamp int64  `json:"channelNewestTimestamp"` //Channel's latest chat timestamp
+	CreateUserMetaId       string `json:"createUserMetaId"`       // Create user MetaId
+	CreateUserAddress      string `json:"createUserAddress"`      // Create user address
+	Timestamp              int64  `json:"timestamp"`              // Timestamp
+	Chain                  string `json:"chain"`                  // Chain
+	BlockHeight            int64  `json:"blockHeight"`            // Block height
+	Index                  int64  `json:"index"`                  // Index
+}

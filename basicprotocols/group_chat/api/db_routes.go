@@ -29,6 +29,14 @@ func RegisterDbRoutes(router *gin.Engine) {
 			groupGroup.GET("/member-list", GetGroupMemberList)
 			groupGroup.GET("/member-list-v2", GetGroupMemberListV2)
 			groupGroup.GET("/person-list-collection", GetGroupPersonListCollection)
+
+			// Group admin, block, and whitelist APIs
+			groupGroup.GET("/admin-collection", GetGroupAdminCollection)
+			groupGroup.GET("/block-collection", GetGroupBlockCollection)
+			groupGroup.GET("/whitelist-collection", GetGroupWhitelistCollection)
+			groupGroup.GET("/admin/:groupId", GetGroupAdminByGroupId)
+			groupGroup.GET("/block/:groupId", GetGroupBlockByGroupId)
+			groupGroup.GET("/whitelist/:groupId", GetGroupWhitelistByGroupId)
 		}
 
 		// Chat-related APIs
@@ -39,12 +47,15 @@ func RegisterDbRoutes(router *gin.Engine) {
 			chatGroup.GET("/pin/all", GetAllChatPin)
 			chatGroup.GET("/timestamp", GetChatTimestamp)
 			chatGroup.GET("/timestamp2/out", GetGroupChatTimestamp2OutList)
+			chatGroup.GET("/timestamp2/out/channel", GetGroupChannelChatTimestampOutList)
 
 			// Chat index-related APIs
 			indexGroup := chatGroup.Group("/index")
 			{
 				indexGroup.GET("/group", GetGroupChatIndexList)
 				indexGroup.GET("/group/keys", GetGroupChatIndexKeys)
+				indexGroup.GET("/channel", GetGroupChannelChatIndexList)
+				indexGroup.GET("/channel/keys", GetGroupChannelChatIndexKeys)
 				indexGroup.GET("/private", GetPrivateChatIndexList)
 			}
 		}
@@ -93,6 +104,7 @@ func RegisterDbRoutes(router *gin.Engine) {
 			luckyBagGroup.GET("/pin", GetLuckyBagPinByPinId)
 			luckyBagGroup.GET("/code-address-key", GetLuckyBagCodeAddressKeyFromCompleted)
 			luckyBagGroup.POST("/retry", RetryFailedLuckyBagOperation)
+			luckyBagGroup.POST("/retry-by-luckybag-id", RetryFailedLuckyBagOperationsByLuckyBagId)
 		}
 
 		// Residue lucky bag-related APIs

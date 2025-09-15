@@ -355,20 +355,16 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 	t = time.Now().UnixMilli()
 	// Convert to response format
 	groupItem := &respond.GroupItem{
-		CommunityId:  group.CommunityId,
-		GroupId:      group.GroupId,
-		TxId:         group.TxId,
-		PinId:        group.PinId,
-		RoomName:     group.RoomName,
-		RoomNote:     group.RoomNote,
-		RoomIcon:     group.RoomIcon,
-		RoomType:     group.RoomType,
-		RoomStatus:   group.RoomStatus,
-		RoomJoinType: group.RoomJoinType,
-		// RoomCodeHash:          "", // Not implemented yet
-		// RoomGenesis:           "", // Not implemented yet
-		// RoomLimitAmount:       0,  // Not implemented yet
-		// RoomGenesisSeriesName: "", // Not implemented yet
+		CommunityId:        group.CommunityId,
+		GroupId:            group.GroupId,
+		TxId:               group.TxId,
+		PinId:              group.PinId,
+		RoomName:           group.RoomName,
+		RoomNote:           group.RoomNote,
+		RoomIcon:           group.RoomIcon,
+		RoomType:           group.RoomType,
+		RoomStatus:         group.RoomStatus,
+		RoomJoinType:       group.RoomJoinType,
 		RoomAvatarUrl:      group.RoomAvatarUrl,
 		RoomNinePersonHash: "", // Not implemented yet
 		RoomNewestTxId: func() string {
@@ -1529,6 +1525,23 @@ func GetCurrentMaxGroupChatIndex(groupId string) (*respond.MaxIndexResponse, err
 	}, nil
 }
 
+// GetCurrentMaxGroupChannelChatIndex Get current maximum index for a group channel
+func GetCurrentMaxGroupChannelChatIndex(channelId string) (*respond.MaxIndexResponse, error) {
+	if channelId == "" {
+		return nil, fmt.Errorf("channelId is empty")
+	}
+
+	maxIndex, err := chatDB.GetCurrentMaxChannelChatIndex(channelId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &respond.MaxIndexResponse{
+		ChannelId: channelId,
+		MaxIndex:  maxIndex,
+	}, nil
+}
+
 // GetCurrentMaxPrivateChatIndex Get current maximum index for a private conversation
 func GetCurrentMaxPrivateChatIndex(fromMetaId, toMetaId string) (*respond.MaxIndexResponse, error) {
 	if fromMetaId == "" {
@@ -1793,7 +1806,7 @@ func SearchGroupsByNameOrId(req *request.SearchGroupRequest) (*respond.GroupSear
 	}
 
 	// Search using GroupDB
-	results, err := groupDB.SearchGroups(req.Query, int(req.Size))
+	results, err := groupDB.SearchGroups(req.Query, int(req.Size), 10)
 	if err != nil {
 		return nil, err
 	}
@@ -1857,7 +1870,7 @@ func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*res
 	}
 
 	// Search groups
-	groupResults, err := groupDB.SearchGroups(req.Query, int(req.Size))
+	groupResults, err := groupDB.SearchGroups(req.Query, int(req.Size), 10)
 	if err != nil {
 		// Log error but continue with user search
 		logger.Info("Failed to search groups: %v\n", err)
@@ -2001,5 +2014,412 @@ func SearchGroupMembers(req *request.SearchGroupMembersRequest) (*respond.GroupM
 	return &respond.GroupMemberSearchResponse{
 		Total: int64(len(results)),
 		List:  results,
+	}, nil
+}
+
+// ==================== Channel Chat Service Methods ====================
+
+// FetchChannelChatListV3 gets channel chat records using GetChatsByChannelIdAndEndTimestampRange3 (test version with IterOptions for improved performance)
+func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
+	var chats []*models.TalkGroupChatV3
+	var err error
+
+	t := time.Now().UnixMilli()
+	var nextTimestamp int64 = 0
+	if req.Timestamp > 0 {
+		// Get chat records by timestamp range using new method with IterOptions
+		chats, nextTimestamp, err = chatDB.GetChatsByChannelIdAndEndTimestampRange3(req.ChannelId, req.Timestamp, req.Size)
+	} else {
+		// Get latest chat records using new method with IterOptions
+		// For latest messages, we can use a very large timestamp as start point
+		currentTimestamp := time.Now().Unix()
+		//add 6 number 0
+		currentTimestamp = currentTimestamp * 1000000
+		chats, nextTimestamp, err = chatDB.GetChatsByChannelIdAndEndTimestampRange3(req.ChannelId, currentTimestamp, req.Size)
+	}
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:   chat.GroupId,
+			MetanetId: chat.ChannelId, // Use ChannelId as MetanetId for channel chats
+			TxId:      chat.TxId,
+			PinId:     chat.PinId,
+			Address:   chat.Address,
+			// UserInfo:    common_service.FetchMetaIDUserInfo(chat.Address),
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			ReplyMetaId: "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+
+		// Get user info
+		if chat.MetaId != "" {
+			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			if userInfo != nil {
+				chatItem.UserInfo = userInfo
+				chatItem.NickName = userInfo.Name
+			}
+		}
+
+		// Get reply info if exists
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err == nil && replyChat != nil {
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				if replyUserInfo != nil {
+					chatItem.ReplyInfo = &respond.ReplyInfo{
+						PinId:       replyChat.PinId,
+						MetaId:      replyChat.MetaId,
+						Address:     replyChat.Address,
+						UserInfo:    replyUserInfo,
+						NickName:    replyUserInfo.Name,
+						Protocol:    replyChat.Protocol,
+						Content:     replyChat.Content,
+						ContentType: replyChat.ContentType,
+						Encryption:  replyChat.Encryption,
+						ChatType:    replyChat.ChatType,
+						Timestamp:   replyChat.Timestamp,
+						Chain:       replyChat.Chain,
+						Index:       replyChat.Index,
+					}
+				}
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+
+	perfStats.totalTime = time.Now().UnixMilli() - startTime.UnixMilli()
+
+	logger.Info(fmt.Sprintf("[ChannelChatListV3] Performance stats - getChats: %dms, responseFormat: %dms, total: %dms, count: %d",
+		perfStats.getChatsTime, perfStats.responseFormatTime, perfStats.totalTime, len(chatItems)))
+
+	return &respond.GroupChatResponse{
+		Total:         int64(len(chatItems)),
+		NextTimestamp: nextTimestamp,
+		List:          chatItems,
+	}, nil
+}
+
+// FetchChannelChatListByIndex gets channel chat records by index range (ascending order) using TalkGroupChannelChatIndexCollection
+func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
+	var chats []*models.TalkGroupChatV3
+	var lastIndex int64
+	var err error
+
+	t := time.Now().UnixMilli()
+	chats, lastIndex, err = chatDB.GetChatsByChannelIdAndStartIndexRange(req.ChannelId, req.StartIndex, req.Size)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:     chat.GroupId,
+			MetanetId:   chat.ChannelId, // Use ChannelId as MetanetId for channel chats
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			Address:     chat.Address,
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			ReplyMetaId: "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+
+		// Get user info
+		if chat.MetaId != "" {
+			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			if userInfo != nil {
+				chatItem.UserInfo = userInfo
+				chatItem.NickName = userInfo.Name
+			}
+		}
+
+		// Get reply info if exists
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err == nil && replyChat != nil {
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				if replyUserInfo != nil {
+					chatItem.ReplyInfo = &respond.ReplyInfo{
+						PinId:       replyChat.PinId,
+						MetaId:      replyChat.MetaId,
+						Address:     replyChat.Address,
+						UserInfo:    replyUserInfo,
+						NickName:    replyUserInfo.Name,
+						Protocol:    replyChat.Protocol,
+						Content:     replyChat.Content,
+						ContentType: replyChat.ContentType,
+						Encryption:  replyChat.Encryption,
+						ChatType:    replyChat.ChatType,
+						Timestamp:   replyChat.Timestamp,
+						Chain:       replyChat.Chain,
+						Index:       replyChat.Index,
+					}
+				}
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+
+	perfStats.totalTime = time.Now().UnixMilli() - startTime.UnixMilli()
+
+	logger.Info(fmt.Sprintf("[ChannelChatListByIndex] Performance stats - getChats: %dms, responseFormat: %dms, total: %dms, count: %d",
+		perfStats.getChatsTime, perfStats.responseFormatTime, perfStats.totalTime, len(chatItems)))
+
+	return &respond.GroupChatResponse{
+		Total:     int64(len(chatItems)),
+		LastIndex: lastIndex,
+		List:      chatItems,
+	}, nil
+}
+
+// FetchChannelChatListByStartTime gets channel chat records by start timestamp range (ascending order) using TalkGroupChannelChatTimestamp2Collection
+func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTimeRequest) (*respond.GroupChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
+	var chats []*models.TalkGroupChatV3
+	var lastTimestamp int64
+	var err error
+
+	t := time.Now().UnixMilli()
+	chats, lastTimestamp, err = chatDB.GetChatsByChannelIdAndStartTimestampRange(req.ChannelId, req.StartTimestamp, req.Size)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.GroupChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.GroupChatItem{
+			GroupId:     chat.GroupId,
+			MetanetId:   chat.ChannelId, // Use ChannelId as MetanetId for channel chats
+			TxId:        chat.TxId,
+			PinId:       chat.PinId,
+			Address:     chat.Address,
+			MetaId:      chat.MetaId,
+			NickName:    "", // Need to get from user info
+			Protocol:    chat.Protocol,
+			Content:     chat.Content,
+			ContentType: chat.ContentType,
+			Encryption:  chat.Encryption,
+			ChatType:    chat.ChatType,
+			ReplyPin:    chat.ReplyPin,
+			ReplyInfo:   nil,
+			ReplyMetaId: "",
+			Timestamp:   chat.Timestamp,
+			Chain:       chat.Chain,
+			BlockHeight: chat.BlockHeight,
+			Index:       chat.Index,
+		}
+
+		// Get user info
+		if chat.MetaId != "" {
+			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			if userInfo != nil {
+				chatItem.UserInfo = userInfo
+				chatItem.NickName = userInfo.Name
+			}
+		}
+
+		// Get reply info if exists
+		if chat.ReplyPin != "" {
+			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
+			if err == nil && replyChat != nil {
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				if replyUserInfo != nil {
+					chatItem.ReplyInfo = &respond.ReplyInfo{
+						PinId:       replyChat.PinId,
+						MetaId:      replyChat.MetaId,
+						Address:     replyChat.Address,
+						UserInfo:    replyUserInfo,
+						NickName:    replyUserInfo.Name,
+						Protocol:    replyChat.Protocol,
+						Content:     replyChat.Content,
+						ContentType: replyChat.ContentType,
+						Encryption:  replyChat.Encryption,
+						ChatType:    replyChat.ChatType,
+						Timestamp:   replyChat.Timestamp,
+						Chain:       replyChat.Chain,
+						Index:       replyChat.Index,
+					}
+				}
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+
+	perfStats.totalTime = time.Now().UnixMilli() - startTime.UnixMilli()
+
+	logger.Info(fmt.Sprintf("[ChannelChatListByStartTime] Performance stats - getChats: %dms, responseFormat: %dms, total: %dms, count: %d",
+		perfStats.getChatsTime, perfStats.responseFormatTime, perfStats.totalTime, len(chatItems)))
+
+	return &respond.GroupChatResponse{
+		Total:         int64(len(chatItems)),
+		LastTimestamp: lastTimestamp,
+		List:          chatItems,
+	}, nil
+}
+
+// FetchGroupChannelList gets channel list by group ID from TalkGroupChannelCollection
+func FetchGroupChannelList(req *request.FetchGroupChannelListRequest) (*respond.GroupChannelResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Get channels from database
+	channels, err := groupDB.GetChannelsByGroupId(req.GroupId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply pagination
+	start := req.Cursor
+	end := start + req.Size
+	if start >= int64(len(channels)) {
+		return &respond.GroupChannelResponse{
+			Total: int64(len(channels)),
+			List:  []*respond.GroupChannelItem{},
+		}, nil
+	}
+	if end > int64(len(channels)) {
+		end = int64(len(channels))
+	}
+
+	// Convert to response format
+	var channelItems []*respond.GroupChannelItem
+	for i := start; i < end; i++ {
+		channel := channels[i]
+
+		// Get channel latest chat information
+		channelLatestChat, err := chatDB.GetGroupChannelLatestChat(channel.ChannelId)
+		if err != nil {
+			logger.Info(fmt.Sprintf("Failed to get channel latest chat for channelId %s: %v", channel.ChannelId, err))
+		}
+
+		channelItem := &respond.GroupChannelItem{
+			ChannelId:         channel.ChannelId,
+			GroupId:           channel.GroupId,
+			ChannelName:       channel.ChannelName,
+			ChannelIcon:       channel.ChannelIcon,
+			ChannelNote:       channel.ChannelNote,
+			ChannelType:       channel.ChannelType,
+			CreateUserMetaId:  channel.CreateUserMetaId,
+			CreateUserAddress: channel.CreateUserAddress,
+			Timestamp:         channel.Timestamp,
+			Chain:             channel.Chain,
+			BlockHeight:       channel.BlockHeight,
+			Index:             0, // TalkGroupChannelModel doesn't have Index field, using 0 as default
+		}
+
+		// Set channel newest information if available
+		if channelLatestChat != nil {
+			channelItem.ChannelNewestTxId = channelLatestChat.TxId
+			channelItem.ChannelNewestPinId = channelLatestChat.PinId
+			channelItem.ChannelNewestMetaId = channelLatestChat.MetaId
+			channelItem.ChannelNewestProtocol = channelLatestChat.Protocol
+			channelItem.ChannelNewestContent = channelLatestChat.Content
+			channelItem.ChannelNewestTimestamp = channelLatestChat.Timestamp
+
+			// Get user info for channelNewestUserName
+			if channelLatestChat.CreateAddress != "" {
+				userInfo := common_service.FetchMetaIDUserInfo(channelLatestChat.CreateAddress)
+				if userInfo != nil {
+					channelItem.ChannelNewestUserName = userInfo.Name
+				}
+			}
+		}
+
+		channelItems = append(channelItems, channelItem)
+	}
+
+	return &respond.GroupChannelResponse{
+		Total: int64(len(channels)),
+		List:  channelItems,
 	}, nil
 }

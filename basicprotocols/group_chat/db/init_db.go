@@ -29,14 +29,23 @@ const (
 	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId and pinId_groupId
 	TalkGroupCommunityCollection   string = "talk_group_community"    // key: communityId_groupId
 
+	TalkGroupChannelInfoCollection        string = "talk_group_channel_info"         // key: channelId
+	TalkGroupChannelVersionInfoCollection string = "talk_group_channel_version_info" // key: channelId_pinId and pinId_channelId
+	TalkGroupChannelCollection            string = "talk_group_channel"              // key: groupId_channelId
+
 	TalkGroupRemoveUserCollection string = "talk_group_remove_user" // key: groupId_pinId and pinId_groupId
 	TalkGroupMetaIdJoinCollection string = "talk_group_metaid_join" // key: metaId_groupId, value: []{joinPinId, joinType, joinTimestamp}
 	TalkGroupJoinCollection       string = "talk_group_join"        // key: groupId_pinId and pinId_groupId
 	TalkGroupPersonCollection     string = "talk_group_person"      // key: groupId_metaId and metaId_groupId, value: {TalkGroupPerson}
 	TalkGroupPersonListCollection string = "talk_group_person_list" // key: groupId, value: []{TalkGroupPerson}
 
-	TalkGroupLatestChatCollection   string = "talk_group_latest_chat"    // key: groupId，value: {groupId, timestamp, chatType, content, createAddress}
-	TalkMetaIdContextListCollection string = "talk_meta_id_context_list" // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
+	TalkGroupAdminCollection     string = "talk_group_admin"     // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+	TalkGroupBlockCollection     string = "talk_group_block"     // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+	TalkGroupWhitelistCollection string = "talk_group_whitelist" // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+
+	TalkGroupLatestChatCollection        string = "talk_group_latest_chat"         // key: groupId，value: {groupId, timestamp, chatType, content, createAddress}
+	TalkGroupChannelLatestChatCollection string = "talk_group_channel_latest_chat" // key: channelId，value: {channelId, timestamp, chatType, content, createAddress}
+	TalkMetaIdContextListCollection      string = "talk_meta_id_context_list"      // key: metaId，value: []{groupId, timestamp, chatType, content, createAddress}
 
 	// Message queue related databases
 	TalkGroupChatQueueCollection            string = "talk_group_chat_queue"              // key: timestamp_pinId，value: chat message data
@@ -56,6 +65,11 @@ const (
 	TalkGroupChatTimestamp2Collection      string = "talk_group_chat_timestamp_2"       // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkGroupChatTimestamp2OutCollection   string = "talk_group_chat_timestamp_out_2"   // key: groupId_timestamp+number(6)，value: pinId_chatType_timestamp_number
 	TalkGroupChatIndexCollection           string = "talk_group_chat_index"             // key: groupId_index，value: pinId_chatType_timestamp_isSet
+
+	// Channel chat related databases
+	TalkGroupChannelChatTimestamp2Collection    string = "talk_group_channel_chat_timestamp_2"     // key: channelId_timestamp+number(6)，value: pinId_chatType_timestamp_number
+	TalkGroupChannelChatTimestamp2OutCollection string = "talk_group_channel_chat_timestamp_out_2" // key: channelId_timestamp+number(6)，value: pinId_chatType_timestamp_number
+	TalkGroupChannelChatIndexCollection         string = "talk_group_channel_chat_index"           // key: channelId_index，value: pinId_chatType_timestamp_isSet
 
 	// Lucky bag residue related databases
 	TalkGroupLuckyBagPinPendingCollection              string = "talk_group_lucky_bag_pin_pending"                // key: pinId，value: luckyBagPinId
@@ -86,6 +100,8 @@ const (
 	// User info
 	TalkUserAddressChatPublicKeyCollection string = "talk_user_address_chat_public_key" // key: address，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 	TalkUserMetaIdChatPublicKeyCollection  string = "talk_user_metaid_chat_public_key"  // key: metaId，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
+
+	TalkGolbalBlockCollection string = "talk_golbal_block" // key: address，value: reasion
 
 )
 
@@ -140,6 +156,20 @@ func (pb *Pebble) InitDatabase() error {
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupCommunityCollection, err)
 	}
+
+	err = open(TalkGroupChannelInfoCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelInfoCollection, err)
+	}
+	err = open(TalkGroupChannelVersionInfoCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelVersionInfoCollection, err)
+	}
+	err = open(TalkGroupChannelCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelCollection, err)
+	}
+
 	err = open(TalkGroupJoinCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupJoinCollection, err)
@@ -155,6 +185,19 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupRemoveUserCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupRemoveUserCollection, err)
+	}
+
+	err = open(TalkGroupAdminCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupAdminCollection, err)
+	}
+	err = open(TalkGroupBlockCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupBlockCollection, err)
+	}
+	err = open(TalkGroupWhitelistCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupWhitelistCollection, err)
 	}
 
 	// Initialize group MetaId join database
@@ -173,6 +216,11 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupLatestChatCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLatestChatCollection, err)
+	}
+
+	err = open(TalkGroupChannelLatestChatCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelLatestChatCollection, err)
 	}
 
 	// Initialize message queue databases
@@ -238,6 +286,19 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupChatIndexCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChatIndexCollection, err)
+	}
+
+	err = open(TalkGroupChannelChatTimestamp2Collection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelChatTimestamp2Collection, err)
+	}
+	err = open(TalkGroupChannelChatTimestamp2OutCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelChatTimestamp2OutCollection, err)
+	}
+	err = open(TalkGroupChannelChatIndexCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelChatIndexCollection, err)
 	}
 
 	// Initialize lucky bag residue related databases
@@ -327,6 +388,11 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkUserMetaIdChatPublicKeyCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkUserMetaIdChatPublicKeyCollection, err)
+	}
+
+	err = open(TalkGolbalBlockCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGolbalBlockCollection, err)
 	}
 
 	err = CheckAndMigrateDatabase()

@@ -30,10 +30,12 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 	}
 
 	ch := db.NewChatDB(pb)
+	gdb := db.NewGroupDB(pb, ch)
+	ch.SetGdb(gdb)
 
 	return &GroupChatIndexer{
 		communityDB: db.NewCommunityDB(pb),
-		groupDB:     db.NewGroupDB(pb, ch),
+		groupDB:     gdb,
 		chatDB:      ch,
 		privateDB:   db.NewPrivateChatDB(pb),
 		userDB:      db.NewUserInfoDB(pb),
@@ -90,8 +92,12 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		// Community related protocols
 		return gci.communityDB.ProcessCommunityPin(pin)
 	case strings.ToLower(protocols.MonitorSimpleGroupCreate),
+		strings.ToLower(protocols.MonitorSimpleGroupChannel),
 		strings.ToLower(protocols.MonitorSimpleGroupJoin),
-		strings.ToLower(protocols.MonitorSimpleGroupRemoveUser):
+		strings.ToLower(protocols.MonitorSimpleGroupRemoveUser),
+		strings.ToLower(protocols.MonitorSimpleGroupAdmin),
+		strings.ToLower(protocols.MonitorSimpleGroupBlock),
+		strings.ToLower(protocols.MonitorSimpleGroupWhitelist):
 		log.Printf("[%s]Group protocol: %s", pin.ChainName, pin.Path)
 		// Group related protocols
 		return gci.groupDB.ProcessGroupPin(pin)

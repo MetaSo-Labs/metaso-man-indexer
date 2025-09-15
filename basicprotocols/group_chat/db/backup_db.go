@@ -139,6 +139,9 @@ func (bdb *BackupDB) performBackup() error {
 		// Group related collections
 		TalkGroupInfoCollection,
 		TalkGroupVersionInfoCollection,
+		TalkGroupChannelInfoCollection,
+		TalkGroupChannelVersionInfoCollection,
+		TalkGroupChannelCollection,
 		TalkGroupCommunityCollection,
 		TalkGroupMetaIdJoinCollection,
 		TalkGroupJoinCollection,
@@ -146,7 +149,13 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupPersonListCollection,
 		TalkMetaIdContextListCollection,
 		TalkGroupLatestChatCollection,
+		TalkGroupChannelLatestChatCollection,
 		TalkGroupRemoveUserCollection,
+
+		// Group admin related collections
+		TalkGroupAdminCollection,
+		TalkGroupBlockCollection,
+		TalkGroupWhitelistCollection,
 
 		// Message queue collections
 		TalkGroupChatQueueCollection,
@@ -164,6 +173,10 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupChatTimestampOutCollection,
 		TalkGroupChatTimestamp2Collection,
 		TalkGroupChatTimestamp2OutCollection,
+		TalkGroupChatIndexCollection,
+		TalkGroupChannelChatTimestamp2Collection,
+		TalkGroupChannelChatTimestamp2OutCollection,
+		TalkGroupChannelChatIndexCollection,
 
 		// Lucky bag residue related collections
 		TalkGroupLuckyBagPinPendingCollection,
@@ -197,6 +210,9 @@ func (bdb *BackupDB) performBackup() error {
 		// User info collections
 		TalkUserAddressChatPublicKeyCollection,
 		TalkUserMetaIdChatPublicKeyCollection,
+
+		// Global block collection
+		TalkGolbalBlockCollection,
 	}
 
 	// Backup each collection
