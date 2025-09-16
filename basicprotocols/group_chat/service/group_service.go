@@ -912,9 +912,17 @@ func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.
 	startTime := time.Now()
 	var perfStats = struct {
 		getMembersTime     int64
+		getGroupInfoTime   int64
+		getAdminListTime   int64
+		getBlockListTime   int64
+		getWhitelistTime   int64
 		responseFormatTime int64
 		totalTime          int64
 		cacheHit           bool
+		groupInfoCacheHit  bool
+		adminCacheHit      bool
+		blockCacheHit      bool
+		whitelistCacheHit  bool
 	}{}
 
 	// Try to get from cache first
@@ -964,18 +972,159 @@ func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.
 	}
 
 	t1 := time.Now().UnixMilli()
-	// Convert to response format
+
+	// Try to get group info from cache first
+	var group *models.TalkGroupModel
+	t2 := time.Now().UnixMilli()
+	if cachedGroup, found := cache_service.GetGroupInfoFromCache(req.GroupId); found {
+		// Use cached data
+		group = cachedGroup
+		perfStats.groupInfoCacheHit = true
+		perfStats.getGroupInfoTime = time.Now().UnixMilli() - t2
+	} else {
+		// Cache miss, get from database
+		group, err = groupDB.GetGroupInfoByGroupId(req.GroupId)
+		if err != nil {
+			return nil, err
+		}
+		perfStats.groupInfoCacheHit = false
+		perfStats.getGroupInfoTime = time.Now().UnixMilli() - t2
+
+		// Update cache with the fetched data
+		if group != nil {
+			cache_service.SetGroupInfoToCache(req.GroupId, group)
+		}
+	}
+
+	// Try to get admins data from cache first
+	var adminList *models.GroupAdminList
+	var blockList *models.GroupBlockList
+	var whitelistList *models.GroupWhitelistList
+
+	t3 := time.Now().UnixMilli()
+	// Get admin list from cache
+	adminList, adminFound := cache_service.GetGroupAdminListFromCache(req.GroupId)
+	perfStats.adminCacheHit = adminFound
+	if !adminFound {
+		// Cache miss, get from database
+		adminList, err = groupDB.GetGroupAdminList(req.GroupId)
+		if err != nil {
+			logger.Info(fmt.Sprintf("Failed to get group admin list for groupId %s: %v", req.GroupId, err))
+			adminList = &models.GroupAdminList{GroupId: req.GroupId, Items: []*models.GroupAdminItem{}}
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupAdminListToCache(req.GroupId, adminList)
+	}
+	perfStats.getAdminListTime = time.Now().UnixMilli() - t3
+
+	t4 := time.Now().UnixMilli()
+	// Get block list from cache
+	blockList, blockFound := cache_service.GetGroupBlockListFromCache(req.GroupId)
+	perfStats.blockCacheHit = blockFound
+	if !blockFound {
+		// Cache miss, get from database
+		blockList, err = groupDB.GetGroupBlockList(req.GroupId)
+		if err != nil {
+			logger.Info(fmt.Sprintf("Failed to get group block list for groupId %s: %v", req.GroupId, err))
+			blockList = &models.GroupBlockList{GroupId: req.GroupId, Items: []*models.GroupBlockItem{}}
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupBlockListToCache(req.GroupId, blockList)
+	}
+	perfStats.getBlockListTime = time.Now().UnixMilli() - t4
+
+	t5 := time.Now().UnixMilli()
+	// Get whitelist from cache
+	whitelistList, whitelistFound := cache_service.GetGroupWhitelistFromCache(req.GroupId)
+	perfStats.whitelistCacheHit = whitelistFound
+	if !whitelistFound {
+		// Cache miss, get from database
+		whitelistList, err = groupDB.GetGroupWhitelistList(req.GroupId)
+		if err != nil {
+			logger.Info(fmt.Sprintf("Failed to get group whitelist for groupId %s: %v", req.GroupId, err))
+			whitelistList = &models.GroupWhitelistList{GroupId: req.GroupId, Items: []*models.GroupWhitelistItem{}}
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupWhitelistToCache(req.GroupId, whitelistList)
+	}
+	perfStats.getWhitelistTime = time.Now().UnixMilli() - t5
+
+	// Helper function to create GroupMemberItem
+	createMemberItem := func(metaId, address string, timestamp int64) *respond.GroupMemberItem {
+		return &respond.GroupMemberItem{
+			MetaId:    metaId,
+			UserInfo:  common_service.FetchMetaIDUserInfo(address),
+			Address:   address,
+			TimeStr:   time.Unix(timestamp, 0).Format("2006-01-02 15:04:05"),
+			Timestamp: timestamp,
+		}
+	}
+
+	// Find creator
+	var creator *respond.GroupMemberItem
+	if group != nil && group.CreateUserAddress != "" {
+		creator = createMemberItem(group.CreateUserMetaId, group.CreateUserAddress, group.Timestamp)
+	}
+
+	// Get current effective admins
+	var admins []*respond.GroupMemberItem
+	if len(adminList.Items) > 0 {
+		// Get the latest admin record (last item since sorted by timestamp ascending)
+		latestAdminItem := adminList.Items[len(adminList.Items)-1]
+		for _, adminMetaId := range latestAdminItem.Admins {
+			// Skip if this is the creator (creator is not in admin list)
+			if group != nil && adminMetaId == group.CreateUserMetaId {
+				continue
+			}
+			// Find admin's address from member list
+			for _, member := range allMembers {
+				if member.MetaId == adminMetaId {
+					admins = append(admins, createMemberItem(adminMetaId, member.Address, member.Timestamp))
+					break
+				}
+			}
+		}
+	}
+
+	// Get current effective blocked users
+	var blockListMembers []*respond.GroupMemberItem
+	if len(blockList.Items) > 0 {
+		// Get the latest block record (last item since sorted by timestamp ascending)
+		latestBlockItem := blockList.Items[len(blockList.Items)-1]
+		for _, blockedMetaId := range latestBlockItem.BlockedUsers {
+			// Find blocked user's address from member list
+			for _, member := range allMembers {
+				if member.MetaId == blockedMetaId {
+					blockListMembers = append(blockListMembers, createMemberItem(blockedMetaId, member.Address, member.Timestamp))
+					break
+				}
+			}
+		}
+	}
+
+	// Get current effective whitelisted users
+	var whitelistMembers []*respond.GroupMemberItem
+	if len(whitelistList.Items) > 0 {
+		// Get the latest whitelist record (last item since sorted by timestamp ascending)
+		latestWhitelistItem := whitelistList.Items[len(whitelistList.Items)-1]
+		for _, whitelistMetaId := range latestWhitelistItem.WhitelistUsers {
+			// Find whitelist user's address from member list
+			for _, member := range allMembers {
+				if member.MetaId == whitelistMetaId {
+					whitelistMembers = append(whitelistMembers, createMemberItem(whitelistMetaId, member.Address, member.Timestamp))
+					break
+				}
+			}
+		}
+	}
+
+	// Convert regular members to response format
 	var memberItems []*respond.GroupMemberItem
 	for _, member := range members {
-		memberItem := &respond.GroupMemberItem{
-			MetaId:    member.MetaId,
-			UserInfo:  common_service.FetchMetaIDUserInfo(member.Address),
-			Address:   member.Address,
-			TimeStr:   time.Unix(member.Timestamp, 0).Format("2006-01-02 15:04:05"),
-			Timestamp: member.Timestamp,
-		}
+		memberItem := createMemberItem(member.MetaId, member.Address, member.Timestamp)
 		memberItems = append(memberItems, memberItem)
 	}
+
 	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
 	perfStats.totalTime = time.Since(startTime).Milliseconds()
 
@@ -984,17 +1133,51 @@ func FetchGroupMemberListV2(req *request.FetchGroupMemberListRequest) (*respond.
 	if perfStats.cacheHit {
 		cacheStatus = "Cache"
 	}
+
+	groupInfoCacheStatus := "DB"
+	if perfStats.groupInfoCacheHit {
+		groupInfoCacheStatus = "Cache"
+	}
+
+	adminCacheStatus := "DB"
+	if perfStats.adminCacheHit {
+		adminCacheStatus = "Cache"
+	}
+
+	blockCacheStatus := "DB"
+	if perfStats.blockCacheHit {
+		blockCacheStatus = "Cache"
+	}
+
+	whitelistCacheStatus := "DB"
+	if perfStats.whitelistCacheHit {
+		whitelistCacheStatus = "Cache"
+	}
+
 	logger.Info("[CHAT_SERVICE][FETCH_GROUP_MEMBER_LIST_V2] Performance Stats - "+
-		"Total: %dms, GetMembers: %dms, ResponseFormat: %dms, Items: %d, Source: %s",
+		"Total: %dms, GetMembers: %dms, GetGroupInfo: %dms(%s), GetAdminList: %dms(%s), "+
+		"GetBlockList: %dms(%s), GetWhitelist: %dms(%s), ResponseFormat: %dms, Items: %d, Source: %s",
 		perfStats.totalTime,
 		perfStats.getMembersTime,
+		perfStats.getGroupInfoTime,
+		groupInfoCacheStatus,
+		perfStats.getAdminListTime,
+		adminCacheStatus,
+		perfStats.getBlockListTime,
+		blockCacheStatus,
+		perfStats.getWhitelistTime,
+		whitelistCacheStatus,
 		perfStats.responseFormatTime,
 		len(memberItems),
 		cacheStatus)
 
 	return &respond.GroupMemberResponse{
-		Total: total,
-		List:  memberItems,
+		Total:     total,
+		Creator:   creator,
+		Admins:    admins,
+		List:      memberItems,
+		BlockList: blockListMembers,
+		WhiteList: whitelistMembers,
 	}, nil
 }
 
@@ -2064,6 +2247,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 	for _, chat := range chats {
 		chatItem := &respond.GroupChatItem{
 			GroupId:   chat.GroupId,
+			ChannelId: chat.ChannelId,
 			MetanetId: chat.ChannelId, // Use ChannelId as MetanetId for channel chats
 			TxId:      chat.TxId,
 			PinId:     chat.PinId,
@@ -2101,6 +2285,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
+						ChannelId:   replyChat.ChannelId,
 						PinId:       replyChat.PinId,
 						MetaId:      replyChat.MetaId,
 						Address:     replyChat.Address,
@@ -2170,6 +2355,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 	for _, chat := range chats {
 		chatItem := &respond.GroupChatItem{
 			GroupId:     chat.GroupId,
+			ChannelId:   chat.ChannelId,
 			MetanetId:   chat.ChannelId, // Use ChannelId as MetanetId for channel chats
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
@@ -2206,6 +2392,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
+						ChannelId:   replyChat.ChannelId,
 						PinId:       replyChat.PinId,
 						MetaId:      replyChat.MetaId,
 						Address:     replyChat.Address,
@@ -2275,6 +2462,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 	for _, chat := range chats {
 		chatItem := &respond.GroupChatItem{
 			GroupId:     chat.GroupId,
+			ChannelId:   chat.ChannelId,
 			MetanetId:   chat.ChannelId, // Use ChannelId as MetanetId for channel chats
 			TxId:        chat.TxId,
 			PinId:       chat.PinId,
@@ -2311,6 +2499,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
+						ChannelId:   replyChat.ChannelId,
 						PinId:       replyChat.PinId,
 						MetaId:      replyChat.MetaId,
 						Address:     replyChat.Address,

@@ -209,7 +209,11 @@ func (gdb *GroupDB) SaveGroupCommunity(group *models.TalkGroupModel) error {
 // Delete group community association
 func (gdb *GroupDB) DeleteGroupCommunity(communityId, groupId string) error {
 	key := []byte(communityId + "_" + groupId)
-	return Pb[TalkGroupCommunityCollection].Delete(key, pebble.Sync)
+	err := Pb[TalkGroupCommunityCollection].Delete(key, pebble.Sync)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Save group channel association
@@ -221,7 +225,22 @@ func (gdb *GroupDB) SaveGroupChannel(channel *models.TalkGroupChannelModel) erro
 
 	// Use GroupId_ChannelId as primary key
 	key := []byte(channel.GroupId + "_" + channel.ChannelId)
-	return Pb[TalkGroupChannelCollection].Set(key, data, pebble.Sync)
+	err = Pb[TalkGroupChannelCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	// Update the group channel list cache by fetching the complete list from database
+	channelList, err := gdb.GetChannelsByGroupId(channel.GroupId)
+	if err != nil {
+		// If failed to get channel list, just delete the cache to ensure consistency
+		// cache_service.DeleteGroupChannelListFromCache(channel.GroupId)
+		return nil // Don't return error as the main operation succeeded
+	}
+
+	// Update cache with the complete channel list
+	cache_service.SetGroupChannelListToCache(channel.GroupId, channelList)
+	return nil
 }
 
 // Get group list by community ID
@@ -2037,6 +2056,11 @@ func (gdb *GroupDB) processGroupWhitelistModify(pin *pin.PinInscription) error {
 	return gdb.processGroupWhitelist(pin, "modify")
 }
 
+// GetGroupAdminList Get group admin list (exported method)
+func (gdb *GroupDB) GetGroupAdminList(groupId string) (*models.GroupAdminList, error) {
+	return gdb.getGroupAdminList(groupId)
+}
+
 // Get group admin list
 func (gdb *GroupDB) getGroupAdminList(groupId string) (*models.GroupAdminList, error) {
 	key := []byte(groupId)
@@ -2066,7 +2090,14 @@ func (gdb *GroupDB) saveGroupAdminList(adminList *models.GroupAdminList) error {
 	}
 
 	key := []byte(adminList.GroupId)
-	return Pb[TalkGroupAdminCollection].Set(key, data, pebble.Sync)
+	err = Pb[TalkGroupAdminCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	cache_service.SetGroupAdminListToCache(adminList.GroupId, adminList)
+
+	return nil
 }
 
 // Add group admin record to group admin list
@@ -2132,6 +2163,11 @@ func (gdb *GroupDB) sortGroupAdminListByTimestamp(adminList *models.GroupAdminLi
 	}
 }
 
+// GetGroupBlockList Get group block list (exported method)
+func (gdb *GroupDB) GetGroupBlockList(groupId string) (*models.GroupBlockList, error) {
+	return gdb.getGroupBlockList(groupId)
+}
+
 // Get group block list
 func (gdb *GroupDB) getGroupBlockList(groupId string) (*models.GroupBlockList, error) {
 	key := []byte(groupId)
@@ -2161,7 +2197,14 @@ func (gdb *GroupDB) saveGroupBlockList(blockList *models.GroupBlockList) error {
 	}
 
 	key := []byte(blockList.GroupId)
-	return Pb[TalkGroupBlockCollection].Set(key, data, pebble.Sync)
+	err = Pb[TalkGroupBlockCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	cache_service.SetGroupBlockListToCache(blockList.GroupId, blockList)
+
+	return nil
 }
 
 // Add group block record to group block list
@@ -2227,6 +2270,11 @@ func (gdb *GroupDB) sortGroupBlockListByTimestamp(blockList *models.GroupBlockLi
 	}
 }
 
+// GetGroupWhitelistList Get group whitelist list (exported method)
+func (gdb *GroupDB) GetGroupWhitelistList(groupId string) (*models.GroupWhitelistList, error) {
+	return gdb.getGroupWhitelistList(groupId)
+}
+
 // Get group whitelist list
 func (gdb *GroupDB) getGroupWhitelistList(groupId string) (*models.GroupWhitelistList, error) {
 	key := []byte(groupId)
@@ -2256,7 +2304,14 @@ func (gdb *GroupDB) saveGroupWhitelistList(whitelistList *models.GroupWhitelistL
 	}
 
 	key := []byte(whitelistList.GroupId)
-	return Pb[TalkGroupWhitelistCollection].Set(key, data, pebble.Sync)
+	err = Pb[TalkGroupWhitelistCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	cache_service.SetGroupWhitelistToCache(whitelistList.GroupId, whitelistList)
+
+	return nil
 }
 
 // Add group whitelist record to group whitelist list
@@ -2324,11 +2379,19 @@ func (gdb *GroupDB) sortGroupWhitelistListByTimestamp(whitelistList *models.Grou
 
 // Check if user is admin of the group at specific timestamp
 func (gdb *GroupDB) IsUserAdmin(groupId, metaId string, pinTimestamp int64) (bool, error) {
-	// Get group admin list
-	adminList, err := gdb.getGroupAdminList(groupId)
-	if err != nil {
-		return false, err
+	// Try to get admin list from cache first
+	adminList, found := cache_service.GetGroupAdminListFromCache(groupId)
+	if !found {
+		// Cache miss, get from database
+		var err error
+		adminList, err = gdb.getGroupAdminList(groupId)
+		if err != nil {
+			return false, err
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupAdminListToCache(groupId, adminList)
 	}
+
 	if adminList == nil || len(adminList.Items) == 0 {
 		return false, nil
 	}
@@ -2363,11 +2426,19 @@ func (gdb *GroupDB) IsUserAdmin(groupId, metaId string, pinTimestamp int64) (boo
 
 // Check if user is blocked in the group at specific timestamp
 func (gdb *GroupDB) IsUserBlock(groupId, metaId string, pinTimestamp int64) (bool, error) {
-	// Get group block list
-	blockList, err := gdb.getGroupBlockList(groupId)
-	if err != nil {
-		return false, err
+	// Try to get block list from cache first
+	blockList, found := cache_service.GetGroupBlockListFromCache(groupId)
+	if !found {
+		// Cache miss, get from database
+		var err error
+		blockList, err = gdb.getGroupBlockList(groupId)
+		if err != nil {
+			return false, err
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupBlockListToCache(groupId, blockList)
 	}
+
 	if blockList == nil || len(blockList.Items) == 0 {
 		return false, nil
 	}
@@ -2402,11 +2473,19 @@ func (gdb *GroupDB) IsUserBlock(groupId, metaId string, pinTimestamp int64) (boo
 
 // Check if user is whitelisted in the group at specific timestamp
 func (gdb *GroupDB) IsUserWhitelist(groupId, metaId string, pinTimestamp int64) (bool, error) {
-	// Get group whitelist list
-	whitelistList, err := gdb.getGroupWhitelistList(groupId)
-	if err != nil {
-		return false, err
+	// Try to get whitelist from cache first
+	whitelistList, found := cache_service.GetGroupWhitelistFromCache(groupId)
+	if !found {
+		// Cache miss, get from database
+		var err error
+		whitelistList, err = gdb.getGroupWhitelistList(groupId)
+		if err != nil {
+			return false, err
+		}
+		// Update cache with the fetched data
+		cache_service.SetGroupWhitelistToCache(groupId, whitelistList)
 	}
+
 	if whitelistList == nil || len(whitelistList.Items) == 0 {
 		return false, nil
 	}
@@ -2660,6 +2739,7 @@ func (gdb *GroupDB) SaveChannelInfo(channel *models.TalkGroupChannelModel) error
 		if err != nil {
 			return err
 		}
+		cache_service.SetGroupChannelInfoToCache(channel.ChannelId, channel)
 		return nil
 	}
 
@@ -2690,6 +2770,7 @@ func (gdb *GroupDB) SaveChannelInfo(channel *models.TalkGroupChannelModel) error
 		if err != nil {
 			return err
 		}
+		cache_service.SetGroupChannelInfoToCache(channel.ChannelId, channel)
 		return nil
 	}
 
@@ -2781,6 +2862,28 @@ func (gdb *GroupDB) GetChannelVersionInfoByPinIdAndChannelId(pinId, channelId st
 
 // Get channels by group ID from TalkGroupChannelCollection
 func (gdb *GroupDB) GetChannelsByGroupId(groupId string) ([]*models.TalkGroupChannelModel, error) {
+	// Try to get channels from cache first
+	channels, found := cache_service.GetGroupChannelListFromCache(groupId)
+	if found {
+		return channels, nil
+	}
+
+	// Cache miss, get from database
+	channels, err := gdb.getChannelsByGroupId(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update cache with the fetched data
+	if channels != nil {
+		cache_service.SetGroupChannelListToCache(groupId, channels)
+	}
+
+	return channels, nil
+}
+
+// Get channels by group ID from TalkGroupChannelCollection
+func (gdb *GroupDB) getChannelsByGroupId(groupId string) ([]*models.TalkGroupChannelModel, error) {
 	var channels []*models.TalkGroupChannelModel
 
 	// Use prefix query, because key is groupId_channelId format

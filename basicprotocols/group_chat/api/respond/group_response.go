@@ -59,6 +59,7 @@ type GroupChatResponse struct {
 
 type GroupChatItem struct {
 	GroupId     string          `json:"groupId"`   //Room ID, unique
+	ChannelId   string          `json:"channelId"` //Channel ID, unique
 	MetanetId   string          `json:"metanetId"` //
 	TxId        string          `json:"txId"`
 	PinId       string          `json:"pinId"`
@@ -84,6 +85,7 @@ type GroupChatItem struct {
 }
 
 type ReplyInfo struct {
+	ChannelId   string          `json:"channelId"` //Channel ID, unique
 	PinId       string          `json:"pinId"`
 	MetaId      string          `json:"metaId"`
 	Address     string          `json:"address"`
@@ -102,8 +104,12 @@ type ReplyInfo struct {
 }
 
 type GroupMemberResponse struct {
-	Total int64              `json:"total"`
-	List  []*GroupMemberItem `json:"list"`
+	Total     int64              `json:"total"`
+	Creator   *GroupMemberItem   `json:"creator"`
+	Admins    []*GroupMemberItem `json:"admins"`
+	List      []*GroupMemberItem `json:"list"`
+	BlockList []*GroupMemberItem `json:"blockList"`
+	WhiteList []*GroupMemberItem `json:"whiteList"`
 }
 
 type GroupMemberItem struct {

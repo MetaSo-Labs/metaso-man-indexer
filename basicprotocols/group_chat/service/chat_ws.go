@@ -50,6 +50,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		if err == nil && replyChat != nil {
 			replyMetaId = replyChat.MetaId
 			replyInfo = &respond.ReplyInfo{
+				ChannelId:   replyChat.ChannelId,
 				PinId:       replyChat.PinId,
 				MetaId:      replyChat.MetaId,
 				Address:     replyChat.Address,
@@ -71,6 +72,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	// 5. Build GroupChatItem
 	groupChatItem := &respond.GroupChatItem{
 		GroupId:     chat.GroupId,
+		ChannelId:   chat.ChannelId,
 		MetanetId:   chat.GroupId, // Use GroupId as MetanetId
 		TxId:        chat.TxId,
 		PinId:       chat.PinId,

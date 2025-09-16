@@ -7,6 +7,7 @@ import (
 	"log"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
+	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/common"
 	"manindexer/pin"
 	"math"
@@ -2107,7 +2108,7 @@ func (cdb *ChatDB) shouldPlaceMessageInGroup(chat *models.TalkGroupChatV3) (bool
 // Also returns the reason if message should be in OutCollection
 func (cdb *ChatDB) shouldPlaceMessageInChannel(chat *models.TalkGroupChatV3) (bool, string, error) {
 	// Get channel info to check ChannelType
-	channelInfo, err := cdb.getChannelInfo(chat.ChannelId)
+	channelInfo, err := cdb.GetChannelInfo(chat.ChannelId)
 	if err != nil {
 		// If getting group info fails, default to placing in group
 		return true, "", nil
@@ -2192,6 +2193,27 @@ func (cdb *ChatDB) getGroupInfo(groupId string) (*models.TalkGroupModel, error) 
 	}
 
 	return &groupInfo, nil
+}
+
+func (cdb *ChatDB) GetChannelInfo(channelId string) (*models.TalkGroupChannelModel, error) {
+	// Try to get channel info from cache first
+	channelInfo, found := cache_service.GetGroupChannelInfoFromCache(channelId)
+	if found {
+		return channelInfo, nil
+	}
+
+	// Cache miss, get from database
+	channelInfo, err := cdb.getChannelInfo(channelId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update cache with the fetched data
+	if channelInfo != nil {
+		cache_service.SetGroupChannelInfoToCache(channelId, channelInfo)
+	}
+
+	return channelInfo, nil
 }
 
 // Get channel info by channel ID (helper method)
