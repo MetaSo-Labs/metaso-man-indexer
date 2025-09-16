@@ -213,6 +213,9 @@ func (bdb *BackupDB) performBackup() error {
 
 		// Global block collection
 		TalkGolbalBlockCollection,
+
+		// Socket info snapshot collection
+		TalkSocketInfoSnapshotCollection,
 	}
 
 	// Backup each collection

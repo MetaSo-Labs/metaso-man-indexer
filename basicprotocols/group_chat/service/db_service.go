@@ -3102,19 +3102,34 @@ func QueryGroupWhitelistByGroupId(groupId string) (map[string]interface{}, error
 
 // ChatStatistics represents statistics for chat data
 type ChatStatistics struct {
-	StartTime           int64                       `json:"startTime"`            // Start time
-	EndTime             int64                       `json:"endTime"`              // End time
-	GroupId             string                      `json:"groupId,omitempty"`    // Group ID (empty means all groups)
-	Chain               string                      `json:"chain,omitempty"`      // Chain (empty means all chains)
-	GroupChatCount      int64                       `json:"groupChatCount"`       // Number of group chat messages
-	PrivateChatCount    int64                       `json:"privateChatCount"`     // Number of private chat messages
-	GroupCreatedCount   int64                       `json:"groupCreatedCount"`    // Number of groups created
-	TotalGroupsCount    int64                       `json:"totalGroupsCount"`     // Total number of groups
-	TotalUsersCount     int64                       `json:"totalUsersCount"`      // Total number of users
-	ChannelChatCount    int64                       `json:"channelChatCount"`     // Number of channel chat messages
-	ChannelCreatedCount int64                       `json:"channelCreatedCount"`  // Number of channels created
-	TotalChannelsCount  int64                       `json:"totalChannelsCount"`   // Total number of channels
-	ChainStats          map[string]*ChainStatistics `json:"chainStats,omitempty"` // Statistics by chain
+	StartTime           int64                       `json:"startTime"`             // Start time
+	EndTime             int64                       `json:"endTime"`               // End time
+	GroupId             string                      `json:"groupId,omitempty"`     // Group ID (empty means all groups)
+	Chain               string                      `json:"chain,omitempty"`       // Chain (empty means all chains)
+	GroupChatCount      int64                       `json:"groupChatCount"`        // Number of group chat messages
+	PrivateChatCount    int64                       `json:"privateChatCount"`      // Number of private chat messages
+	GroupCreatedCount   int64                       `json:"groupCreatedCount"`     // Number of groups created
+	TotalGroupsCount    int64                       `json:"totalGroupsCount"`      // Total number of groups
+	TotalUsersCount     int64                       `json:"totalUsersCount"`       // Total number of users
+	ChannelChatCount    int64                       `json:"channelChatCount"`      // Number of channel chat messages
+	ChannelCreatedCount int64                       `json:"channelCreatedCount"`   // Number of channels created
+	TotalChannelsCount  int64                       `json:"totalChannelsCount"`    // Total number of channels
+	ChainStats          map[string]*ChainStatistics `json:"chainStats,omitempty"`  // Statistics by chain
+	SocketStats         *SocketStatistics           `json:"socketStats,omitempty"` // Socket connection statistics
+}
+
+// SocketStatistics represents socket connection statistics
+type SocketStatistics struct {
+	MaxActiveConnections     int64   `json:"maxActiveConnections"`     // Maximum active connections in time range
+	MinActiveConnections     int64   `json:"minActiveConnections"`     // Minimum active connections in time range
+	AverageActiveConnections float64 `json:"averageActiveConnections"` // Average active connections in time range
+	MaxMemoryUsage           int64   `json:"maxMemoryUsage"`           // Maximum memory usage in time range (bytes)
+	MinMemoryUsage           int64   `json:"minMemoryUsage"`           // Minimum memory usage in time range (bytes)
+	AverageMemoryUsage       float64 `json:"averageMemoryUsage"`       // Average memory usage in time range (bytes)
+	MaxMemoryUsageMB         float64 `json:"maxMemoryUsageMB"`         // Maximum memory usage in time range (MB)
+	MinMemoryUsageMB         float64 `json:"minMemoryUsageMB"`         // Minimum memory usage in time range (MB)
+	AverageMemoryUsageMB     float64 `json:"averageMemoryUsageMB"`     // Average memory usage in time range (MB)
+	SnapshotCount            int64   `json:"snapshotCount"`            // Number of snapshots in time range
 }
 
 // ChainStatistics represents statistics for a specific chain
@@ -3340,6 +3355,85 @@ func GetChatStatisticsByTimeRange(startTime, endTime int64, groupId string) (*Ch
 			}
 		}
 	}
+
+	// Get socket statistics from TalkSocketInfoSnapshotCollection
+	socketStats := &SocketStatistics{
+		MaxActiveConnections:     0,
+		MinActiveConnections:     -1, // Initialize to -1 to detect first value
+		AverageActiveConnections: 0,
+		MaxMemoryUsage:           0,
+		MinMemoryUsage:           -1, // Initialize to -1 to detect first value
+		AverageMemoryUsage:       0,
+		MaxMemoryUsageMB:         0,
+		MinMemoryUsageMB:         -1, // Initialize to -1 to detect first value
+		AverageMemoryUsageMB:     0,
+		SnapshotCount:            0,
+	}
+
+	// Use existing socket info DB method to get snapshots by time range
+	snapshots, err := socketInfoDB.GetSocketInfoSnapshotsByTimeRange(startTime*1000, endTime*1000)
+	if err == nil && len(snapshots) > 0 {
+		var totalActiveConnections int64 = 0
+		var totalMemoryUsage int64 = 0
+		var totalMemoryUsageMB float64 = 0
+
+		for _, snapshot := range snapshots {
+			socketStats.SnapshotCount++
+
+			// Get active connections
+			activeConnectionsInt := snapshot.ActiveConnections
+			totalActiveConnections += activeConnectionsInt
+
+			// Update max/min active connections
+			if activeConnectionsInt > socketStats.MaxActiveConnections {
+				socketStats.MaxActiveConnections = activeConnectionsInt
+			}
+			if socketStats.MinActiveConnections == -1 || activeConnectionsInt < socketStats.MinActiveConnections {
+				socketStats.MinActiveConnections = activeConnectionsInt
+			}
+
+			// Get memory usage (bytes)
+			memoryUsageInt := snapshot.TotalMemoryUsage
+			totalMemoryUsage += memoryUsageInt
+
+			// Update max/min memory usage
+			if memoryUsageInt > socketStats.MaxMemoryUsage {
+				socketStats.MaxMemoryUsage = memoryUsageInt
+			}
+			if socketStats.MinMemoryUsage == -1 || memoryUsageInt < socketStats.MinMemoryUsage {
+				socketStats.MinMemoryUsage = memoryUsageInt
+			}
+
+			// Get memory usage (MB)
+			memoryUsageMB := snapshot.TotalMemoryMB
+			totalMemoryUsageMB += memoryUsageMB
+
+			// Update max/min memory usage (MB)
+			if memoryUsageMB > socketStats.MaxMemoryUsageMB {
+				socketStats.MaxMemoryUsageMB = memoryUsageMB
+			}
+			if socketStats.MinMemoryUsageMB == -1 || memoryUsageMB < socketStats.MinMemoryUsageMB {
+				socketStats.MinMemoryUsageMB = memoryUsageMB
+			}
+		}
+
+		// Calculate averages
+		if socketStats.SnapshotCount > 0 {
+			socketStats.AverageActiveConnections = float64(totalActiveConnections) / float64(socketStats.SnapshotCount)
+			socketStats.AverageMemoryUsage = float64(totalMemoryUsage) / float64(socketStats.SnapshotCount)
+			socketStats.AverageMemoryUsageMB = totalMemoryUsageMB / float64(socketStats.SnapshotCount)
+		}
+	}
+
+	// If no snapshots found, set min values to 0
+	if socketStats.SnapshotCount == 0 {
+		socketStats.MinActiveConnections = 0
+		socketStats.MinMemoryUsage = 0
+		socketStats.MinMemoryUsageMB = 0
+	}
+
+	// Set socket statistics
+	stats.SocketStats = socketStats
 
 	return stats, nil
 }

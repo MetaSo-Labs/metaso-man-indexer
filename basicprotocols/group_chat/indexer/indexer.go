@@ -16,6 +16,7 @@ type GroupChatIndexer struct {
 	privateDB     *db.PrivateChatDB
 	userDB        *db.UserInfoDB
 	globalBlockDB *db.GlobalBlockDB
+	socketInfoDB  *db.SocketInfoDB
 	pb            *db.Pebble
 }
 
@@ -41,6 +42,7 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 		privateDB:     db.NewPrivateChatDB(pb),
 		userDB:        db.NewUserInfoDB(pb),
 		globalBlockDB: db.NewGlobalBlockDB(pb),
+		socketInfoDB:  db.NewSocketInfoDB(pb),
 		pb:            pb,
 	}, nil
 }
@@ -178,4 +180,9 @@ func (gci *GroupChatIndexer) GetPebble() *db.Pebble {
 // GetUserInfoDB Get user info database instance
 func (gci *GroupChatIndexer) GetUserInfoDB() *db.UserInfoDB {
 	return gci.userDB
+}
+
+// GetSocketInfoDB Get socket info database instance
+func (gci *GroupChatIndexer) GetSocketInfoDB() *db.SocketInfoDB {
+	return gci.socketInfoDB
 }

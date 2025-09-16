@@ -101,8 +101,11 @@ const (
 	TalkUserAddressChatPublicKeyCollection string = "talk_user_address_chat_public_key" // key: address，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 	TalkUserMetaIdChatPublicKeyCollection  string = "talk_user_metaid_chat_public_key"  // key: metaId，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 
+	// Global block
 	TalkGolbalBlockCollection string = "talk_golbal_block" // key: address，value: reasion
 
+	// Socket info snapshot
+	TalkSocketInfoSnapshotCollection string = "talk_socket_info_snapshot" // key: timestamp，value: ConnectionStats
 )
 
 type Pebble struct{}
@@ -393,6 +396,11 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGolbalBlockCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGolbalBlockCollection, err)
+	}
+
+	err = open(TalkSocketInfoSnapshotCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkSocketInfoSnapshotCollection, err)
 	}
 
 	err = CheckAndMigrateDatabase()

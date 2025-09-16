@@ -12,6 +12,7 @@ import (
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"manindexer/basicprotocols/group_chat/service/socket_service"
 	"sort"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ var (
 	chatDB       *db.ChatDB
 	privateDB    *db.PrivateChatDB
 	userInfoDB   *db.UserInfoDB
+	socketInfoDB *db.SocketInfoDB
 	pebbleDB     *db.Pebble
 	chainAdapter map[string]adapter.Chain
 )
@@ -38,6 +40,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	chatDB = indexer.GetChatDB()
 	privateDB = indexer.GetPrivateDB()
 	userInfoDB = indexer.GetUserInfoDB()
+	socketInfoDB = indexer.GetSocketInfoDB()
 	chainAdapter = adapter
 
 	// Start chat queue processor
@@ -60,6 +63,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	common_service.StartUserInfoPolling()
 
 	startLuckyBagGrabCleanupGoroutine()
+
+	// Start socket info snapshot timer
+	startSocketInfoSnapshotTimer()
 
 	return nil
 }
@@ -2611,4 +2617,80 @@ func FetchGroupChannelList(req *request.FetchGroupChannelListRequest) (*respond.
 		Total: int64(len(channels)),
 		List:  channelItems,
 	}, nil
+}
+
+// startSocketInfoSnapshotTimer Start socket info snapshot timer
+func startSocketInfoSnapshotTimer() {
+	logger.Info("[SOCKET_INFO_SNAPSHOT] Starting socket info snapshot timer - every 5 minutes")
+
+	go func() {
+		// Start the periodic timer immediately
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		// Take initial snapshot
+		takeSocketInfoSnapshot()
+
+		// Take snapshots every 5 minutes
+		for range ticker.C {
+			if db.GlobalIsStop {
+				logger.Info("[SOCKET_INFO_SNAPSHOT] Socket info snapshot timer stopped")
+				break
+			}
+			takeSocketInfoSnapshot()
+		}
+	}()
+}
+
+// takeSocketInfoSnapshot Take a snapshot of socket connection stats and save to database
+func takeSocketInfoSnapshot() {
+	startTime := time.Now()
+
+	logger.Info("[SOCKET_INFO_SNAPSHOT] Starting to take socket info snapshot")
+
+	// Get connection stats from socket service
+	stats := socket_service.GetConnectionStats()
+	if stats == nil {
+		logger.Info("[SOCKET_INFO_SNAPSHOT] Failed to get connection stats - socket service not available")
+		return
+	}
+
+	// Create timestamp for this snapshot (use current time)
+	timestamp := time.Now().UnixMilli()
+
+	// Create snapshot data
+	snapshot := &db.SocketInfoSnapshot{
+		Timestamp:            timestamp,
+		TotalConnections:     stats.TotalConnections,
+		ActiveConnections:    stats.ActiveConnections,
+		TotalMessagesSent:    stats.TotalMessagesSent,
+		TotalMessagesFailed:  stats.TotalMessagesFailed,
+		TotalMemoryUsage:     stats.TotalMemoryUsage,
+		AverageMemoryPerConn: stats.AverageMemoryPerConn,
+		TotalMemoryMB:        stats.TotalMemoryMB,
+		AverageMemoryKB:      stats.AverageMemoryKB,
+		MemoryUsagePercent:   stats.MemoryUsagePercent,
+		MemoryLimitMB:        stats.MemoryLimitMB,
+	}
+
+	if db.GlobalIsStop {
+		logger.Info("[SOCKET_INFO_SNAPSHOT] Socket info snapshot timer stopped")
+		return
+	}
+
+	// Save to database
+	err := socketInfoDB.SaveSocketInfoSnapshot(timestamp, snapshot)
+	if err != nil {
+		logger.Info("[SOCKET_INFO_SNAPSHOT] Failed to save snapshot: %v", err)
+		return
+	}
+
+	elapsed := time.Since(startTime).Milliseconds()
+	logger.Info("[SOCKET_INFO_SNAPSHOT] Snapshot taken successfully - "+
+		"Timestamp: %d, TotalConnections: %d, ActiveConnections: %d, "+
+		"TotalMessagesSent: %d, TotalMessagesFailed: %d, TotalMemoryMB: %.2f, "+
+		"MemoryUsagePercent: %.2f%%, Elapsed: %dms",
+		timestamp, stats.TotalConnections, stats.ActiveConnections,
+		stats.TotalMessagesSent, stats.TotalMessagesFailed, stats.TotalMemoryMB,
+		stats.MemoryUsagePercent, elapsed)
 }
