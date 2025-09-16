@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +44,9 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/notifcation/list", notifcationList)
 	btcGroup.GET("/dict/set", dictSet)
 	btcGroup.GET("/dict/get", dictGet)
+	btcGroup.GET("/block/file", blockFileGet)
+	btcGroup.GET("/block/file/partCount", blockPartCount)
+	btcGroup.GET("/block/file/create", blockFileCreate)
 
 	btcGroup.GET("/pin/:numberOrId", getPinById)
 	btcGroup.GET("/address/pin/utxo/count/:address", getPinUtxoCountByAddress)
@@ -771,6 +776,11 @@ func getFollowRecord(ctx *gin.Context) {
 
 }
 func reindex(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token != common.Config.AdminToken || token == "" {
+		ctx.JSON(http.StatusOK, "error token")
+		return
+	}
 	chain := ctx.Param("chain")
 	from, _ := strconv.ParseInt(ctx.Param("from"), 10, 64)
 	to, _ := strconv.ParseInt(ctx.Param("to"), 10, 64)
@@ -856,4 +866,98 @@ func dictGet(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", string(value)))
+}
+
+func blockFileGet(ctx *gin.Context) {
+	heightStr := ctx.Query("height")
+	if heightStr == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	height, err := strconv.ParseInt(heightStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	chainName := ctx.Query("chain")
+	if chainName == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	partIndexStr := ctx.Query("part")
+	partIndex := 0
+	if partIndexStr != "" {
+		partIndex, err = strconv.Atoi(partIndexStr)
+		if err != nil {
+			ctx.JSON(http.StatusOK, respond.ErrParameterError)
+			return
+		}
+	}
+
+	// 获取文件路径
+	filePath := man.GetBlockFilePath(chainName, height, partIndex)
+	if _, err := os.Stat(filePath); err != nil {
+		ctx.JSON(http.StatusOK, respond.ApiError(404, "File does not exist"))
+		return
+	}
+
+	// 设置下载响应头
+	ctx.Header("Content-Type", "application/octet-stream")
+	ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(filePath)))
+	ctx.File(filePath)
+}
+
+// 查询某区块分片文件数量
+func blockPartCount(ctx *gin.Context) {
+	heightStr := ctx.Query("height")
+	if heightStr == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	height, err := strconv.ParseInt(heightStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	chainName := ctx.Query("chain")
+	if chainName == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+
+	// 遍历分片文件，统计数量
+	dirPath := filepath.Join(
+		common.Config.Pebble.Dir+"/blockFiles",
+		strconv.FormatInt(height/1000000, 10),
+		strconv.FormatInt((height%1000000)/1000, 10),
+	)
+	prefix := chainName + "_" + strconv.FormatInt(height, 10) + "_"
+	count := 0
+	files, err := os.ReadDir(dirPath)
+	if err == nil {
+		for _, f := range files {
+			if !f.IsDir() && strings.HasPrefix(f.Name(), prefix) && strings.HasSuffix(f.Name(), ".dat.zst") {
+				count++
+			}
+		}
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"partCount": count}))
+}
+func blockFileCreate(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token != common.Config.AdminToken || token == "" {
+		ctx.JSON(http.StatusOK, "error token")
+		return
+	}
+	chainName := ctx.Query("chain")
+	if chainName == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	from, _ := strconv.ParseInt(ctx.Query("from"), 10, 64)
+	to, _ := strconv.ParseInt(ctx.Query("to"), 10, 64)
+	for i := from; i <= to; i++ {
+		man.SaveBlockFile(chainName, int(i))
+	}
+	ctx.String(http.StatusOK, "block file create finish")
 }

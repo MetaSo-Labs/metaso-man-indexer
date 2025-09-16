@@ -230,6 +230,24 @@ func (idx *Database) InsertBlockTxs(blockKey string, data string) error {
 	return idx.BlocksDB.Set([]byte(blockKey), []byte(data), pebble.Sync)
 }
 
+// 获取BlocksDB所有的数据
+func (idx *Database) GetlBlocksDB(chainName string, height int) (*string, error) {
+	it, err := idx.BlocksDB.NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+	searchKey := fmt.Sprintf("&%s&%010d", chainName, height)
+	for it.First(); it.Valid(); it.Next() {
+		key := string(it.Key())
+		if strings.Contains(key, searchKey) {
+			val := string(it.Value())
+			return &val, nil
+		}
+	}
+	return nil, nil
+}
+
 // PageQuery 分页查询参数
 type PageQuery struct {
 	Type   string // pin

@@ -3,6 +3,7 @@ package man
 import (
 	"fmt"
 	"log"
+
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/pebblestore"
@@ -65,6 +66,7 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 		startTime = time.Now()
 		pd.Database.SetAllPins(height, pinList, 20000)
 		log.Println("SetAllPins:", time.Since(startTime))
+		go SaveBlockFile(chainName, int(height))
 		//check transfer in this block
 		//var idList []string
 		tmp := pinList[0].(*pin.PinInscription)

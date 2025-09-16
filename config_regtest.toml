@@ -2,6 +2,8 @@ version = "0.2"
 net = "mainnet"
 protocolID = "6d6574616964"
 module = ["metaname","mrc721","mrc20","metaso_notifcation"]
+syncDB = "./sync_data.db"
+adminToken = "metaid"
 [metaso]
 feeRateHost = "http://47.238.91.186:8085"
 feeLimit = 5
@@ -52,12 +54,12 @@ allowProtocols = ["*"]
 [btc]
 initialHeight = 0
 mrc20Height = 0
-rpcHost = "127.0.0.1:8332"
+rpcHost = "127.0.0.1:18443"
 rpcUser = "test"
 rpcPass = "test"
 rpcHttpPostMode = true
 rpcDisableTLS = true
-zmqHost = "tcp://127.0.0.1:28336"
+zmqHost = "tcp://127.0.0.1:28333"
 popCutNum = 0
 [mvc]
 #initialHeight = 91797
@@ -72,7 +74,7 @@ rpcDisableTLS = true
 zmqHost = "tcp://127.0.0.1:25555"
 popCutNum = 21
 [mongodb]
-mongoURI = "mongodb://test:12345678@192.168.64.2:27017"
+mongoURI = "mongodb://test:12345678@127.0.0.1:27017"
 dbName = "man_regtest"
 poolSize = 200
 timeOut = 20

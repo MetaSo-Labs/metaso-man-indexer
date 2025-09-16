@@ -83,7 +83,11 @@ func (chain *BitcoinChain) GetInitialHeight() (height int64) {
 func (chain *BitcoinChain) GetBestHeight() (height int64) {
 	info, err := client.GetBlockChainInfo()
 	if err != nil {
-		return
+		height, err = client.GetBlockCount()
+		if err == nil {
+			return height
+		}
+		return 0
 	}
 	height = int64(info.Blocks)
 	return
