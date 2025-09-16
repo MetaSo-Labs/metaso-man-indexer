@@ -1094,7 +1094,7 @@ func SetupSwagger(router *gin.Engine) {
             "get": {
                 "description": "Get comprehensive lucky bag statistics for a specific group or all groups within a time range",
                 "produces": ["application/json"],
-                "tags": ["Database Query"],
+                "tags": ["Statistics"],
                 "summary": "Get lucky bag statistics by group and time range",
                 "parameters": [
                     {"type": "string", "description": "Group ID (leave empty to get statistics for all groups)", "name": "groupId", "in": "query", "required": false},
@@ -1785,6 +1785,133 @@ func SetupSwagger(router *gin.Engine) {
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
+        },
+        "/api/db/global-block/set": {
+            "post": {
+                "description": "Set an address to the global block list",
+                "produces": ["application/json"],
+                "tags": ["Global Block"],
+                "summary": "Set global block address",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "address": {
+                                    "type": "string",
+                                    "description": "Address to block"
+                                },
+                                "reason": {
+                                    "type": "string",
+                                    "description": "Reason for blocking"
+                                }
+                            },
+                            "required": ["address"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Success response", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-block/delete": {
+            "post": {
+                "description": "Remove an address from the global block list",
+                "produces": ["application/json"],
+                "tags": ["Global Block"],
+                "summary": "Delete global block address",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "address": {
+                                    "type": "string",
+                                    "description": "Address to unblock"
+                                }
+                            },
+                            "required": ["address"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "Success response", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-block/stats": {
+            "get": {
+                "description": "Get statistics about the global block list",
+                "produces": ["application/json"],
+                "tags": ["Global Block"],
+                "summary": "Get global block statistics",
+                "responses": {
+                    "200": {"description": "Success response with statistics", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-block/addresses": {
+            "get": {
+                "description": "Get paginated list of all global block addresses",
+                "produces": ["application/json"],
+                "tags": ["Global Block"],
+                "summary": "Get global block addresses",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor for pagination", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with paginated data", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-block/check": {
+            "get": {
+                "description": "Check if an address is in the global block list",
+                "produces": ["application/json"],
+                "tags": ["Global Block"],
+                "summary": "Check global block status",
+                "parameters": [
+                    {"type": "string", "description": "Address to check", "name": "address", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with block status", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/chat-statistics": {
+            "get": {
+                "description": "Get comprehensive chat statistics including group chat, private chat, channel chat, group creation, and total counts within a time range",
+                "produces": ["application/json"],
+                "tags": ["Statistics"],
+                "summary": "Get chat statistics",
+                "parameters": [
+                    {"type": "integer", "description": "Start timestamp (Unix timestamp in milliseconds)", "name": "startTime", "in": "query", "required": true},
+                    {"type": "integer", "description": "End timestamp (Unix timestamp in milliseconds)", "name": "endTime", "in": "query", "required": true},
+                    {"type": "string", "description": "Group ID (leave empty to get statistics for all groups)", "name": "groupId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with chat statistics", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
         }
     },
     "tags": [
@@ -1799,6 +1926,14 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "Socket management related APIs, including connection statistics and user online status",
             "name": "Socket Management"
+        },
+        {
+            "description": "Global block list management APIs for managing globally blocked addresses",
+            "name": "Global Block"
+        },
+        {
+            "description": "Statistics related APIs for getting various statistics and analytics",
+            "name": "Statistics"
         }
     ],
     "definitions": {

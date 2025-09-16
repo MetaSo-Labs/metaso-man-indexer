@@ -2107,3 +2107,255 @@ func GetGroupWhitelistByGroupId(ctx *gin.Context) {
 		"data":    result,
 	})
 }
+
+// SetGlobalBlockAddress Set a global block address
+// @Summary Set global block address
+// @Description Set an address to the global block list
+// @Tags Global Block
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Request body with address and reason"
+// @Success 200 {object} map[string]interface{} "Success response"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-block/set [post]
+func SetGlobalBlockAddress(ctx *gin.Context) {
+	var req struct {
+		Address string `json:"address" binding:"required"`
+		Reason  string `json:"reason"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Invalid request parameters: %v", err),
+		})
+		return
+	}
+
+	result, err := service.SetGlobalBlockAddress(req.Address, req.Reason)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to set global block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// DeleteGlobalBlockAddress Delete a global block address
+// @Summary Delete global block address
+// @Description Remove an address from the global block list
+// @Tags Global Block
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "Request body with address"
+// @Success 200 {object} map[string]interface{} "Success response"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-block/delete [post]
+func DeleteGlobalBlockAddress(ctx *gin.Context) {
+	var req struct {
+		Address string `json:"address" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Invalid request parameters: %v", err),
+		})
+		return
+	}
+
+	result, err := service.DeleteGlobalBlockAddress(req.Address)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to delete global block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGlobalBlockStats Get global block list statistics
+// @Summary Get global block statistics
+// @Description Get statistics about the global block list
+// @Tags Global Block
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Success response with statistics"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-block/stats [get]
+func GetGlobalBlockStats(ctx *gin.Context) {
+	result, err := service.GetGlobalBlockStats()
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get global block stats: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGlobalBlockAddresses Get all global block addresses with pagination
+// @Summary Get global block addresses
+// @Description Get paginated list of all global block addresses
+// @Tags Global Block
+// @Produce json
+// @Param cursor query int false "Cursor for pagination" default(0)
+// @Param size query int false "Page size" default(20)
+// @Success 200 {object} map[string]interface{} "Success response with paginated data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-block/addresses [get]
+func GetGlobalBlockAddresses(ctx *gin.Context) {
+	cursorStr := ctx.DefaultQuery("cursor", "0")
+	sizeStr := ctx.DefaultQuery("size", "20")
+
+	cursor, err := strconv.Atoi(cursorStr)
+	if err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid cursor parameter",
+		})
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid size parameter",
+		})
+		return
+	}
+
+	result, err := service.GetGlobalBlockAddresses(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get global block addresses: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// CheckGlobalBlockAddress Check if an address is globally blocked
+// @Summary Check global block status
+// @Description Check if an address is in the global block list
+// @Tags Global Block
+// @Produce json
+// @Param address query string true "Address to check"
+// @Success 200 {object} map[string]interface{} "Success response with block status"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-block/check [get]
+func CheckGlobalBlockAddress(ctx *gin.Context) {
+	address := ctx.Query("address")
+	if address == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Address parameter is required",
+		})
+		return
+	}
+
+	result, err := service.CheckGlobalBlockAddress(address)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to check global block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetChatStatistics Get chat statistics within a time range
+// @Summary Get chat statistics
+// @Description Get comprehensive chat statistics including group chat, private chat, channel chat, group creation, and total counts within a time range
+// @Tags Statistics
+// @Produce json
+// @Param startTime query int64 true "Start timestamp (Unix timestamp)"
+// @Param endTime query int64 true "End timestamp (Unix timestamp)"
+// @Param groupId query string false "Group ID (leave empty to get statistics for all groups)"
+// @Success 200 {object} map[string]interface{} "Success response with chat statistics"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/chat-statistics [get]
+func GetChatStatistics(ctx *gin.Context) {
+	startTimeStr := ctx.Query("startTime")
+	endTimeStr := ctx.Query("endTime")
+	groupId := ctx.Query("groupId") // Optional groupId parameter
+
+	if startTimeStr == "" || endTimeStr == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "startTime and endTime parameters are required",
+		})
+		return
+	}
+
+	startTime, err := strconv.ParseInt(startTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid startTime parameter",
+		})
+		return
+	}
+
+	endTime, err := strconv.ParseInt(endTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid endTime parameter",
+		})
+		return
+	}
+
+	if startTime > endTime {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "startTime must be less than or equal to endTime",
+		})
+		return
+	}
+
+	result, err := service.GetChatStatisticsByTimeRange(startTime, endTime, groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get chat statistics: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}

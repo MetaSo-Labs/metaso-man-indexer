@@ -76,6 +76,7 @@ func RegisterDbRoutes(router *gin.Engine) {
 		// Statistics-related APIs
 		dbGroup.GET("/stats", GetDatabaseStats)
 		dbGroup.GET("/collections", GetCollections)
+		dbGroup.GET("/chat-statistics", GetChatStatistics)
 
 		// Lucky bag-related APIs
 		luckyBagGroup := dbGroup.Group("/luckybag")
@@ -124,6 +125,16 @@ func RegisterDbRoutes(router *gin.Engine) {
 		migrationGroup := dbGroup.Group("/migration")
 		{
 			migrationGroup.GET("/info", GetMigrationInfo)
+		}
+
+		// Global block list-related APIs
+		globalBlockGroup := dbGroup.Group("/global-block")
+		{
+			globalBlockGroup.POST("/set", SetGlobalBlockAddress)
+			globalBlockGroup.POST("/delete", DeleteGlobalBlockAddress)
+			globalBlockGroup.GET("/stats", GetGlobalBlockStats)
+			globalBlockGroup.GET("/addresses", GetGlobalBlockAddresses)
+			globalBlockGroup.GET("/check", CheckGlobalBlockAddress)
 		}
 	}
 }

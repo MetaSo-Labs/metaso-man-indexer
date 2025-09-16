@@ -10,12 +10,13 @@ import (
 
 // GroupChatIndexer Group chat indexer
 type GroupChatIndexer struct {
-	communityDB *db.CommunityDB
-	groupDB     *db.GroupDB
-	chatDB      *db.ChatDB
-	privateDB   *db.PrivateChatDB
-	userDB      *db.UserInfoDB
-	pb          *db.Pebble
+	communityDB   *db.CommunityDB
+	groupDB       *db.GroupDB
+	chatDB        *db.ChatDB
+	privateDB     *db.PrivateChatDB
+	userDB        *db.UserInfoDB
+	globalBlockDB *db.GlobalBlockDB
+	pb            *db.Pebble
 }
 
 // NewGroupChatIndexer Create new group chat indexer
@@ -34,12 +35,13 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 	ch.SetGdb(gdb)
 
 	return &GroupChatIndexer{
-		communityDB: db.NewCommunityDB(pb),
-		groupDB:     gdb,
-		chatDB:      ch,
-		privateDB:   db.NewPrivateChatDB(pb),
-		userDB:      db.NewUserInfoDB(pb),
-		pb:          pb,
+		communityDB:   db.NewCommunityDB(pb),
+		groupDB:       gdb,
+		chatDB:        ch,
+		privateDB:     db.NewPrivateChatDB(pb),
+		userDB:        db.NewUserInfoDB(pb),
+		globalBlockDB: db.NewGlobalBlockDB(pb),
+		pb:            pb,
 	}, nil
 }
 
@@ -71,6 +73,17 @@ func (gci *GroupChatIndexer) Stop() error {
 // ProcessPin Process single Pin
 func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{}) error {
 	if pin == nil {
+		return nil
+	}
+
+	// Check if the address is globally blocked
+	isBlocked, _ := gci.globalBlockDB.IsAddressGloballyBlocked(pin.CreateAddress)
+	// if err != nil {
+	// 	log.Printf("Failed to check if address is globally blocked: %v", err)
+	// 	return err
+	// }
+	if isBlocked {
+		log.Printf("[%s]Address is globally blocked: %s", pin.ChainName, pin.CreateAddress)
 		return nil
 	}
 

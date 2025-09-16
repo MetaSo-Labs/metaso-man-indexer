@@ -526,29 +526,44 @@ func GetAvailableCollections() []string {
 
 // LuckyBagStatistics represents statistics for lucky bag data
 type LuckyBagStatistics struct {
-	GroupId             string  `json:"groupId"`
-	StartTime           int64   `json:"startTime"`
-	EndTime             int64   `json:"endTime"`
-	LuckyBagCount       int     `json:"luckyBagCount"`       // Number of lucky bags sent
-	OpenLuckyBagCount   int     `json:"openLuckyBagCount"`   // Number of opened lucky bags
-	TotalAmount         float64 `json:"totalAmount"`         // Total amount of all lucky bags
-	TotalOpenedAmount   float64 `json:"totalOpenedAmount"`   // Total amount of opened lucky bags
-	UniqueOpeners       int     `json:"uniqueOpeners"`       // Number of unique users who opened lucky bags
-	OpenRate            float64 `json:"openRate"`            // Open rate (opened/total)
-	AverageAmount       float64 `json:"averageAmount"`       // Average amount per lucky bag
-	AverageOpenedAmount float64 `json:"averageOpenedAmount"` // Average amount per opened lucky bag
+	GroupId             string                              `json:"groupId"`
+	StartTime           int64                               `json:"startTime"`
+	EndTime             int64                               `json:"endTime"`
+	LuckyBagCount       int                                 `json:"luckyBagCount"`        // Number of lucky bags sent
+	OpenLuckyBagCount   int                                 `json:"openLuckyBagCount"`    // Number of opened lucky bags
+	TotalAmount         float64                             `json:"totalAmount"`          // Total amount of all lucky bags
+	TotalOpenedAmount   float64                             `json:"totalOpenedAmount"`    // Total amount of opened lucky bags
+	UniqueOpeners       int                                 `json:"uniqueOpeners"`        // Number of unique users who opened lucky bags
+	OpenRate            float64                             `json:"openRate"`             // Open rate (opened/total)
+	AverageAmount       float64                             `json:"averageAmount"`        // Average amount per lucky bag
+	AverageOpenedAmount float64                             `json:"averageOpenedAmount"`  // Average amount per opened lucky bag
+	ChainStats          map[string]*LuckyBagChainStatistics `json:"chainStats,omitempty"` // Statistics by chain
+}
+
+// LuckyBagChainStatistics represents statistics for a specific chain
+type LuckyBagChainStatistics struct {
+	Chain               string  `json:"chain"`
+	LuckyBagCount       int     `json:"luckyBagCount"`
+	OpenLuckyBagCount   int     `json:"openLuckyBagCount"`
+	TotalAmount         float64 `json:"totalAmount"`
+	TotalOpenedAmount   float64 `json:"totalOpenedAmount"`
+	UniqueOpeners       int     `json:"uniqueOpeners"`
+	OpenRate            float64 `json:"openRate"`
+	AverageAmount       float64 `json:"averageAmount"`
+	AverageOpenedAmount float64 `json:"averageOpenedAmount"`
 }
 
 // LuckyBagStatisticsByGroup represents statistics for lucky bag data grouped by group
 type LuckyBagStatisticsByGroup struct {
-	StartTime          int64                          `json:"startTime"`
-	EndTime            int64                          `json:"endTime"`
-	TotalLuckyBagCount int                            `json:"totalLuckyBagCount"` // Total number of lucky bags sent across all groups
-	TotalOpenCount     int                            `json:"totalOpenCount"`     // Total number of opened lucky bags across all groups
-	TotalAmount        float64                        `json:"totalAmount"`        // Total amount of all lucky bags across all groups
-	TotalOpenedAmount  float64                        `json:"totalOpenedAmount"`  // Total amount of opened lucky bags across all groups
-	TotalUniqueOpeners int                            `json:"totalUniqueOpeners"` // Total number of unique users who opened lucky bags across all groups
-	GroupStats         map[string]*LuckyBagStatistics `json:"groupStats"`         // Statistics by group ID
+	StartTime          int64                               `json:"startTime"`
+	EndTime            int64                               `json:"endTime"`
+	TotalLuckyBagCount int                                 `json:"totalLuckyBagCount"`   // Total number of lucky bags sent across all groups
+	TotalOpenCount     int                                 `json:"totalOpenCount"`       // Total number of opened lucky bags across all groups
+	TotalAmount        float64                             `json:"totalAmount"`          // Total amount of all lucky bags across all groups
+	TotalOpenedAmount  float64                             `json:"totalOpenedAmount"`    // Total amount of opened lucky bags across all groups
+	TotalUniqueOpeners int                                 `json:"totalUniqueOpeners"`   // Total number of unique users who opened lucky bags across all groups
+	GroupStats         map[string]*LuckyBagStatistics      `json:"groupStats"`           // Statistics by group ID
+	ChainStats         map[string]*LuckyBagChainStatistics `json:"chainStats,omitempty"` // Statistics by chain
 }
 
 // GetLuckyBagStatisticsByGroupAndTimeRange Get lucky bag statistics for a specific group or all groups within a time range
@@ -565,9 +580,10 @@ func GetLuckyBagStatisticsByGroupAndTimeRange(groupId string, startTime, endTime
 // getLuckyBagStatisticsForSpecificGroup Get lucky bag statistics for a specific group within a time range
 func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime int64) (*LuckyBagStatistics, error) {
 	stats := &LuckyBagStatistics{
-		GroupId:   groupId,
-		StartTime: startTime,
-		EndTime:   endTime,
+		GroupId:    groupId,
+		StartTime:  startTime,
+		EndTime:    endTime,
+		ChainStats: make(map[string]*LuckyBagChainStatistics),
 	}
 
 	// Get lucky bag database instance
@@ -623,6 +639,12 @@ func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime in
 			continue
 		}
 
+		// Get chain information
+		chain := "unknown"
+		if chainValue, ok := luckyBag["chain"].(string); ok && chainValue != "" {
+			chain = chainValue
+		}
+
 		// Count this lucky bag
 		stats.LuckyBagCount++
 
@@ -630,7 +652,20 @@ func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime in
 		if amount, ok := luckyBag["amount"].(string); ok {
 			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
 				totalAmount += amountFloat
+
+				// Update chain stats for lucky bag
+				if _, exists := stats.ChainStats[chain]; !exists {
+					stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				stats.ChainStats[chain].LuckyBagCount++
+				stats.ChainStats[chain].TotalAmount += amountFloat
 			}
+		} else {
+			// Update chain stats for lucky bag (even without amount)
+			if _, exists := stats.ChainStats[chain]; !exists {
+				stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			stats.ChainStats[chain].LuckyBagCount++
 		}
 	}
 
@@ -656,6 +691,12 @@ func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime in
 			continue
 		}
 
+		// Get chain information
+		chain := "unknown"
+		if chainValue, ok := openLuckyBag["chain"].(string); ok && chainValue != "" {
+			chain = chainValue
+		}
+
 		// Count this open lucky bag
 		stats.OpenLuckyBagCount++
 
@@ -668,7 +709,26 @@ func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime in
 		if amount, ok := openLuckyBag["amount"].(string); ok {
 			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
 				totalOpenedAmount += amountFloat
+
+				// Update chain stats for open lucky bag
+				if _, exists := stats.ChainStats[chain]; !exists {
+					stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				stats.ChainStats[chain].OpenLuckyBagCount++
+				stats.ChainStats[chain].TotalOpenedAmount += amountFloat
+
+				// Track unique openers for chain
+				if _, ok := openLuckyBag["metaId"].(string); ok {
+					// We need to track unique openers per chain, but for simplicity, we'll use the same uniqueOpeners map
+					// In a more complex implementation, you might want to track unique openers per chain separately
+				}
 			}
+		} else {
+			// Update chain stats for open lucky bag (even without amount)
+			if _, exists := stats.ChainStats[chain]; !exists {
+				stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			stats.ChainStats[chain].OpenLuckyBagCount++
 		}
 	}
 
@@ -687,6 +747,22 @@ func getLuckyBagStatisticsForSpecificGroup(groupId string, startTime, endTime in
 		stats.AverageOpenedAmount = totalOpenedAmount / float64(stats.OpenLuckyBagCount)
 	}
 
+	// Calculate derived statistics for each chain
+	for _, chainStat := range stats.ChainStats {
+		if chainStat.LuckyBagCount > 0 {
+			chainStat.OpenRate = float64(chainStat.OpenLuckyBagCount) / float64(chainStat.LuckyBagCount)
+			chainStat.AverageAmount = chainStat.TotalAmount / float64(chainStat.LuckyBagCount)
+		}
+
+		if chainStat.OpenLuckyBagCount > 0 {
+			chainStat.AverageOpenedAmount = chainStat.TotalOpenedAmount / float64(chainStat.OpenLuckyBagCount)
+		}
+
+		// Set unique openers (for simplicity, using total unique openers)
+		// In a more complex implementation, you might want to track unique openers per chain separately
+		chainStat.UniqueOpeners = len(uniqueOpeners)
+	}
+
 	return stats, nil
 }
 
@@ -696,6 +772,7 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 		StartTime:  startTime,
 		EndTime:    endTime,
 		GroupStats: make(map[string]*LuckyBagStatistics),
+		ChainStats: make(map[string]*LuckyBagChainStatistics),
 	}
 
 	// Get lucky bag database instance
@@ -756,12 +833,19 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 			continue
 		}
 
+		// Get chain information
+		chain := "unknown"
+		if chainValue, ok := luckyBag["chain"].(string); ok && chainValue != "" {
+			chain = chainValue
+		}
+
 		// Initialize group stats if not exists
 		if groupStats[groupId] == nil {
 			groupStats[groupId] = &LuckyBagStatistics{
-				GroupId:   groupId,
-				StartTime: startTime,
-				EndTime:   endTime,
+				GroupId:    groupId,
+				StartTime:  startTime,
+				EndTime:    endTime,
+				ChainStats: make(map[string]*LuckyBagChainStatistics),
 			}
 			groupUniqueOpeners[groupId] = make(map[string]bool)
 		}
@@ -775,7 +859,33 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
 				groupStats[groupId].TotalAmount += amountFloat
 				totalAmount += amountFloat
+
+				// Update group chain stats
+				if _, exists := groupStats[groupId].ChainStats[chain]; !exists {
+					groupStats[groupId].ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				groupStats[groupId].ChainStats[chain].LuckyBagCount++
+				groupStats[groupId].ChainStats[chain].TotalAmount += amountFloat
+
+				// Update global chain stats
+				if _, exists := stats.ChainStats[chain]; !exists {
+					stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				stats.ChainStats[chain].LuckyBagCount++
+				stats.ChainStats[chain].TotalAmount += amountFloat
 			}
+		} else {
+			// Update group chain stats (even without amount)
+			if _, exists := groupStats[groupId].ChainStats[chain]; !exists {
+				groupStats[groupId].ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			groupStats[groupId].ChainStats[chain].LuckyBagCount++
+
+			// Update global chain stats
+			if _, exists := stats.ChainStats[chain]; !exists {
+				stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			stats.ChainStats[chain].LuckyBagCount++
 		}
 	}
 
@@ -802,12 +912,19 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 			continue
 		}
 
+		// Get chain information
+		chain := "unknown"
+		if chainValue, ok := openLuckyBag["chain"].(string); ok && chainValue != "" {
+			chain = chainValue
+		}
+
 		// Initialize group stats if not exists
 		if groupStats[groupId] == nil {
 			groupStats[groupId] = &LuckyBagStatistics{
-				GroupId:   groupId,
-				StartTime: startTime,
-				EndTime:   endTime,
+				GroupId:    groupId,
+				StartTime:  startTime,
+				EndTime:    endTime,
+				ChainStats: make(map[string]*LuckyBagChainStatistics),
 			}
 			groupUniqueOpeners[groupId] = make(map[string]bool)
 		}
@@ -827,7 +944,33 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 			if amountFloat, err := strconv.ParseFloat(amount, 64); err == nil {
 				groupStats[groupId].TotalOpenedAmount += amountFloat
 				totalOpenedAmount += amountFloat
+
+				// Update group chain stats
+				if _, exists := groupStats[groupId].ChainStats[chain]; !exists {
+					groupStats[groupId].ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				groupStats[groupId].ChainStats[chain].OpenLuckyBagCount++
+				groupStats[groupId].ChainStats[chain].TotalOpenedAmount += amountFloat
+
+				// Update global chain stats
+				if _, exists := stats.ChainStats[chain]; !exists {
+					stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+				}
+				stats.ChainStats[chain].OpenLuckyBagCount++
+				stats.ChainStats[chain].TotalOpenedAmount += amountFloat
 			}
+		} else {
+			// Update group chain stats (even without amount)
+			if _, exists := groupStats[groupId].ChainStats[chain]; !exists {
+				groupStats[groupId].ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			groupStats[groupId].ChainStats[chain].OpenLuckyBagCount++
+
+			// Update global chain stats
+			if _, exists := stats.ChainStats[chain]; !exists {
+				stats.ChainStats[chain] = &LuckyBagChainStatistics{Chain: chain}
+			}
+			stats.ChainStats[chain].OpenLuckyBagCount++
 		}
 	}
 
@@ -844,6 +987,21 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 		if groupStat.OpenLuckyBagCount > 0 {
 			groupStat.AverageOpenedAmount = groupStat.TotalOpenedAmount / float64(groupStat.OpenLuckyBagCount)
 		}
+
+		// Calculate derived statistics for each chain in this group
+		for _, chainStat := range groupStat.ChainStats {
+			if chainStat.LuckyBagCount > 0 {
+				chainStat.OpenRate = float64(chainStat.OpenLuckyBagCount) / float64(chainStat.LuckyBagCount)
+				chainStat.AverageAmount = chainStat.TotalAmount / float64(chainStat.LuckyBagCount)
+			}
+
+			if chainStat.OpenLuckyBagCount > 0 {
+				chainStat.AverageOpenedAmount = chainStat.TotalOpenedAmount / float64(chainStat.OpenLuckyBagCount)
+			}
+
+			// Set unique openers (for simplicity, using group unique openers)
+			chainStat.UniqueOpeners = len(groupUniqueOpeners[groupId])
+		}
 	}
 
 	// Set overall calculated values
@@ -851,6 +1009,21 @@ func getLuckyBagStatisticsForAllGroups(startTime, endTime int64) (*LuckyBagStati
 	stats.TotalOpenedAmount = totalOpenedAmount
 	stats.TotalUniqueOpeners = len(allUniqueOpeners)
 	stats.GroupStats = groupStats
+
+	// Calculate derived statistics for global chain stats
+	for _, chainStat := range stats.ChainStats {
+		if chainStat.LuckyBagCount > 0 {
+			chainStat.OpenRate = float64(chainStat.OpenLuckyBagCount) / float64(chainStat.LuckyBagCount)
+			chainStat.AverageAmount = chainStat.TotalAmount / float64(chainStat.LuckyBagCount)
+		}
+
+		if chainStat.OpenLuckyBagCount > 0 {
+			chainStat.AverageOpenedAmount = chainStat.TotalOpenedAmount / float64(chainStat.OpenLuckyBagCount)
+		}
+
+		// Set unique openers (for simplicity, using total unique openers)
+		chainStat.UniqueOpeners = len(allUniqueOpeners)
+	}
 
 	return stats, nil
 }
@@ -2922,6 +3095,404 @@ func QueryGroupWhitelistByGroupId(groupId string) (map[string]interface{}, error
 		"groupId": groupId,
 		"found":   true,
 		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
+// ChatStatistics represents statistics for chat data
+type ChatStatistics struct {
+	StartTime           int64                       `json:"startTime"`            // Start time
+	EndTime             int64                       `json:"endTime"`              // End time
+	GroupId             string                      `json:"groupId,omitempty"`    // Group ID (empty means all groups)
+	Chain               string                      `json:"chain,omitempty"`      // Chain (empty means all chains)
+	GroupChatCount      int64                       `json:"groupChatCount"`       // Number of group chat messages
+	PrivateChatCount    int64                       `json:"privateChatCount"`     // Number of private chat messages
+	GroupCreatedCount   int64                       `json:"groupCreatedCount"`    // Number of groups created
+	TotalGroupsCount    int64                       `json:"totalGroupsCount"`     // Total number of groups
+	TotalUsersCount     int64                       `json:"totalUsersCount"`      // Total number of users
+	ChannelChatCount    int64                       `json:"channelChatCount"`     // Number of channel chat messages
+	ChannelCreatedCount int64                       `json:"channelCreatedCount"`  // Number of channels created
+	TotalChannelsCount  int64                       `json:"totalChannelsCount"`   // Total number of channels
+	ChainStats          map[string]*ChainStatistics `json:"chainStats,omitempty"` // Statistics by chain
+}
+
+// ChainStatistics represents statistics for a specific chain
+type ChainStatistics struct {
+	Chain               string `json:"chain"`
+	GroupChatCount      int64  `json:"groupChatCount"`
+	PrivateChatCount    int64  `json:"privateChatCount"`
+	GroupCreatedCount   int64  `json:"groupCreatedCount"`
+	ChannelChatCount    int64  `json:"channelChatCount"`
+	ChannelCreatedCount int64  `json:"channelCreatedCount"`
+}
+
+// GetChatStatisticsByTimeRange Get chat statistics within a time range
+func GetChatStatisticsByTimeRange(startTime, endTime int64, groupId string) (*ChatStatistics, error) {
+	stats := &ChatStatistics{
+		StartTime:  startTime,
+		EndTime:    endTime,
+		GroupId:    groupId,
+		ChainStats: make(map[string]*ChainStatistics),
+	}
+
+	// Get group chat count in time range
+	groupChatDB, exists := db.Pb[db.TalkGroupChatPinCollection]
+	if exists {
+		iter, err := groupChatDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				var chat map[string]interface{}
+				if err := json.Unmarshal(iter.Value(), &chat); err == nil {
+					if timestamp, ok := chat["timestamp"].(float64); ok {
+						if int64(timestamp) >= startTime && int64(timestamp) <= endTime {
+							// Check groupId filter
+							if groupId != "" {
+								if chatGroupId, ok := chat["groupId"].(string); !ok || chatGroupId != groupId {
+									continue
+								}
+							}
+
+							// Get chain information
+							chain := "unknown"
+							if chainValue, ok := chat["chain"].(string); ok && chainValue != "" {
+								chain = chainValue
+							}
+
+							// Check if this is a channel chat
+							if channelId, exists := chat["channelId"]; exists && channelId != nil && channelId != "" {
+								stats.ChannelChatCount++
+								// Update chain stats for channel chat
+								if _, exists := stats.ChainStats[chain]; !exists {
+									stats.ChainStats[chain] = &ChainStatistics{Chain: chain}
+								}
+								stats.ChainStats[chain].ChannelChatCount++
+							} else {
+								stats.GroupChatCount++
+								// Update chain stats for group chat
+								if _, exists := stats.ChainStats[chain]; !exists {
+									stats.ChainStats[chain] = &ChainStatistics{Chain: chain}
+								}
+								stats.ChainStats[chain].GroupChatCount++
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get private chat count in time range
+	privateChatDB, exists := db.Pb[db.TalkPrivateChatPinCollection]
+	if exists {
+		iter, err := privateChatDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				var chat map[string]interface{}
+				if err := json.Unmarshal(iter.Value(), &chat); err == nil {
+					if timestamp, ok := chat["timestamp"].(float64); ok {
+						if int64(timestamp) >= startTime && int64(timestamp) <= endTime {
+							// Get chain information for private chat
+							chain := "unknown"
+							if chainValue, ok := chat["chain"].(string); ok && chainValue != "" {
+								chain = chainValue
+							}
+
+							stats.PrivateChatCount++
+							// Update chain stats for private chat
+							if _, exists := stats.ChainStats[chain]; !exists {
+								stats.ChainStats[chain] = &ChainStatistics{Chain: chain}
+							}
+							stats.ChainStats[chain].PrivateChatCount++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get group created count in time range
+	groupInfoDB, exists := db.Pb[db.TalkGroupInfoCollection]
+	if exists {
+		iter, err := groupInfoDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				var group map[string]interface{}
+				if err := json.Unmarshal(iter.Value(), &group); err == nil {
+					if timestamp, ok := group["timestamp"].(float64); ok {
+						if int64(timestamp) >= startTime && int64(timestamp) <= endTime {
+							// Check groupId filter
+							if groupId != "" {
+								if groupGroupId, ok := group["groupId"].(string); !ok || groupGroupId != groupId {
+									continue
+								}
+							}
+
+							// Get chain information
+							chain := "unknown"
+							if chainValue, ok := group["chain"].(string); ok && chainValue != "" {
+								chain = chainValue
+							}
+
+							stats.GroupCreatedCount++
+							// Update chain stats for group creation
+							if _, exists := stats.ChainStats[chain]; !exists {
+								stats.ChainStats[chain] = &ChainStatistics{Chain: chain}
+							}
+							stats.ChainStats[chain].GroupCreatedCount++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get channel created count in time range
+	channelInfoDB, exists := db.Pb[db.TalkGroupChannelInfoCollection]
+	if exists {
+		iter, err := channelInfoDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				var channel map[string]interface{}
+				if err := json.Unmarshal(iter.Value(), &channel); err == nil {
+					if timestamp, ok := channel["timestamp"].(float64); ok {
+						if int64(timestamp) >= startTime && int64(timestamp) <= endTime {
+							// Check groupId filter (channel belongs to a group)
+							if groupId != "" {
+								if channelGroupId, ok := channel["groupId"].(string); !ok || channelGroupId != groupId {
+									continue
+								}
+							}
+
+							// Get chain information
+							chain := "unknown"
+							if chainValue, ok := channel["chain"].(string); ok && chainValue != "" {
+								chain = chainValue
+							}
+
+							stats.ChannelCreatedCount++
+							// Update chain stats for channel creation
+							if _, exists := stats.ChainStats[chain]; !exists {
+								stats.ChainStats[chain] = &ChainStatistics{Chain: chain}
+							}
+							stats.ChainStats[chain].ChannelCreatedCount++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Get total groups count
+	groupInfoDB, exists = db.Pb[db.TalkGroupInfoCollection]
+	if exists {
+		iter, err := groupInfoDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				if groupId != "" {
+					var group map[string]interface{}
+					if err := json.Unmarshal(iter.Value(), &group); err == nil {
+						if groupGroupId, ok := group["groupId"].(string); ok && groupGroupId == groupId {
+							stats.TotalGroupsCount++
+						}
+					}
+				} else {
+					stats.TotalGroupsCount++
+				}
+			}
+		}
+	}
+
+	// Get total channels count
+	channelInfoDB, exists = db.Pb[db.TalkGroupChannelInfoCollection]
+	if exists {
+		iter, err := channelInfoDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				if groupId != "" {
+					var channel map[string]interface{}
+					if err := json.Unmarshal(iter.Value(), &channel); err == nil {
+						if channelGroupId, ok := channel["groupId"].(string); ok && channelGroupId == groupId {
+							stats.TotalChannelsCount++
+						}
+					}
+				} else {
+					stats.TotalChannelsCount++
+				}
+			}
+		}
+	}
+
+	// Get total users count (from MetaId context list)
+	metaIdContextDB, exists := db.Pb[db.TalkMetaIdContextListCollection]
+	if exists {
+		iter, err := metaIdContextDB.NewIter(nil)
+		if err == nil {
+			defer iter.Close()
+			for iter.First(); iter.Valid(); iter.Next() {
+				stats.TotalUsersCount++
+			}
+		}
+	}
+
+	return stats, nil
+}
+
+// Global block list related methods
+
+// SetGlobalBlockAddress Set a global block address
+func SetGlobalBlockAddress(address, reason string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	// Create global block DB instance
+	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
+
+	// Save the global block address
+	err := globalBlockDB.SaveGlobalBlockAddress(address, reason)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set global block address: %v", err)
+	}
+
+	return map[string]interface{}{
+		"address": address,
+		"reason":  reason,
+		"message": "Global block address set successfully",
+		"success": true,
+	}, nil
+}
+
+// DeleteGlobalBlockAddress Delete a global block address
+func DeleteGlobalBlockAddress(address string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	// Create global block DB instance
+	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
+
+	// Delete the global block address
+	err := globalBlockDB.DeleteGlobalBlockAddress(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete global block address: %v", err)
+	}
+
+	return map[string]interface{}{
+		"address": address,
+		"message": "Global block address deleted successfully",
+		"success": true,
+	}, nil
+}
+
+// GetGlobalBlockStats Get global block list statistics
+func GetGlobalBlockStats() (map[string]interface{}, error) {
+	// Create global block DB instance
+	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
+
+	// Get statistics
+	stats, err := globalBlockDB.GetGlobalBlockStats()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global block stats: %v", err)
+	}
+
+	return stats, nil
+}
+
+// GetGlobalBlockAddresses Get all global block addresses with pagination
+func GetGlobalBlockAddresses(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	// Create global block DB instance
+	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
+
+	// Get all global block addresses
+	allItems, err := globalBlockDB.GetAllGlobalBlockAddresses()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global block addresses: %v", err)
+	}
+
+	// Apply pagination
+	total := len(allItems)
+	start := cursor
+	end := cursor + size
+	if end > total {
+		end = total
+	}
+
+	var results []map[string]interface{}
+	for i := start; i < end; i++ {
+		if i < len(allItems) {
+			item := allItems[i]
+			results = append(results, map[string]interface{}{
+				"address": item.Address,
+				"reason":  item.Reason,
+			})
+		}
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + size
+	if nextCursor >= total {
+		nextCursor = -1 // No more data
+	}
+
+	return map[string]interface{}{
+		"total":      total,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      len(results),
+		"data":       results,
+	}, nil
+}
+
+// CheckGlobalBlockAddress Check if an address is globally blocked
+func CheckGlobalBlockAddress(address string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	// Create global block DB instance
+	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
+
+	// Check if address is blocked
+	isBlocked, err := globalBlockDB.IsAddressGloballyBlocked(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check global block address: %v", err)
+	}
+
+	// Get block details if blocked
+	var blockDetails *db.GlobalBlockItem
+	if isBlocked {
+		blockDetails, err = globalBlockDB.GetGlobalBlockAddress(address)
+		if err != nil {
+			// If we can't get details, just return the blocked status
+			blockDetails = nil
+		}
+	}
+
+	result := map[string]interface{}{
+		"address":   address,
+		"isBlocked": isBlocked,
+	}
+
+	if blockDetails != nil {
+		result["reason"] = blockDetails.Reason
 	}
 
 	return result, nil
