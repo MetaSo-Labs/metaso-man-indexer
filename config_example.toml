@@ -52,3 +52,7 @@ maxConnections = 10000
 maxMemoryMB = 512
 cleanupInterval = 2
 connectionTTL = 20
+[redis]
+redisAddr = "127.0.0.1:6379"
+redisPassword = ""
+redisDB = 1

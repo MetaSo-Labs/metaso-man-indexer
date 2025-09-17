@@ -40,6 +40,7 @@ type AllConfig struct {
 	Statistics  Statistics
 	GroupChat   groupChatConfig
 	Socket      socketConfig
+	Redis       redisConfig
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
@@ -140,6 +141,12 @@ type socketConfig struct {
 	ConnectionTTL   int64 `toml:"connectionTTL"`
 }
 
+type redisConfig struct {
+	RedisAddr     string `toml:"redisAddr"`
+	RedisPassword string `toml:"redisPassword"`
+	RedisDB       int    `toml:"redisDB"`
+}
+
 func InitConfig(filePath string) {
 	configMutex.Lock()
 	defer configMutex.Unlock()
@@ -219,6 +226,12 @@ func InitConfig(filePath string) {
 		// 	Config.Socket.ConnectionTTL = *v
 		case "socket_is_enble":
 			Config.Socket.IsEnble = *v == "true"
+		case "redis_addr":
+			Config.Redis.RedisAddr = *v
+		case "redis_password":
+			Config.Redis.RedisPassword = *v
+		case "redis_db":
+			Config.Redis.RedisDB, _ = strconv.Atoi(*v)
 		}
 
 	}

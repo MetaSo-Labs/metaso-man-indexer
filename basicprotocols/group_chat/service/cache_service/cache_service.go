@@ -101,6 +101,10 @@ func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 	initialized = true
 }
 
+func IsRedisInitialized() bool {
+	return initialized && useRedis && redisClient != nil
+}
+
 // GetCacheGiftInfo Get lucky bag info cache
 func GetCacheGiftInfo(groupId, luckyBagPinId string, index int64) (string, error) {
 	if !initialized {

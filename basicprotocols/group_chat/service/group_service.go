@@ -13,6 +13,7 @@ import (
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
 	"manindexer/basicprotocols/group_chat/service/socket_service"
+	"manindexer/common"
 	"sort"
 	"strings"
 	"time"
@@ -57,7 +58,10 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	db.SetHandlePrivateChatItem(wsForPrivateChatItem)
 
 	// Initialize cache service for lucky bag
-	cache_service.InitCacheService("", "", 0)
+	cache_service.InitCacheService(
+		common.Config.Redis.RedisAddr,
+		common.Config.Redis.RedisPassword,
+		common.Config.Redis.RedisDB)
 
 	// Start user info polling
 	common_service.StartUserInfoPolling()

@@ -6,6 +6,7 @@ import (
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/service"
+	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"net/http"
 	"strconv"
 	"time"
@@ -378,6 +379,8 @@ func GetLuckyBagInfo(c *gin.Context) {
 			GroupId: c.DefaultQuery("groupId", ""),
 			PinId:   c.DefaultQuery("pinId", ""),
 		}
+		response *respond.LuckyBagInfoResponse
+		err      error
 	)
 
 	if req.GroupId == "" {
@@ -390,7 +393,12 @@ func GetLuckyBagInfo(c *gin.Context) {
 		return
 	}
 
-	response, err := service.GetLuckyBagWithOpenList(req.GroupId, req.PinId)
+	if cache_service.IsRedisInitialized() {
+		log.Printf("Get lucky bag info from Redis: %s, %s", req.GroupId, req.PinId)
+		response, err = service.GetLuckyBagWithOpenListV2(req.GroupId, req.PinId)
+	} else {
+		response, err = service.GetLuckyBagWithOpenList(req.GroupId, req.PinId)
+	}
 	if err != nil {
 		log.Printf("Failed to get lucky bag info for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
 		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
@@ -410,8 +418,10 @@ func GetLuckyBagInfo(c *gin.Context) {
 // @Router /group-chat/grab-lucky-bag [post]
 func GrabLuckyBag(c *gin.Context) {
 	var (
-		t   = time.Now().UnixMilli()
-		req = &request.GrabLuckyBagRequest{}
+		t      = time.Now().UnixMilli()
+		req    = &request.GrabLuckyBagRequest{}
+		result string
+		err    error
 	)
 
 	if err := c.ShouldBindJSON(req); err != nil {
@@ -439,7 +449,14 @@ func GrabLuckyBag(c *gin.Context) {
 		return
 	}
 
-	result, err := service.GrabLuckyBag(req.GroupId, req.PinId, req.MetaId, req.Address)
+	if cache_service.IsRedisInitialized() {
+		log.Printf("Grab lucky bag from Redis: %s, %s", req.GroupId, req.PinId)
+		result, err = service.GrabLuckyBagV2(req.GroupId, req.PinId, req.MetaId, req.Address)
+	} else {
+		result, err = service.GrabLuckyBag(req.GroupId, req.PinId, req.MetaId, req.Address)
+	}
+	// result, err := service.GrabLuckyBag(req.GroupId, req.PinId, req.MetaId, req.Address)
+	// result, err := service.GrabLuckyBagV2(req.GroupId, req.PinId, req.MetaId, req.Address)
 	if err != nil {
 		log.Printf("Failed to grab lucky bag for groupId %s, pinId %s, metaId %s: %v", req.GroupId, req.PinId, req.MetaId, err)
 		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
@@ -512,6 +529,8 @@ func GetLuckyBagUnusedInfo(c *gin.Context) {
 			GroupId: c.DefaultQuery("groupId", ""),
 			PinId:   c.DefaultQuery("pinId", ""),
 		}
+		response *respond.LuckyBagUnusedResponse
+		err      error
 	)
 
 	if req.GroupId == "" {
@@ -524,7 +543,12 @@ func GetLuckyBagUnusedInfo(c *gin.Context) {
 		return
 	}
 
-	response, err := service.GetLuckyBagWithUnusedList(req.GroupId, req.PinId)
+	if cache_service.IsRedisInitialized() {
+		log.Printf("Get lucky bag unused info from Redis: %s, %s", req.GroupId, req.PinId)
+		response, err = service.GetLuckyBagWithUnusedListV2(req.GroupId, req.PinId)
+	} else {
+		response, err = service.GetLuckyBagWithUnusedList(req.GroupId, req.PinId)
+	}
 	if err != nil {
 		log.Printf("Failed to get lucky bag unused info for groupId %s and pinId %s: %v", req.GroupId, req.PinId, err)
 		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
