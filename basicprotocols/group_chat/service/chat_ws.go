@@ -5,6 +5,7 @@ import (
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/common_service"
 	"manindexer/basicprotocols/group_chat/service/socket_service"
+	"manindexer/common/socket_util"
 )
 
 func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
@@ -102,6 +103,9 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	}
 	// common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
 
+	// 7. Send message to extra push
+	socket_service.SendAllMessageToExtraPush(groupChatItem, metaIdList, socket_util.WS_SERVER_NOTIFY_GROUP_CHAT)
+
 }
 
 func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
@@ -177,4 +181,7 @@ func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 	socket_service.SendPrivateMessageToUser(chat.From, privateChatItem)
 	socket_service.SendPrivateMessageToUser(chat.To, privateChatItem)
 	// common_service.WsPost(chat.PinId, privateChatItem, metaIdList)
+
+	// 7. Send message to extra push
+	socket_service.SendAllMessageToExtraPush(privateChatItem, metaIdList, socket_util.WS_SERVER_NOTIFY_PRIVATE_CHAT)
 }

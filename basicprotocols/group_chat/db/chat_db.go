@@ -2117,6 +2117,11 @@ func (cdb *ChatDB) shouldPlaceMessageInChannel(chat *models.TalkGroupChatV3) (bo
 	// Check if group is in launch-mode (RoomJoinType = "4")
 	if channelInfo != nil && channelInfo.ChannelType == 1 {
 		if cdb.gdb != nil {
+			//Check if user is creator
+			if channelInfo.CreateUserMetaId == chat.MetaId {
+				return true, "", nil
+			}
+
 			// Check if user is admin
 			isAdmin, err := cdb.gdb.IsUserAdmin(chat.GroupId, chat.MetaId, chat.Timestamp)
 			if err != nil {
@@ -2284,6 +2289,8 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (boo
 
 	if shouldPlaceInGroup {
 		go dealGroupChatItem(chat)
+	} else {
+		cdb.SaveChat(chat)
 	}
 
 	return isGoEnqueue, nil
@@ -3831,6 +3838,8 @@ func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV
 
 	if shouldPlaceInChannel {
 		go dealGroupChatItem(chat)
+	} else {
+		cdb.SaveChat(chat)
 	}
 
 	return isGoEnqueue, nil

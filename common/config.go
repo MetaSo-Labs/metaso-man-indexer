@@ -133,12 +133,13 @@ type groupChatConfig struct {
 	LogFileOutput    bool   `toml:"logFileOutput"`
 }
 type socketConfig struct {
-	IsEnble         bool  `toml:"isEnble"`
-	Port            int64 `toml:"port"`
-	MaxConnections  int64 `toml:"maxConnections"`
-	MaxMemoryMB     int64 `toml:"maxMemoryMB"`
-	CleanupInterval int64 `toml:"cleanupInterval"`
-	ConnectionTTL   int64 `toml:"connectionTTL"`
+	IsEnble          bool   `toml:"isEnble"`
+	Port             int64  `toml:"port"`
+	MaxConnections   int64  `toml:"maxConnections"`
+	MaxMemoryMB      int64  `toml:"maxMemoryMB"`
+	CleanupInterval  int64  `toml:"cleanupInterval"`
+	ConnectionTTL    int64  `toml:"connectionTTL"`
+	ExtraPushAuthKey string `toml:"extraPushAuthKey"`
 }
 
 type redisConfig struct {

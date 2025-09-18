@@ -17,6 +17,9 @@ type SocketManager struct {
 	connections sync.Map // store connection info, key: metaid, value: *ConnectionInfo
 	mutex       sync.RWMutex
 
+	extraPushAuthKey string
+	extraConnection  *ConnectionInfo
+
 	// Memory limit configuration
 	maxConnections int
 	maxMemoryMB    int
@@ -32,6 +35,10 @@ type SocketManager struct {
 	initialized bool
 	initMutex   sync.Mutex
 }
+
+const (
+	EXTRA_PUSH_SERVICE_METAID = "extra_push_service"
+)
 
 // ConnectionInfo Connection information
 type ConnectionInfo struct {
@@ -59,11 +66,12 @@ type ConnectionStats struct {
 
 // SocketConfig Socket configuration
 type SocketConfig struct {
-	MaxConnections  int           // Maximum number of connections
-	MaxMemoryMB     int           // Maximum memory usage (MB)
-	CleanupInterval time.Duration // Cleanup interval
-	ConnectionTTL   time.Duration // Connection time to live
-	Port            int           // Service port
+	MaxConnections   int           // Maximum number of connections
+	MaxMemoryMB      int           // Maximum memory usage (MB)
+	CleanupInterval  time.Duration // Cleanup interval
+	ConnectionTTL    time.Duration // Connection time to live
+	Port             int           // Service port
+	ExtraPushAuthKey string        // Extra push auth key
 }
 
 // DefaultConfig Default configuration
@@ -114,13 +122,15 @@ func InitSocketManager(config *SocketConfig) error {
 		server := socket.NewServer(nil, nil)
 
 		globalSocketManager = &SocketManager{
-			server:          server,
-			maxConnections:  config.MaxConnections,
-			maxMemoryMB:     config.MaxMemoryMB,
-			cleanupInterval: config.CleanupInterval,
-			connectionTTL:   config.ConnectionTTL,
-			stats:           &ConnectionStats{},
-			initialized:     true,
+			server:           server,
+			maxConnections:   config.MaxConnections,
+			maxMemoryMB:      config.MaxMemoryMB,
+			cleanupInterval:  config.CleanupInterval,
+			connectionTTL:    config.ConnectionTTL,
+			stats:            &ConnectionStats{},
+			initialized:      true,
+			extraPushAuthKey: config.ExtraPushAuthKey,
+			extraConnection:  nil,
 		}
 
 		// Setup auto-listeners for client connections
@@ -157,6 +167,35 @@ func (sm *SocketManager) setupAutoListeners() {
 
 // handleClientConnect Handle client connection
 func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
+	if sm.extraPushAuthKey != "" {
+		// Check if this is an extra push connection
+		extraAuthKey := sm.getExtraPushAuthKeyFromSocket(client)
+		if extraAuthKey != "" && extraAuthKey == sm.extraPushAuthKey {
+			// This is an extra push connection, initialize extraConnection
+			sm.extraConnection = &ConnectionInfo{
+				SocketID:    string(client.Id()),
+				MetaID:      EXTRA_PUSH_SERVICE_METAID,
+				ConnectTime: time.Now(),
+				LastActive:  time.Now(),
+				IsActive:    true,
+			}
+
+			log.Printf("Extra push connection established: socketID=%s", client.Id())
+
+			// Send connection success response
+			response := &SocketData{
+				M: WS_RESPONSE_SUCCESS,
+				C: WS_CODE_SEND_SUCCESS,
+				D: "Extra push connection successful",
+			}
+			sm.sendMessage(client, response)
+
+			// Setup listeners for extra push connection
+			sm.setupExtraPushListeners(client)
+			return
+		}
+	}
+
 	// Get metaid from handshake
 	metaid := sm.getMetaIDFromSocket(client)
 	if metaid == "" {
@@ -289,6 +328,125 @@ func (sm *SocketManager) getMetaIDFromSocket(client *socket.Socket) string {
 	}
 
 	return ""
+}
+
+// getExtraPushAuthKeyFromSocket Get extraPushAuthKey from socket
+func (sm *SocketManager) getExtraPushAuthKeyFromSocket(client *socket.Socket) string {
+	// Get extraPushAuthKey from handshake
+	handshake := client.Handshake()
+	if handshake == nil {
+		return ""
+	}
+
+	// Try to get extraPushAuthKey from Auth
+	if handshake.Auth != nil {
+		if authMap, ok := handshake.Auth.(map[string]interface{}); ok {
+			if extraAuthKey, exists := authMap["extraPushAuthKey"]; exists {
+				if extraAuthKeyStr, ok := extraAuthKey.(string); ok {
+					return extraAuthKeyStr
+				}
+			}
+		}
+	}
+
+	// Try to get extraPushAuthKey from Query
+	if handshake.Query != nil {
+		if extraAuthKeyValues, exists := handshake.Query["extraPushAuthKey"]; exists && len(extraAuthKeyValues) > 0 {
+			return extraAuthKeyValues[0]
+		}
+	}
+
+	return ""
+}
+
+// setupExtraPushListeners Setup listeners for extra push connection
+func (sm *SocketManager) setupExtraPushListeners(client *socket.Socket) {
+	// Listen for client messages
+	client.On("message", func(args ...interface{}) {
+		if len(args) > 0 {
+			if msg, ok := args[0].(string); ok {
+				sm.handleExtraPushMessage(client, msg)
+			}
+		}
+	})
+
+	// Listen for client disconnection
+	client.On("disconnect", func(args ...interface{}) {
+		reason := "unknown"
+		if len(args) > 0 {
+			if r, ok := args[0].(string); ok {
+				reason = r
+			}
+		}
+		sm.handleExtraPushDisconnect(client, reason)
+	})
+
+	// Listen for client ping
+	client.On("ping", func(args ...interface{}) {
+		sm.handleExtraPushPing(client)
+	})
+}
+
+// handleExtraPushMessage Handle extra push message
+func (sm *SocketManager) handleExtraPushMessage(client *socket.Socket, msg string) {
+	// Update connection activity time
+	if sm.extraConnection != nil {
+		sm.extraConnection.LastActive = time.Now()
+	}
+
+	// Parse message
+	socketData := SocketDataFromStringMsg(msg)
+	if socketData == nil {
+		log.Printf("Invalid extra push message format: %s", msg)
+		sm.sendError(client, "Invalid message format", WS_CODE_SEND_ERROR)
+		return
+	}
+
+	// Handle heartbeat
+	if socketData.M == HEART_BEAT {
+		sm.handleExtraPushHeartbeat(client, socketData)
+		return
+	}
+
+	log.Printf("Received extra push message: method=%s, socketID=%s, data=%v", socketData.M, client.Id(), socketData.D)
+}
+
+// handleExtraPushDisconnect Handle extra push disconnection
+func (sm *SocketManager) handleExtraPushDisconnect(client *socket.Socket, reason string) {
+	log.Printf("Extra push connection disconnected: socketID=%s, reason: %s", client.Id(), reason)
+	sm.extraConnection = nil
+}
+
+// handleExtraPushPing Handle extra push ping
+func (sm *SocketManager) handleExtraPushPing(client *socket.Socket) {
+	// Update connection activity time
+	if sm.extraConnection != nil {
+		sm.extraConnection.LastActive = time.Now()
+	}
+
+	// Send pong response
+	response := &SocketData{
+		M: "pong",
+		C: WS_CODE_SEND_SUCCESS,
+	}
+
+	sm.sendMessage(client, response)
+}
+
+// handleExtraPushHeartbeat Handle extra push heartbeat
+func (sm *SocketManager) handleExtraPushHeartbeat(client *socket.Socket, socketData *SocketData) {
+	// Update connection activity time
+	if sm.extraConnection != nil {
+		sm.extraConnection.LastActive = time.Now()
+	}
+
+	// Send heartbeat response
+	response := &SocketData{
+		M: HEART_BEAT,
+		C: WS_CODE_HEART_BEAT_BACK,
+	}
+
+	sm.sendMessage(client, response)
 }
 
 // sendMessage Send message
@@ -645,5 +803,32 @@ func (sm *SocketManager) BroadcastMessage(socketData *SocketData) error {
 	})
 
 	log.Printf("Broadcast message: method=%s, sent to %d active connections", socketData.M, sm.GetActiveConnections())
+	return nil
+}
+
+// SendMessageToExtraPush Send message to extra push connection
+func (sm *SocketManager) SendMessageToExtraPush(socketData *SocketData) error {
+	if sm.extraConnection == nil || !sm.extraConnection.IsActive {
+		return fmt.Errorf("extra push connection not available")
+	}
+
+	// Find corresponding socket connection through socketID
+	var targetSocket *socket.Socket
+	sm.server.Sockets().Sockets().Range(func(socketID socket.SocketId, client *socket.Socket) bool {
+		if string(socketID) == sm.extraConnection.SocketID {
+			targetSocket = client
+			return false // Stop iteration after finding
+		}
+		return true
+	})
+
+	if targetSocket == nil {
+		return fmt.Errorf("extra push socket connection not found: socketID=%s", sm.extraConnection.SocketID)
+	}
+
+	// Use sendMessage method to send message
+	sm.sendMessage(targetSocket, socketData)
+
+	log.Printf("Sent message to extra push service: method=%s", socketData.M)
 	return nil
 }

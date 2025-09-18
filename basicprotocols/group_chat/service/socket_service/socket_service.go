@@ -58,11 +58,12 @@ func InitGroupChatSocketService() error {
 
 	// Initialize Socket manager with configuration
 	config := &socket_util.SocketConfig{
-		MaxConnections:  int(maxConnections),                          // Maximum number of connections
-		MaxMemoryMB:     int(maxMemoryMB),                             // Maximum memory usage (MB)
-		CleanupInterval: time.Duration(cleanupInterval) * time.Minute, // Cleanup interval
-		ConnectionTTL:   time.Duration(connectionTTL) * time.Minute,   // Connection time to live
-		Port:            int(port),                                    // Socket service port
+		MaxConnections:   int(maxConnections),                          // Maximum number of connections
+		MaxMemoryMB:      int(maxMemoryMB),                             // Maximum memory usage (MB)
+		CleanupInterval:  time.Duration(cleanupInterval) * time.Minute, // Cleanup interval
+		ConnectionTTL:    time.Duration(connectionTTL) * time.Minute,   // Connection time to live
+		Port:             int(port),                                    // Socket service port
+		ExtraPushAuthKey: common.Config.Socket.ExtraPushAuthKey,        // Extra push auth key
 	}
 
 	err := socket_util.InitSocketManager(config)
@@ -143,4 +144,40 @@ func IsUserOnline(metaid string) bool {
 	socketManager := socket_util.GetSocketManager()
 	connInfo, exists := socketManager.GetUserConnection(metaid)
 	return exists && connInfo.IsActive
+}
+
+// SendAllMessageToExtraPush Send message to all extra push connections
+func SendAllMessageToExtraPush(message interface{}, repostMetaIds []string, method string) error {
+	socketManager := socket_util.GetSocketManager()
+	if socketManager == nil {
+		log.Printf("Socket manager not initialized")
+		return nil
+	}
+
+	type ExtraPushMessage struct {
+		Message       interface{} `json:"message"`
+		RepostMetaIds []string    `json:"repostMetaIds"`
+	}
+
+	extraPushMessage := &ExtraPushMessage{
+		Message:       message,
+		RepostMetaIds: repostMetaIds,
+	}
+
+	// Create message
+	socketData := &socket_util.SocketData{
+		M: method,
+		C: socket_util.WS_CODE_SERVER,
+		D: extraPushMessage,
+	}
+
+	// Send message to specified user
+	err := socketManager.SendMessageToExtraPush(socketData)
+	if err != nil {
+		log.Printf("Failed to send message to extra push: error=%v", err)
+		return err
+	}
+
+	// log.Printf("Message sent successfully: metaid=%s", metaid)
+	return nil
 }
