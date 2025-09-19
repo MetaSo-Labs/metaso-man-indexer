@@ -151,3 +151,10 @@ type FetchGroupChannelListRequest struct {
 	Cursor  int64  `form:"cursor"`  // Cursor for pagination
 	Size    int64  `form:"size"`    // Page size
 }
+
+// FetchGroupUserRoleInfoRequest Get group user role info request
+type FetchGroupUserRoleInfoRequest struct {
+	GroupId   string `form:"groupId"`   // Group ID
+	ChannelId string `form:"channelId"` // Channel ID (optional)
+	MetaId    string `form:"metaId"`    // User MetaId
+}

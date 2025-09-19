@@ -55,6 +55,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get group member info
 		group.GET("/group-person", GetGroupPerson)
 
+		// Get group user role info
+		group.GET("/group-user-role", GetGroupUserRoleInfo)
+
 		// Get user info by address
 		group.GET("/user-info", GetUserInfoByAddress)
 

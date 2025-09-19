@@ -457,8 +457,9 @@ func (pb *Pebble) CloseAll() {
 }
 
 var (
-	handleGroupChatItem   func(chat *models.TalkGroupChatV3) error
-	handlePrivateChatItem func(chat *models.TalkPrivateChatV3) error
+	handleGroupChatItem           func(chat *models.TalkGroupChatV3) error
+	handlePrivateChatItem         func(chat *models.TalkPrivateChatV3) error
+	handleGroupRoleInfoChangeList func(roleInfo *models.GroupUserRoleInfo) error
 )
 
 func SetHandleGroupChatItem(handle func(chat *models.TalkGroupChatV3) error) {
@@ -479,6 +480,17 @@ func SetHandlePrivateChatItem(handle func(chat *models.TalkPrivateChatV3) error)
 func dealPrivateChatItem(chat *models.TalkPrivateChatV3) error {
 	if handlePrivateChatItem != nil {
 		return handlePrivateChatItem(chat)
+	}
+	return nil
+}
+
+func SetHandleGroupRoleInfoChangeList(handle func(roleInfo *models.GroupUserRoleInfo) error) {
+	handleGroupRoleInfoChangeList = handle
+}
+
+func dealGroupRoleInfoChangeList(roleInfo *models.GroupUserRoleInfo) error {
+	if handleGroupRoleInfoChangeList != nil {
+		return handleGroupRoleInfoChangeList(roleInfo)
 	}
 	return nil
 }

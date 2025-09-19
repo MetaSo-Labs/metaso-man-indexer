@@ -430,3 +430,16 @@ type GroupChannelItem struct {
 	BlockHeight            int64  `json:"blockHeight"`            // Block height
 	Index                  int64  `json:"index"`                  // Index
 }
+
+type GroupUserRoleInfo struct {
+	MetaId      string    `json:"metaId"`              // User MetaId
+	Address     string    `json:"address"`             // User address
+	UserInfo    *UserInfo `json:"userInfo"`            // User information
+	GroupId     string    `json:"groupId"`             // Group ID
+	ChannelId   string    `json:"channelId"`           // Channel ID
+	IsCreator   bool      `json:"isCreator"`           // Is creator
+	IsAdmin     bool      `json:"isAdmin"`             // Is admin
+	IsBlocked   bool      `json:"isBlocked"`           // Is blocked
+	IsWhitelist bool      `json:"isWhitelist"`         // Is whitelist
+	IsRemoved   bool      `json:"isRemoved,omitempty"` // Is removed
+}

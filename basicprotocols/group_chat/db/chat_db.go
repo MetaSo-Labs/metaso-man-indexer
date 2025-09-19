@@ -2336,6 +2336,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		Timestamp:   pin.Timestamp,
 		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,
+		Chain:       pin.ChainName,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection

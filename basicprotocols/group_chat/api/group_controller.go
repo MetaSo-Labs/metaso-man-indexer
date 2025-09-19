@@ -1352,3 +1352,45 @@ func GetGroupChannelList(c *gin.Context) {
 
 	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
 }
+
+// GetGroupUserRoleInfo 获取用户在群组中的角色信息
+// @Summary 获取用户在群组中的角色信息
+// @Description 获取指定用户在指定群组中的角色信息，包括是否为创建者、管理员、是否被拉黑、是否在白名单中等
+// @Tags 群组管理
+// @Accept json
+// @Produce json
+// @Param groupId query string true "群组ID"
+// @Param channelId query string false "频道ID（可选）"
+// @Param metaId query string true "用户MetaId"
+// @Success 200 {object} respond.RespSuccess{data=respond.GroupUserRoleInfo} "成功获取用户角色信息"
+// @Failure 400 {object} respond.RespError "请求参数错误"
+// @Failure 500 {object} respond.RespError "服务器内部错误"
+// @Router /group-chat/group-user-role [get]
+func GetGroupUserRoleInfo(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupUserRoleInfoRequest{
+			GroupId:   c.DefaultQuery("groupId", ""),
+			ChannelId: c.DefaultQuery("channelId", ""),
+			MetaId:    c.DefaultQuery("metaId", ""),
+		}
+	)
+
+	// 参数验证
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	result, err := service.FetchGroupUserRoleInfo(req)
+	if err != nil {
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
+}

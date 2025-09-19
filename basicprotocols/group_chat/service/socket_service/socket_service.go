@@ -102,6 +102,32 @@ func SendGroupMessageToUser(metaid string, message interface{}) error {
 	return nil
 }
 
+// SendGroupRoleInfoToUser Send role info to specified user (based on metaid)
+func SendGroupRoleInfoToUser(metaid string, message interface{}) error {
+	socketManager := socket_util.GetSocketManager()
+	if socketManager == nil {
+		log.Printf("Socket manager not initialized")
+		return nil
+	}
+
+	// Create message
+	socketData := &socket_util.SocketData{
+		M: socket_util.WS_SERVER_NOTIFY_GROUP_ROLE,
+		C: socket_util.WS_CODE_SERVER,
+		D: message,
+	}
+
+	// Send role info to specified user
+	err := socketManager.SendMessageToUser(metaid, socketData)
+	if err != nil {
+		log.Printf("Failed to send role info to user: metaid=%s, error=%v", metaid, err)
+		return err
+	}
+
+	// log.Printf("Role info sent successfully: metaid=%s", metaid)
+	return nil
+}
+
 // SendPrivateMessageToUser Send private message to specified user (based on metaid)
 func SendPrivateMessageToUser(metaid string, message interface{}) error {
 	socketManager := socket_util.GetSocketManager()

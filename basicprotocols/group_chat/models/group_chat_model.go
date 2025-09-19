@@ -587,3 +587,14 @@ type TalkGroupChannelLatestChat struct {
 	Chain            string   `json:"chain"`            // Chain type
 	BlockHeight      int64    `json:"blockHeight"`      // Block height
 }
+
+type GroupUserRoleInfo struct {
+	MetaId      string `json:"metaId"`              // User MetaId
+	GroupId     string `json:"groupId"`             // Group ID
+	ChannelId   string `json:"channelId"`           // Channel ID
+	IsCreator   bool   `json:"isCreator"`           // Is creator
+	IsAdmin     bool   `json:"isAdmin"`             // Is admin
+	IsBlocked   bool   `json:"isBlocked"`           // Is blocked
+	IsWhitelist bool   `json:"isWhitelist"`         // Is whitelist
+	IsRemoved   bool   `json:"isRemoved,omitempty"` // Is removed
+}

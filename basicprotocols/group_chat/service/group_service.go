@@ -56,6 +56,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 
 	db.SetHandleGroupChatItem(wsForGroupChatItem)
 	db.SetHandlePrivateChatItem(wsForPrivateChatItem)
+	db.SetHandleGroupRoleInfoChangeList(wsForGroupRoleInfoChange)
 
 	// Initialize cache service for lucky bag
 	cache_service.InitCacheService(
@@ -1531,6 +1532,11 @@ func wsForPrivateChatItem(chat *models.TalkPrivateChatV3) error {
 	return nil
 }
 
+func wsForGroupRoleInfoChange(roleInfo *models.GroupUserRoleInfo) error {
+	wsPostGroupRoleInfo(roleInfo)
+	return nil
+}
+
 // GetUserInfoByAddress Get user information by address
 func GetUserInfoByAddress(address string) (*respond.UserInfoResponse, error) {
 	if address == "" {
@@ -2281,7 +2287,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 
 		// Get user info
 		if chat.MetaId != "" {
-			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			userInfo := common_service.FetchMetaIDUserInfo(chat.Address)
 			if userInfo != nil {
 				chatItem.UserInfo = userInfo
 				chatItem.NickName = userInfo.Name
@@ -2292,7 +2298,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 		if chat.ReplyPin != "" {
 			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
 			if err == nil && replyChat != nil {
-				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.Address)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
 						ChannelId:   replyChat.ChannelId,
@@ -2388,7 +2394,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 
 		// Get user info
 		if chat.MetaId != "" {
-			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			userInfo := common_service.FetchMetaIDUserInfo(chat.Address)
 			if userInfo != nil {
 				chatItem.UserInfo = userInfo
 				chatItem.NickName = userInfo.Name
@@ -2399,7 +2405,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 		if chat.ReplyPin != "" {
 			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
 			if err == nil && replyChat != nil {
-				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.Address)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
 						ChannelId:   replyChat.ChannelId,
@@ -2495,7 +2501,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 
 		// Get user info
 		if chat.MetaId != "" {
-			userInfo := common_service.FetchMetaIDUserInfo(chat.MetaId)
+			userInfo := common_service.FetchMetaIDUserInfo(chat.Address)
 			if userInfo != nil {
 				chatItem.UserInfo = userInfo
 				chatItem.NickName = userInfo.Name
@@ -2506,7 +2512,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 		if chat.ReplyPin != "" {
 			replyChat, err := chatDB.GetChatByPinId(chat.ReplyPin)
 			if err == nil && replyChat != nil {
-				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.MetaId)
+				replyUserInfo := common_service.FetchMetaIDUserInfo(replyChat.Address)
 				if replyUserInfo != nil {
 					chatItem.ReplyInfo = &respond.ReplyInfo{
 						ChannelId:   replyChat.ChannelId,
@@ -2621,6 +2627,45 @@ func FetchGroupChannelList(req *request.FetchGroupChannelListRequest) (*respond.
 		Total: int64(len(channels)),
 		List:  channelItems,
 	}, nil
+}
+
+// FetchGroupUserRoleInfo
+func FetchGroupUserRoleInfo(req *request.FetchGroupUserRoleInfoRequest) (*respond.GroupUserRoleInfo, error) {
+	if req.GroupId == "" {
+		return nil, fmt.Errorf("groupId is empty")
+	}
+	if req.MetaId == "" {
+		return nil, fmt.Errorf("metaId is empty")
+	}
+
+	roleInfo, err := groupDB.GetGroupUserRoleInfo(req.GroupId, req.ChannelId, req.MetaId)
+	if err != nil {
+		return nil, err
+	}
+
+	userInfo := common_service.FetchMetaIDUserInfoInfoByMetaId(req.MetaId)
+	if userInfo == nil {
+		userInfo = &respond.UserInfo{
+			Metaid:  req.MetaId,
+			Address: "",
+			Name:    "",
+			Avatar:  "",
+		}
+	}
+
+	result := &respond.GroupUserRoleInfo{
+		MetaId:      roleInfo.MetaId,
+		Address:     userInfo.Address,
+		UserInfo:    userInfo,
+		GroupId:     roleInfo.GroupId,
+		ChannelId:   roleInfo.ChannelId,
+		IsCreator:   roleInfo.IsCreator,
+		IsAdmin:     roleInfo.IsAdmin,
+		IsBlocked:   roleInfo.IsBlocked,
+		IsWhitelist: roleInfo.IsWhitelist,
+	}
+
+	return result, nil
 }
 
 // startSocketInfoSnapshotTimer Start socket info snapshot timer

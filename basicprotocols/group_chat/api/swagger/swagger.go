@@ -424,6 +424,24 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/group-user-role": {
+            "get": {
+                "description": "获取用户在群组中的角色信息，包括是否为创建者、管理员、是否被拉黑、是否在白名单中等",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "获取用户在群组中的角色信息",
+                "parameters": [
+                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "频道ID（可选）", "name": "channelId", "in": "query", "required": false},
+                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "成功获取用户角色信息", "schema": {"type": "object"}},
+                    "400": {"description": "请求参数错误", "schema": {"type": "object"}},
+                    "500": {"description": "服务器内部错误", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/user-info": {
             "get": {
                 "description": "Get user information by address or metaId. If address is provided, it will be used; if address is empty but metaId is provided, metaId will be used; if both are empty, an error will be returned.",

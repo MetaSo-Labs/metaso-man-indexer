@@ -108,6 +108,29 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 
 }
 
+func wsPostGroupRoleInfo(roleInfo *models.GroupUserRoleInfo) {
+	metaIdList := make([]string, 0)
+	metaIdList = append(metaIdList, roleInfo.MetaId)
+
+	roleInfoItem := &respond.GroupUserRoleInfo{
+		MetaId:      roleInfo.MetaId,
+		UserInfo:    common_service.FetchMetaIDUserInfoInfoByMetaId(roleInfo.MetaId),
+		GroupId:     roleInfo.GroupId,
+		ChannelId:   roleInfo.ChannelId,
+		IsCreator:   roleInfo.IsCreator,
+		IsAdmin:     roleInfo.IsAdmin,
+		IsBlocked:   roleInfo.IsBlocked,
+		IsWhitelist: roleInfo.IsWhitelist,
+		IsRemoved:   roleInfo.IsRemoved,
+	}
+	if roleInfoItem.UserInfo != nil {
+		roleInfoItem.Address = roleInfoItem.UserInfo.Address
+	}
+
+	socket_service.SendGroupRoleInfoToUser(roleInfo.MetaId, roleInfoItem)
+	socket_service.SendAllMessageToExtraPush(roleInfoItem, []string{roleInfo.MetaId}, socket_util.WS_SERVER_NOTIFY_GROUP_ROLE)
+}
+
 func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 	//if from equals to to, then not send both from and to
 	if chat.From == chat.To {

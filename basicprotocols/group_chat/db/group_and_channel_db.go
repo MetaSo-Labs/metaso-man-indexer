@@ -57,7 +57,7 @@ func NewGroupDB(pb *Pebble, c *ChatDB) *GroupDB {
 // Save group info
 func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 	// First get existing group info
-	existingGroup, err := gdb.GetGroupInfoByGroupId(group.GroupId)
+	existingGroup, err := gdb.getGroupInfoByGroupId(group.GroupId)
 	if err != nil {
 		return err
 	}
@@ -112,8 +112,30 @@ func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
 	return nil
 }
 
-// Get group info by GroupId
+// Get group info by GroupId (with cache support)
 func (gdb *GroupDB) GetGroupInfoByGroupId(groupId string) (*models.TalkGroupModel, error) {
+	// 优先从缓存获取
+	group, found := cache_service.GetGroupInfoFromCache(groupId)
+	if found {
+		return group, nil
+	}
+
+	// 缓存未命中，从数据库获取
+	group, err := gdb.getGroupInfoByGroupId(groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	// 如果从数据库获取到数据，更新缓存
+	if group != nil {
+		cache_service.SetGroupInfoToCache(groupId, group)
+	}
+
+	return group, nil
+}
+
+// Get group info by GroupId
+func (gdb *GroupDB) getGroupInfoByGroupId(groupId string) (*models.TalkGroupModel, error) {
 	key := []byte(groupId)
 	value, closer, err := Pb[TalkGroupInfoCollection].Get(key)
 	if err != nil {
@@ -443,7 +465,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	}
 
 	// Get existing group info
-	existingGroup, err := gdb.GetGroupInfoByGroupId(simpleGroupCreate.GroupId)
+	existingGroup, err := gdb.getGroupInfoByGroupId(simpleGroupCreate.GroupId)
 	if err != nil {
 		return err
 	}
@@ -1781,6 +1803,19 @@ func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription) error {
 		return err
 	}
 
+	roleInfo := &models.GroupUserRoleInfo{
+		MetaId:  simpleGroupRemoveUser.RemoveMetaid,
+		GroupId: simpleGroupRemoveUser.GroupId,
+		// ChannelId:   "",
+		// IsCreator:   false,
+		// IsAdmin:     false,
+		// IsBlocked:   false,
+		// IsWhitelist: false,
+		IsRemoved: true,
+	}
+
+	go dealGroupRoleInfoChangeList(roleInfo)
+
 	return nil
 }
 
@@ -2148,7 +2183,27 @@ func (gdb *GroupDB) addGroupAdminToGroupList(
 	gdb.sortGroupAdminListByTimestamp(existingList)
 
 	// Save updated admin list
-	return gdb.saveGroupAdminList(existingList)
+	err = gdb.saveGroupAdminList(existingList)
+	if err != nil {
+		return err
+	}
+
+	// If it is a new record, get the changed metaId list
+	if !found && len(existingList.Items) >= 1 {
+		// Get the latest and previous admin list
+		latestMetaIds := newItem.Admins
+		previousMetaIds := []string{}
+		if len(existingList.Items) >= 2 {
+			if existingList.Items[len(existingList.Items)-2] != nil {
+				previousMetaIds = existingList.Items[len(existingList.Items)-2].Admins
+			}
+		}
+
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+
+	}
+	return nil
+
 }
 
 // Sort group admin list by timestamp in ascending order
@@ -2255,7 +2310,27 @@ func (gdb *GroupDB) addGroupBlockToGroupList(
 	gdb.sortGroupBlockListByTimestamp(existingList)
 
 	// Save updated block list
-	return gdb.saveGroupBlockList(existingList)
+	err = gdb.saveGroupBlockList(existingList)
+	if err != nil {
+		return err
+	}
+
+	// If it is a new record, get the changed metaId list
+	if !found && len(existingList.Items) >= 1 {
+		// Get the latest and previous admin list
+		latestMetaIds := newItem.BlockedUsers
+		previousMetaIds := []string{}
+		if len(existingList.Items) >= 2 {
+			if existingList.Items[len(existingList.Items)-2] != nil {
+				previousMetaIds = existingList.Items[len(existingList.Items)-2].BlockedUsers
+			}
+		}
+
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+
+	}
+
+	return nil
 }
 
 // Sort group block list by timestamp in ascending order
@@ -2362,7 +2437,26 @@ func (gdb *GroupDB) addGroupWhitelistToGroupList(
 	gdb.sortGroupWhitelistListByTimestamp(existingList)
 
 	// Save updated whitelist list
-	return gdb.saveGroupWhitelistList(existingList)
+	err = gdb.saveGroupWhitelistList(existingList)
+	if err != nil {
+		return err
+	}
+
+	// If it is a new record, get the changed metaId list
+	if !found && len(existingList.Items) >= 1 {
+		// Get the latest and previous admin list
+		latestMetaIds := newItem.WhitelistUsers
+		previousMetaIds := []string{}
+		if len(existingList.Items) >= 2 {
+			if existingList.Items[len(existingList.Items)-2] != nil {
+				previousMetaIds = existingList.Items[len(existingList.Items)-2].WhitelistUsers
+			}
+		}
+
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+
+	}
+	return nil
 }
 
 // Sort group whitelist list by timestamp in ascending order
@@ -3040,4 +3134,93 @@ func (gdb *GroupDB) processGroupChannelModify(pin *pin.PinInscription) error {
 	}
 
 	return nil
+}
+
+// GetGroupUserRoleInfo
+func (gdb *GroupDB) GetGroupUserRoleInfo(groupId, channelId, metaId string) (*models.GroupUserRoleInfo, error) {
+	group, err := gdb.GetGroupInfoByGroupId(groupId)
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, errors.New("group not found")
+	}
+
+	isCreator := group.CreateUserMetaId == metaId
+
+	isAdmin, err := gdb.IsUserAdmin(groupId, metaId, time.Now().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+
+	isBlocked, err := gdb.IsUserBlock(groupId, metaId, time.Now().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+
+	isWhitelist, err := gdb.IsUserWhitelist(groupId, metaId, time.Now().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+
+	result := &models.GroupUserRoleInfo{
+		MetaId:      metaId,
+		GroupId:     groupId,
+		ChannelId:   channelId,
+		IsCreator:   isCreator,
+		IsAdmin:     isAdmin,
+		IsBlocked:   isBlocked,
+		IsWhitelist: isWhitelist,
+	}
+
+	return result, nil
+}
+
+// GetChangedMetaIds Get changed metaId list
+// Return added and removed metaId list, used in addGroupAdminToGroupList etc.
+func (gdb *GroupDB) getChangedMetaIds(oldList, newList []string) (added, removed []string) {
+	// Create old list map, for quick lookup
+	oldMap := make(map[string]bool)
+	for _, metaId := range oldList {
+		oldMap[metaId] = true
+	}
+
+	// Create new list map, for quick lookup
+	newMap := make(map[string]bool)
+	for _, metaId := range newList {
+		newMap[metaId] = true
+	}
+
+	// Find added metaId (in new list but not in old list)
+	for _, metaId := range newList {
+		if !oldMap[metaId] {
+			added = append(added, metaId)
+		}
+	}
+
+	// Find deleted metaId (in old list but not in new list)
+	for _, metaId := range oldList {
+		if !newMap[metaId] {
+			removed = append(removed, metaId)
+		}
+	}
+
+	return added, removed
+}
+
+func (gdb *GroupDB) dealGroupRoleInfoChangeList(groupId string, previousMetaIds, latestMetaIds []string) {
+	// Get changed metaIds
+	addedMetaIds, removedMetaIds := gdb.getChangedMetaIds(previousMetaIds, latestMetaIds)
+
+	changeList := make([]string, 0)
+	changeList = append(changeList, addedMetaIds...)
+	changeList = append(changeList, removedMetaIds...)
+
+	// Send change list to socket
+	for _, metaId := range changeList {
+		roleInfo, _ := gdb.GetGroupUserRoleInfo(groupId, "", metaId)
+		if roleInfo != nil {
+			go dealGroupRoleInfoChangeList(roleInfo)
+		}
+	}
 }
