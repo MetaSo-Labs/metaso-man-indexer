@@ -28,16 +28,18 @@ func GetConnectionStats(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
-		"totalConnections":     stats.TotalConnections,
-		"activeConnections":    stats.ActiveConnections,
-		"totalMessagesSent":    stats.TotalMessagesSent,
-		"totalMessagesFailed":  stats.TotalMessagesFailed,
-		"totalMemoryUsage":     stats.TotalMemoryUsage,
-		"averageMemoryPerConn": stats.AverageMemoryPerConn,
-		"totalMemoryMB":        stats.TotalMemoryMB,
-		"averageMemoryKB":      stats.AverageMemoryKB,
-		"memoryUsagePercent":   stats.MemoryUsagePercent,
-		"memoryLimitMB":        stats.MemoryLimitMB,
+		"totalConnections":      stats.TotalConnections,
+		"activeConnections":     stats.ActiveConnections,
+		"totalUserConnections":  stats.TotalUserConnections,
+		"activeUserConnections": stats.ActiveUserConnections,
+		"totalMessagesSent":     stats.TotalMessagesSent,
+		"totalMessagesFailed":   stats.TotalMessagesFailed,
+		"totalMemoryUsage":      stats.TotalMemoryUsage,
+		"averageMemoryPerConn":  stats.AverageMemoryPerConn,
+		"totalMemoryMB":         stats.TotalMemoryMB,
+		"averageMemoryKB":       stats.AverageMemoryKB,
+		"memoryUsagePercent":    stats.MemoryUsagePercent,
+		"memoryLimitMB":         stats.MemoryLimitMB,
 	}, t))
 }
 

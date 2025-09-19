@@ -2709,17 +2709,19 @@ func takeSocketInfoSnapshot() {
 
 	// Create snapshot data
 	snapshot := &db.SocketInfoSnapshot{
-		Timestamp:            timestamp,
-		TotalConnections:     stats.TotalConnections,
-		ActiveConnections:    stats.ActiveConnections,
-		TotalMessagesSent:    stats.TotalMessagesSent,
-		TotalMessagesFailed:  stats.TotalMessagesFailed,
-		TotalMemoryUsage:     stats.TotalMemoryUsage,
-		AverageMemoryPerConn: stats.AverageMemoryPerConn,
-		TotalMemoryMB:        stats.TotalMemoryMB,
-		AverageMemoryKB:      stats.AverageMemoryKB,
-		MemoryUsagePercent:   stats.MemoryUsagePercent,
-		MemoryLimitMB:        stats.MemoryLimitMB,
+		Timestamp:             timestamp,
+		TotalConnections:      stats.TotalConnections,
+		ActiveConnections:     stats.ActiveConnections,
+		TotalUserConnections:  stats.TotalUserConnections,
+		ActiveUserConnections: stats.ActiveUserConnections,
+		TotalMessagesSent:     stats.TotalMessagesSent,
+		TotalMessagesFailed:   stats.TotalMessagesFailed,
+		TotalMemoryUsage:      stats.TotalMemoryUsage,
+		AverageMemoryPerConn:  stats.AverageMemoryPerConn,
+		TotalMemoryMB:         stats.TotalMemoryMB,
+		AverageMemoryKB:       stats.AverageMemoryKB,
+		MemoryUsagePercent:    stats.MemoryUsagePercent,
+		MemoryLimitMB:         stats.MemoryLimitMB,
 	}
 
 	if db.GlobalIsStop {

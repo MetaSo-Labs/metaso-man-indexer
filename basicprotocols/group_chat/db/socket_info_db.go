@@ -22,18 +22,20 @@ func NewSocketInfoDB(pb *Pebble) *SocketInfoDB {
 
 // SocketInfoSnapshot Socket info snapshot item
 type SocketInfoSnapshot struct {
-	Timestamp            int64   `json:"timestamp"`            // Snapshot timestamp
-	TimeStr              string  `json:"timeStr"`              // Snapshot time string
-	TotalConnections     int64   `json:"totalConnections"`     // Total connections
-	ActiveConnections    int64   `json:"activeConnections"`    // Active connections
-	TotalMessagesSent    int64   `json:"totalMessagesSent"`    // Total messages sent
-	TotalMessagesFailed  int64   `json:"totalMessagesFailed"`  // Total messages failed
-	TotalMemoryUsage     int64   `json:"totalMemoryUsage"`     // Total memory usage in bytes
-	AverageMemoryPerConn int64   `json:"averageMemoryPerConn"` // Average memory per connection in bytes
-	TotalMemoryMB        float64 `json:"totalMemoryMB"`        // Total memory usage in MB
-	AverageMemoryKB      float64 `json:"averageMemoryKB"`      // Average memory per connection in KB
-	MemoryUsagePercent   float64 `json:"memoryUsagePercent"`   // Memory usage percentage
-	MemoryLimitMB        int     `json:"memoryLimitMB"`        // Memory limit in MB
+	Timestamp             int64   `json:"timestamp"`             // Snapshot timestamp
+	TimeStr               string  `json:"timeStr"`               // Snapshot time string
+	TotalConnections      int64   `json:"totalConnections"`      // Total connections
+	ActiveConnections     int64   `json:"activeConnections"`     // Active connections
+	TotalUserConnections  int64   `json:"totalUserConnections"`  // Total user connections
+	ActiveUserConnections int64   `json:"activeUserConnections"` // Active user connections
+	TotalMessagesSent     int64   `json:"totalMessagesSent"`     // Total messages sent
+	TotalMessagesFailed   int64   `json:"totalMessagesFailed"`   // Total messages failed
+	TotalMemoryUsage      int64   `json:"totalMemoryUsage"`      // Total memory usage in bytes
+	AverageMemoryPerConn  int64   `json:"averageMemoryPerConn"`  // Average memory per connection in bytes
+	TotalMemoryMB         float64 `json:"totalMemoryMB"`         // Total memory usage in MB
+	AverageMemoryKB       float64 `json:"averageMemoryKB"`       // Average memory per connection in KB
+	MemoryUsagePercent    float64 `json:"memoryUsagePercent"`    // Memory usage percentage
+	MemoryLimitMB         int     `json:"memoryLimitMB"`         // Memory limit in MB
 }
 
 // SaveSocketInfoSnapshot Save socket info snapshot

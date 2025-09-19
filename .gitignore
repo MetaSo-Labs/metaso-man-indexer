@@ -15,3 +15,4 @@ docker-compose.testnet.simple.yml
 Dockerfile.testnet
 .idea/
 client_test.html
+client_test_2.html

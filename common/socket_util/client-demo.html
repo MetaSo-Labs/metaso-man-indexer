@@ -8,7 +8,8 @@
       const socket = io('http://127.0.0.1:7555', {
         path: '/socket.io',
         query: {
-          'metaid': ''
+          'metaid': '',
+          'type': 'pc' // pc or app, default is pc
         }
       });
 

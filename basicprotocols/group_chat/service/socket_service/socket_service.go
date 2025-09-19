@@ -92,7 +92,8 @@ func SendGroupMessageToUser(metaid string, message interface{}) error {
 	}
 
 	// Send message to specified user
-	err := socketManager.SendMessageToUser(metaid, socketData)
+	// err := socketManager.SendMessageToUser(metaid, socketData)
+	err := socketManager.SendMessageToUserAllDevices(metaid, socketData)
 	if err != nil {
 		log.Printf("Failed to send message to user: metaid=%s, error=%v", metaid, err)
 		return err
@@ -118,7 +119,8 @@ func SendGroupRoleInfoToUser(metaid string, message interface{}) error {
 	}
 
 	// Send role info to specified user
-	err := socketManager.SendMessageToUser(metaid, socketData)
+	// err := socketManager.SendMessageToUser(metaid, socketData)
+	err := socketManager.SendMessageToUserAllDevices(metaid, socketData)
 	if err != nil {
 		log.Printf("Failed to send role info to user: metaid=%s, error=%v", metaid, err)
 		return err
@@ -144,7 +146,8 @@ func SendPrivateMessageToUser(metaid string, message interface{}) error {
 	}
 
 	// Send message to specified user
-	err := socketManager.SendMessageToUser(metaid, socketData)
+	// err := socketManager.SendMessageToUser(metaid, socketData)
+	err := socketManager.SendMessageToUserAllDevices(metaid, socketData)
 	if err != nil {
 		log.Printf("Failed to send private message to user: metaid=%s, error=%v", metaid, err)
 		return err

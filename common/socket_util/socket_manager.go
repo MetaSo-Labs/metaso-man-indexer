@@ -14,7 +14,7 @@ import (
 // SocketManager Generic WebSocket connection manager
 type SocketManager struct {
 	server      *socket.Server
-	connections sync.Map // store connection info, key: metaid, value: *ConnectionInfo
+	connections sync.Map // store connection info, key: metaid, value: *UserConnections
 	mutex       sync.RWMutex
 
 	extraPushAuthKey string
@@ -38,30 +38,42 @@ type SocketManager struct {
 
 const (
 	EXTRA_PUSH_SERVICE_METAID = "extra_push_service"
+	DEVICE_TYPE_PC            = "pc"
+	DEVICE_TYPE_APP           = "app"
+	MAX_DEVICES_PER_USER      = 2
 )
 
 // ConnectionInfo Connection information
 type ConnectionInfo struct {
 	SocketID    string
 	MetaID      string
+	DeviceType  string // "pc" or "app"
 	ConnectTime time.Time
 	LastActive  time.Time
 	IsActive    bool
 }
 
+// UserConnections User's device connections
+type UserConnections struct {
+	MetaID  string
+	Devices []*ConnectionInfo // Maximum 2 devices: pc and app
+}
+
 // ConnectionStats Connection statistics
 type ConnectionStats struct {
-	TotalConnections     int64
-	ActiveConnections    int64
-	TotalMessagesSent    int64
-	TotalMessagesFailed  int64
-	TotalMemoryUsage     int64   // Total memory usage in bytes
-	AverageMemoryPerConn int64   // Average memory per connection in bytes
-	TotalMemoryMB        float64 // Total memory usage in MB
-	AverageMemoryKB      float64 // Average memory per connection in KB
-	MemoryUsagePercent   float64 // Memory usage percentage
-	MemoryLimitMB        int     // Memory limit in MB
-	mutex                sync.RWMutex
+	TotalConnections      int64
+	ActiveConnections     int64
+	TotalUserConnections  int64
+	ActiveUserConnections int64
+	TotalMessagesSent     int64
+	TotalMessagesFailed   int64
+	TotalMemoryUsage      int64   // Total memory usage in bytes
+	AverageMemoryPerConn  int64   // Average memory per connection in bytes
+	TotalMemoryMB         float64 // Total memory usage in MB
+	AverageMemoryKB       float64 // Average memory per connection in KB
+	MemoryUsagePercent    float64 // Memory usage percentage
+	MemoryLimitMB         int     // Memory limit in MB
+	mutex                 sync.RWMutex
 }
 
 // SocketConfig Socket configuration
@@ -196,8 +208,8 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 		}
 	}
 
-	// Get metaid from handshake
-	metaid := sm.getMetaIDFromSocket(client)
+	// Get metaid and device type from handshake
+	metaid, deviceType := sm.getMetaIDAndDeviceTypeFromSocket(client)
 	if metaid == "" {
 		log.Printf("Connection failed: missing metaid parameter, socket: %s", client.Id())
 		client.Disconnect(true)
@@ -220,8 +232,8 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 		return
 	}
 
-	// Automatically add connection to manager
-	sm.addConnection(string(client.Id()), metaid)
+	// Automatically add device connection to manager
+	sm.addDeviceConnection(metaid, deviceType, string(client.Id()))
 
 	// Send connection success response
 	response := &SocketData{
@@ -231,7 +243,7 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 	}
 
 	sm.sendMessage(client, response)
-	log.Printf("Client connected successfully: socketID=%s, metaid=%s", client.Id(), metaid)
+	log.Printf("[SOCKET] Client connected successfully: socketID=%s, metaid=%s, deviceType=%s", client.Id(), metaid, deviceType)
 
 	// Listen for client messages
 	client.On("message", func(args ...interface{}) {
@@ -261,14 +273,14 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 
 // handleClientDisconnect Handle client disconnection
 func (sm *SocketManager) handleClientDisconnect(client *socket.Socket, reason string) {
-	log.Printf("Client disconnected: socketID=%s, reason: %s", client.Id(), reason)
-	sm.removeConnection(string(client.Id()))
+	log.Printf("[SOCKET] Client disconnected: socketID=%s, reason: %s", client.Id(), reason)
+	sm.removeDeviceConnection(string(client.Id()))
 }
 
 // handleClientMessage Handle client message
 func (sm *SocketManager) handleClientMessage(client *socket.Socket, msg string) {
 	// Update connection activity time
-	sm.updateConnectionActivity(string(client.Id()))
+	sm.updateDeviceConnectionActivity(string(client.Id()))
 
 	// Parse message
 	socketData := SocketDataFromStringMsg(msg)
@@ -290,7 +302,7 @@ func (sm *SocketManager) handleClientMessage(client *socket.Socket, msg string) 
 // handleClientPing Handle client ping
 func (sm *SocketManager) handleClientPing(client *socket.Socket) {
 	// Update connection activity time
-	sm.updateConnectionActivity(string(client.Id()))
+	sm.updateDeviceConnectionActivity(string(client.Id()))
 
 	// Send pong response
 	response := &SocketData{
@@ -301,33 +313,55 @@ func (sm *SocketManager) handleClientPing(client *socket.Socket) {
 	sm.sendMessage(client, response)
 }
 
-// getMetaIDFromSocket Get metaid from socket
-func (sm *SocketManager) getMetaIDFromSocket(client *socket.Socket) string {
-	// Get metaid from handshake
+// getMetaIDAndDeviceTypeFromSocket Get metaid and device type from socket handshake
+func (sm *SocketManager) getMetaIDAndDeviceTypeFromSocket(client *socket.Socket) (string, string) {
 	handshake := client.Handshake()
 	if handshake == nil {
-		return ""
+		return "", DEVICE_TYPE_PC // Default to PC
 	}
 
-	// Try to get metaid from Auth
+	metaid := ""
+	deviceType := DEVICE_TYPE_PC // Default to PC
+
+	// Try to get from Auth first
 	if handshake.Auth != nil {
 		if authMap, ok := handshake.Auth.(map[string]interface{}); ok {
-			if metaid, exists := authMap["metaid"]; exists {
-				if metaidStr, ok := metaid.(string); ok {
-					return metaidStr
+			// Get metaid
+			if metaidVal, exists := authMap["metaid"]; exists {
+				if metaidStr, ok := metaidVal.(string); ok {
+					metaid = metaidStr
+				}
+			}
+			// Get device type
+			if deviceTypeVal, exists := authMap["type"]; exists {
+				if deviceTypeStr, ok := deviceTypeVal.(string); ok {
+					if deviceTypeStr == DEVICE_TYPE_APP {
+						deviceType = DEVICE_TYPE_APP
+					}
 				}
 			}
 		}
 	}
 
-	// Try to get metaid from Query
+	// Try to get from Query if not found in Auth
 	if handshake.Query != nil {
-		if metaidValues, exists := handshake.Query["metaid"]; exists && len(metaidValues) > 0 {
-			return metaidValues[0]
+		// Get metaid
+		if metaid == "" {
+			if metaidValues, exists := handshake.Query["metaid"]; exists && len(metaidValues) > 0 {
+				metaid = metaidValues[0]
+			}
+		}
+		// Get device type
+		if deviceType == DEVICE_TYPE_PC {
+			if deviceTypeValues, exists := handshake.Query["type"]; exists && len(deviceTypeValues) > 0 {
+				if deviceTypeValues[0] == DEVICE_TYPE_APP {
+					deviceType = DEVICE_TYPE_APP
+				}
+			}
 		}
 	}
 
-	return ""
+	return metaid, deviceType
 }
 
 // getExtraPushAuthKeyFromSocket Get extraPushAuthKey from socket
@@ -484,7 +518,7 @@ func (sm *SocketManager) sendError(client *socket.Socket, message string, code i
 // handleHeartbeat Handle heartbeat event
 func (sm *SocketManager) handleHeartbeat(client *socket.Socket, socketData *SocketData) {
 	// Update connection activity time
-	sm.updateConnectionActivity(string(client.Id()))
+	sm.updateDeviceConnectionActivity(string(client.Id()))
 
 	// Send heartbeat response
 	response := &SocketData{
@@ -499,7 +533,8 @@ func (sm *SocketManager) handleHeartbeat(client *socket.Socket, socketData *Sock
 func (sm *SocketManager) getConnectionCount() int {
 	count := 0
 	sm.connections.Range(func(key, value interface{}) bool {
-		count++
+		userConn := value.(*UserConnections)
+		count += len(userConn.Devices)
 		return true
 	})
 	return count
@@ -521,25 +556,39 @@ func (sm *SocketManager) cleanupInactiveConnections() {
 	removedCount := 0
 
 	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
+		userConn := value.(*UserConnections)
+		var devicesToRemove []int
 
-		// Check if connection has timed out
-		if now.Sub(connInfo.LastActive) > sm.connectionTTL {
-			sm.connections.Delete(key)
-			removedCount++
-
-			// Update statistics
-			sm.stats.mutex.Lock()
-			sm.stats.ActiveConnections--
-			sm.stats.mutex.Unlock()
+		// Check each device for timeout
+		for i, device := range userConn.Devices {
+			if now.Sub(device.LastActive) > sm.connectionTTL {
+				devicesToRemove = append(devicesToRemove, i)
+				removedCount++
+			}
 		}
+
+		// Remove timed out devices (from back to front to maintain indices)
+		for i := len(devicesToRemove) - 1; i >= 0; i-- {
+			index := devicesToRemove[i]
+			userConn.Devices = append(userConn.Devices[:index], userConn.Devices[index+1:]...)
+		}
+
+		// If no devices left, remove user connection
+		if len(userConn.Devices) == 0 {
+			sm.connections.Delete(key)
+		}
+
 		return true
 	})
 
-	// Update memory statistics after cleanup
+	// Update statistics and memory after cleanup
 	if removedCount > 0 {
+		sm.stats.mutex.Lock()
+		sm.stats.ActiveConnections -= int64(removedCount)
+		sm.stats.mutex.Unlock()
+
 		sm.updateMemoryStats()
-		log.Printf("Cleaned up %d inactive connections", removedCount)
+		log.Printf("[SOCKET] Cleaned up %d inactive device connections", removedCount)
 	}
 }
 
@@ -579,6 +628,11 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 	sm.stats.mutex.RLock()
 	defer sm.stats.mutex.RUnlock()
 
+	// Calculate user connection counts
+	totalUsers, activeUsers := sm.GetUserConnectionCounts()
+	totalUserConnections := int64(totalUsers)
+	activeUserConnections := int64(activeUsers)
+
 	// Calculate formatted memory values
 	totalMemoryMB := float64(sm.stats.TotalMemoryUsage) / (1024 * 1024)
 	averageMemoryKB := float64(sm.stats.AverageMemoryPerConn) / 1024
@@ -590,16 +644,18 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 	memoryUsagePercent = float64(int64(memoryUsagePercent*1000000)) / 1000000
 
 	return &ConnectionStats{
-		TotalConnections:     sm.stats.TotalConnections,
-		ActiveConnections:    sm.stats.ActiveConnections,
-		TotalMessagesSent:    sm.stats.TotalMessagesSent,
-		TotalMessagesFailed:  sm.stats.TotalMessagesFailed,
-		TotalMemoryUsage:     sm.stats.TotalMemoryUsage,
-		AverageMemoryPerConn: sm.stats.AverageMemoryPerConn,
-		TotalMemoryMB:        totalMemoryMB,
-		AverageMemoryKB:      averageMemoryKB,
-		MemoryUsagePercent:   memoryUsagePercent,
-		MemoryLimitMB:        sm.maxMemoryMB,
+		TotalConnections:      sm.stats.TotalConnections,
+		ActiveConnections:     sm.stats.ActiveConnections,
+		TotalUserConnections:  totalUserConnections,
+		ActiveUserConnections: activeUserConnections,
+		TotalMessagesSent:     sm.stats.TotalMessagesSent,
+		TotalMessagesFailed:   sm.stats.TotalMessagesFailed,
+		TotalMemoryUsage:      sm.stats.TotalMemoryUsage,
+		AverageMemoryPerConn:  sm.stats.AverageMemoryPerConn,
+		TotalMemoryMB:         totalMemoryMB,
+		AverageMemoryKB:       averageMemoryKB,
+		MemoryUsagePercent:    memoryUsagePercent,
+		MemoryLimitMB:         sm.maxMemoryMB,
 	}
 }
 
@@ -607,86 +663,101 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 func (sm *SocketManager) GetActiveConnections() int {
 	count := 0
 	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
-		if connInfo.IsActive {
-			count++
+		userConn := value.(*UserConnections)
+		for _, device := range userConn.Devices {
+			if device.IsActive {
+				count++
+			}
 		}
 		return true
 	})
 	return count
 }
 
-// GetUserConnection Get user connection information
+// GetUserConnection Get user connection information (returns first active device)
 func (sm *SocketManager) GetUserConnection(metaid string) (*ConnectionInfo, bool) {
 	value, exists := sm.connections.Load(metaid)
 	if !exists {
 		return nil, false
 	}
 
-	connInfo := value.(*ConnectionInfo)
-	return connInfo, connInfo.IsActive
+	userConn := value.(*UserConnections)
+	for _, device := range userConn.Devices {
+		if device.IsActive {
+			return device, true
+		}
+	}
+	return nil, false
 }
 
-// AddConnection Add connection
-func (sm *SocketManager) addConnection(socketID, metaid string) {
-	connInfo := &ConnectionInfo{
-		SocketID:    socketID,
-		MetaID:      metaid,
-		ConnectTime: time.Now(),
-		LastActive:  time.Now(),
-		IsActive:    true,
+// GetUserConnectionByDevice Get user connection by device type
+func (sm *SocketManager) GetUserConnectionByDevice(metaid, deviceType string) (*ConnectionInfo, bool) {
+	value, exists := sm.connections.Load(metaid)
+	if !exists {
+		return nil, false
 	}
 
-	sm.connections.Store(metaid, connInfo)
-
-	// Update statistics
-	sm.stats.mutex.Lock()
-	sm.stats.TotalConnections++
-	sm.stats.ActiveConnections++
-	sm.stats.mutex.Unlock()
-
-	// Update memory statistics
-	sm.updateMemoryStats()
-
-	log.Printf("Added connection: socketID=%s, metaid=%s", socketID, metaid)
+	userConn := value.(*UserConnections)
+	for _, device := range userConn.Devices {
+		if device.DeviceType == deviceType && device.IsActive {
+			return device, true
+		}
+	}
+	return nil, false
 }
 
-// RemoveConnection Remove connection
-func (sm *SocketManager) removeConnection(socketID string) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
+// GetUserAllConnections Get all active connections for a user
+func (sm *SocketManager) GetUserAllConnections(metaid string) ([]*ConnectionInfo, bool) {
+	value, exists := sm.connections.Load(metaid)
+	if !exists {
+		return nil, false
+	}
 
-	// Find and remove connection
+	userConn := value.(*UserConnections)
+	var activeDevices []*ConnectionInfo
+	for _, device := range userConn.Devices {
+		if device.IsActive {
+			activeDevices = append(activeDevices, device)
+		}
+	}
+	return activeDevices, len(activeDevices) > 0
+}
+
+// IsUserOnline Check if user is online (any device)
+func (sm *SocketManager) IsUserOnline(metaid string) bool {
+	value, exists := sm.connections.Load(metaid)
+	if !exists {
+		return false
+	}
+
+	userConn := value.(*UserConnections)
+	for _, device := range userConn.Devices {
+		if device.IsActive {
+			return true
+		}
+	}
+	return false
+}
+
+// GetUserConnectionCounts Get user connection counts
+func (sm *SocketManager) GetUserConnectionCounts() (int, int) {
+	totalUsers := 0
+	activeUsers := 0
+
 	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
-		if connInfo.SocketID == socketID {
-			sm.connections.Delete(key)
-
-			// Update statistics
-			sm.stats.mutex.Lock()
-			sm.stats.ActiveConnections--
-			sm.stats.mutex.Unlock()
-
-			// Update memory statistics
-			sm.updateMemoryStats()
-
-			log.Printf("Removed connection: socketID=%s, metaid=%s", socketID, connInfo.MetaID)
-			return false
+		userConn := value.(*UserConnections)
+		totalUsers++
+		// Check if user has any active devices
+		for _, device := range userConn.Devices {
+			if device.IsActive {
+				activeUsers++
+				break // Count user as active if any device is active
+			}
 		}
 		return true
 	})
-}
 
-// UpdateConnectionActivity Update connection activity time
-func (sm *SocketManager) updateConnectionActivity(socketID string) {
-	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
-		if connInfo.SocketID == socketID {
-			connInfo.LastActive = time.Now()
-			return false
-		}
-		return true
-	})
+	return totalUsers, activeUsers
 }
 
 // calculateConnectionMemory Calculate memory usage for a single connection
@@ -695,9 +766,10 @@ func (sm *SocketManager) calculateConnectionMemory(connInfo *ConnectionInfo) int
 	// This is a rough estimation based on typical Go struct sizes
 	memoryUsage := int64(0)
 
-	// String fields: SocketID, MetaID
+	// String fields: SocketID, MetaID, DeviceType
 	memoryUsage += int64(len(connInfo.SocketID))
 	memoryUsage += int64(len(connInfo.MetaID))
+	memoryUsage += int64(len(connInfo.DeviceType))
 
 	// Time fields: ConnectTime, LastActive (typically 24 bytes each)
 	memoryUsage += 48
@@ -723,10 +795,12 @@ func (sm *SocketManager) updateMemoryStats() {
 	activeConnections := int64(0)
 
 	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
-		if connInfo.IsActive {
-			totalMemory += sm.calculateConnectionMemory(connInfo)
-			activeConnections++
+		userConn := value.(*UserConnections)
+		for _, device := range userConn.Devices {
+			if device.IsActive {
+				totalMemory += sm.calculateConnectionMemory(device)
+				activeConnections++
+			}
 		}
 		return true
 	})
@@ -752,7 +826,7 @@ func (sm *SocketManager) RefreshMemoryStats() {
 		stats.TotalMemoryMB, stats.AverageMemoryKB, stats.MemoryUsagePercent)
 }
 
-// SendMessageToUser Server actively pushes message to specified user
+// SendMessageToUser Server actively pushes message to specified user (first active device)
 // Used for server to send messages to client
 func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData) error {
 	connInfo, exists := sm.GetUserConnection(metaid)
@@ -778,7 +852,67 @@ func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData
 	// Use sendMessage method to send message
 	sm.sendMessage(targetSocket, socketData)
 
-	log.Printf("Sent message to user: metaid=%s, method=%s", metaid, socketData.M)
+	log.Printf("Sent message to user: metaid=%s, deviceType=%s, method=%s", metaid, connInfo.DeviceType, socketData.M)
+	return nil
+}
+
+// SendMessageToUserByDevice Server actively pushes message to specified user's device
+func (sm *SocketManager) SendMessageToUserByDevice(metaid, deviceType string, socketData *SocketData) error {
+	connInfo, exists := sm.GetUserConnectionByDevice(metaid, deviceType)
+	if !exists || !connInfo.IsActive {
+		// return fmt.Errorf("user device not connected: %s, %s", metaid, deviceType)
+		return nil
+	}
+
+	// Find corresponding socket connection through socketID
+	var targetSocket *socket.Socket
+	sm.server.Sockets().Sockets().Range(func(socketID socket.SocketId, client *socket.Socket) bool {
+		if string(socketID) == connInfo.SocketID {
+			targetSocket = client
+			return false // Stop iteration after finding
+		}
+		return true
+	})
+
+	if targetSocket == nil {
+		return fmt.Errorf("socket connection not found: socketID=%s", connInfo.SocketID)
+	}
+
+	// Use sendMessage method to send message
+	sm.sendMessage(targetSocket, socketData)
+
+	log.Printf("Sent message to user device: metaid=%s, deviceType=%s, method=%s", metaid, deviceType, socketData.M)
+	return nil
+}
+
+// SendMessageToUserAllDevices Server actively pushes message to all user's devices
+func (sm *SocketManager) SendMessageToUserAllDevices(metaid string, socketData *SocketData) error {
+	devices, exists := sm.GetUserAllConnections(metaid)
+	if !exists {
+		// return fmt.Errorf("user not connected: %s", metaid)
+		return nil
+	}
+
+	successCount := 0
+	for _, device := range devices {
+		// Find corresponding socket connection through socketID
+		var targetSocket *socket.Socket
+		sm.server.Sockets().Sockets().Range(func(socketID socket.SocketId, client *socket.Socket) bool {
+			if string(socketID) == device.SocketID {
+				targetSocket = client
+				return false // Stop iteration after finding
+			}
+			return true
+		})
+
+		if targetSocket != nil {
+			sm.sendMessage(targetSocket, socketData)
+			successCount++
+		}
+	}
+
+	log.Printf("Sent message to user all devices: metaid=%s, method=%s, successCount=%d/%d",
+		metaid, socketData.M, successCount, len(devices))
 	return nil
 }
 
@@ -787,17 +921,19 @@ func (sm *SocketManager) SendMessageToUser(metaid string, socketData *SocketData
 func (sm *SocketManager) BroadcastMessage(socketData *SocketData) error {
 	// Iterate through all active connections and send messages
 	sm.connections.Range(func(key, value interface{}) bool {
-		connInfo := value.(*ConnectionInfo)
-		if connInfo.IsActive {
-			// Find corresponding socket connection through socketID
-			sm.server.Sockets().Sockets().Range(func(socketID socket.SocketId, client *socket.Socket) bool {
-				if string(socketID) == connInfo.SocketID {
-					// Use sendMessage method to send message
-					sm.sendMessage(client, socketData)
-					return false // Stop iteration after finding
-				}
-				return true
-			})
+		userConn := value.(*UserConnections)
+		for _, device := range userConn.Devices {
+			if device.IsActive {
+				// Find corresponding socket connection through socketID
+				sm.server.Sockets().Sockets().Range(func(socketID socket.SocketId, client *socket.Socket) bool {
+					if string(socketID) == device.SocketID {
+						// Use sendMessage method to send message
+						sm.sendMessage(client, socketData)
+						return false // Stop iteration after finding
+					}
+					return true
+				})
+			}
 		}
 		return true
 	})
@@ -831,4 +967,129 @@ func (sm *SocketManager) SendMessageToExtraPush(socketData *SocketData) error {
 
 	log.Printf("Sent message to extra push service: method=%s", socketData.M)
 	return nil
+}
+
+// Helper methods for device connection management
+
+// findDeviceConnection Find device connection by device type
+func (sm *SocketManager) findDeviceConnection(userConn *UserConnections, deviceType string) (*ConnectionInfo, int) {
+	for i, device := range userConn.Devices {
+		if device.DeviceType == deviceType {
+			return device, i
+		}
+	}
+	return nil, -1
+}
+
+// addDeviceConnection Add device connection for user
+func (sm *SocketManager) addDeviceConnection(metaid, deviceType, socketID string) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	if value, exists := sm.connections.Load(metaid); exists {
+		userConn := value.(*UserConnections)
+
+		// Find if device type already exists
+		if existingDevice, index := sm.findDeviceConnection(userConn, deviceType); existingDevice != nil {
+			// Replace existing device of same type
+			userConn.Devices[index] = &ConnectionInfo{
+				SocketID:    socketID,
+				MetaID:      metaid,
+				DeviceType:  deviceType,
+				ConnectTime: time.Now(),
+				LastActive:  time.Now(),
+				IsActive:    true,
+			}
+			log.Printf("[SOCKET] Replaced device connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
+		} else if len(userConn.Devices) < MAX_DEVICES_PER_USER {
+			// Add new device (within limit)
+			userConn.Devices = append(userConn.Devices, &ConnectionInfo{
+				SocketID:    socketID,
+				MetaID:      metaid,
+				DeviceType:  deviceType,
+				ConnectTime: time.Now(),
+				LastActive:  time.Now(),
+				IsActive:    true,
+			})
+			log.Printf("[SOCKET] Added device connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
+		} else {
+			log.Printf("[SOCKET] Device connection limit reached for user: metaid=%s", metaid)
+		}
+	} else {
+		// Create new user connections
+		userConn := &UserConnections{
+			MetaID: metaid,
+			Devices: []*ConnectionInfo{
+				{
+					SocketID:    socketID,
+					MetaID:      metaid,
+					DeviceType:  deviceType,
+					ConnectTime: time.Now(),
+					LastActive:  time.Now(),
+					IsActive:    true,
+				},
+			},
+		}
+		sm.connections.Store(metaid, userConn)
+		log.Printf("[SOCKET] Created new user connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
+	}
+
+	// Update statistics
+	sm.stats.mutex.Lock()
+	sm.stats.TotalConnections++
+	sm.stats.ActiveConnections++
+	sm.stats.mutex.Unlock()
+
+	// Update memory statistics
+	sm.updateMemoryStats()
+}
+
+// removeDeviceConnection Remove device connection for user
+func (sm *SocketManager) removeDeviceConnection(socketID string) {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	// Find and remove connection
+	sm.connections.Range(func(key, value interface{}) bool {
+		userConn := value.(*UserConnections)
+
+		for i, device := range userConn.Devices {
+			if device.SocketID == socketID {
+				// Remove device from slice
+				userConn.Devices = append(userConn.Devices[:i], userConn.Devices[i+1:]...)
+
+				// If no devices left, remove user connection
+				if len(userConn.Devices) == 0 {
+					sm.connections.Delete(key)
+				}
+
+				// Update statistics
+				sm.stats.mutex.Lock()
+				sm.stats.ActiveConnections--
+				sm.stats.mutex.Unlock()
+
+				// Update memory statistics
+				sm.updateMemoryStats()
+
+				log.Printf("[SOCKET] Removed device connection: socketID=%s, metaid=%s, deviceType=%s", socketID, device.MetaID, device.DeviceType)
+				return false
+			}
+		}
+		return true
+	})
+}
+
+// updateDeviceConnectionActivity Update device connection activity time
+func (sm *SocketManager) updateDeviceConnectionActivity(socketID string) {
+	sm.connections.Range(func(key, value interface{}) bool {
+		userConn := value.(*UserConnections)
+
+		for _, device := range userConn.Devices {
+			if device.SocketID == socketID {
+				device.LastActive = time.Now()
+				return false
+			}
+		}
+		return true
+	})
 }
