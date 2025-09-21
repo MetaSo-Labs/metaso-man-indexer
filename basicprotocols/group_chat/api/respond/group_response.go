@@ -429,6 +429,7 @@ type GroupChannelItem struct {
 	Chain                  string `json:"chain"`                  // Chain
 	BlockHeight            int64  `json:"blockHeight"`            // Block height
 	Index                  int64  `json:"index"`                  // Index
+	Version                string `json:"version"`                // Version
 }
 
 type GroupUserRoleInfo struct {

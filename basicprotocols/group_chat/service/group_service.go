@@ -2283,6 +2283,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
 			Index:       chat.Index,
+			Version:     chat.Version,
 		}
 
 		// Get user info
@@ -2315,6 +2316,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
+						Version:     replyChat.Version,
 					}
 				}
 			}
@@ -2390,6 +2392,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
 			Index:       chat.Index,
+			Version:     chat.Version,
 		}
 
 		// Get user info
@@ -2422,6 +2425,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
+						Version:     replyChat.Version,
 					}
 				}
 			}
@@ -2497,6 +2501,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
 			Index:       chat.Index,
+			Version:     chat.Version,
 		}
 
 		// Get user info
@@ -2529,6 +2534,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
+						Version:     replyChat.Version,
 					}
 				}
 			}
@@ -2599,7 +2605,7 @@ func FetchGroupChannelList(req *request.FetchGroupChannelListRequest) (*respond.
 			Timestamp:         channel.Timestamp,
 			Chain:             channel.Chain,
 			BlockHeight:       channel.BlockHeight,
-			Index:             0, // TalkGroupChannelModel doesn't have Index field, using 0 as default
+			Index:             -1, // TalkGroupChannelModel doesn't have Index field, using 0 as default
 		}
 
 		// Set channel newest information if available
@@ -2610,6 +2616,12 @@ func FetchGroupChannelList(req *request.FetchGroupChannelListRequest) (*respond.
 			channelItem.ChannelNewestProtocol = channelLatestChat.Protocol
 			channelItem.ChannelNewestContent = channelLatestChat.Content
 			channelItem.ChannelNewestTimestamp = channelLatestChat.Timestamp
+
+			channelChat, err := chatDB.GetChatByPinId(channelLatestChat.PinId)
+			if err == nil && channelChat != nil {
+				channelItem.Index = channelChat.Index
+				channelItem.Version = channelChat.Version
+			}
 
 			// Get user info for channelNewestUserName
 			if channelLatestChat.CreateAddress != "" {
