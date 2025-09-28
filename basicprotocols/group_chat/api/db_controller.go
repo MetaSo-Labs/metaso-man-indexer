@@ -382,12 +382,27 @@ func GetChatQueue(ctx *gin.Context) {
 
 	var results []map[string]interface{}
 	var queryErr error
+	var totalCount int
 
 	if timestamp != "" {
 		prefix := timestamp + "_"
 		results, queryErr = service.QueryByPrefix("talk_group_chat_queue", prefix, limit)
+		// For prefix query, we need to count all records with that prefix
+		if queryErr == nil {
+			allResults, countErr := service.QueryByPrefix("talk_group_chat_queue", prefix, 0) // Get all with prefix
+			if countErr == nil {
+				totalCount = len(allResults)
+			}
+		}
 	} else {
 		results, queryErr = service.QueryGroupChatQueue(limit)
+		// Get total count for the entire collection
+		if queryErr == nil {
+			totalCount, err = service.GetCollectionCount("talk_group_chat_queue")
+			if err != nil {
+				totalCount = 0
+			}
+		}
 	}
 
 	if queryErr != nil {
@@ -396,8 +411,9 @@ func GetChatQueue(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(gin.H{
-		"data":  results,
-		"count": len(results),
+		"data":       results,
+		"count":      len(results),
+		"totalCount": totalCount,
 	}, t))
 }
 

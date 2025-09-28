@@ -75,9 +75,10 @@ func DoSync(step int64) error {
 			return errors.New("localLastHeight <= 0")
 		}
 		for h := localLastHeight + 1; h <= localLastHeight+step; h++ {
-			err := DownloadFile(chain, int(h))
+			partCount, err := DownloadFile(chain, int(h))
 			if err != nil {
 				if err.Error() == "noFile" {
+					log.Printf("[BLOCKFILE]链 %s 成功同步高度 %d, 空分片数量 %d", chain, h, partCount)
 					// log.Printf("[BLOCKFILE]链 %s 同步完成, 正在同步高度:%d 没有文件，当前local高度 %d", chain, h, localLastHeight)
 					continue
 				} else if err.Error() == "height is greater than MaxHeight" {
@@ -88,7 +89,7 @@ func DoSync(step int64) error {
 					break
 				}
 			} else {
-				log.Printf("[BLOCKFILE]链 %s 成功同步高度 %d", chain, h)
+				log.Printf("[BLOCKFILE]链 %s 成功同步高度 %d, 分片数量 %d", chain, h, partCount)
 			}
 		}
 	}
@@ -108,13 +109,15 @@ func GetBlockFilePath(chainName string, height int64, partIndex int) string {
 		lastName,
 	)
 }
-func DownloadFile(chainName string, height int) error {
+func DownloadFile(chainName string, height int) (int64, error) {
 	partUrl := fmt.Sprintf("%s/api/block/file/partCount?chain=%s&height=%d", syncHost, chainName, height)
 	resp, err := http.Get(partUrl)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
+
+	partCount := int64(0)
 
 	type partResp struct {
 		Code    int    `json:"code"`
@@ -129,48 +132,49 @@ func DownloadFile(chainName string, height int) error {
 	}
 	var pr partResp
 	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
-		return err
+		return -1, err
 	}
 	if pr.Code != 1 {
-		return fmt.Errorf("partCount api error: %s", pr.Message)
+		return -1, fmt.Errorf("partCount api error: %s", pr.Message)
 	}
+	partCount = int64(pr.Data.PartCount)
 	if pr.Data.PartCount == 0 {
 		if chainName == "btc" {
 			if int64(height) > pr.Data.BtcMax {
-				return errors.New("height is greater than MaxHeight")
+				return -1, errors.New("height is greater than MaxHeight")
 			}
 		} else if chainName == "mvc" {
 			if int64(height) > pr.Data.MvcMax {
-				return errors.New("height is greater than MaxHeight")
+				return -1, errors.New("height is greater than MaxHeight")
 			}
 		}
 		PebbleSetData("meta", chainName+"_lastheight", []byte(strconv.FormatInt(int64(height), 10)))
 
 		//log.Printf("链 %s 高度 %d 没有分片", chainName, height)
 		// return errors.New("partCount is 0")
-		return errors.New("noFile")
+		return partCount, errors.New("noFile")
 	}
 	for i := 0; i < pr.Data.PartCount; i++ {
 		fileUrl := fmt.Sprintf("%s/api/block/file?chain=%s&height=%d&part=%d", syncHost, chainName, height, i)
 		fileResp, err := http.Get(fileUrl)
 		if err != nil {
-			return err
+			return partCount, err
 		}
 		defer fileResp.Body.Close()
 		filePath := GetBlockFilePath(chainName, int64(height), i)
 		dirPath := filepath.Dir(filePath)
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
-			return fmt.Errorf("创建目录 %s 失败: %w", dirPath, err)
+			return partCount, fmt.Errorf("创建目录 %s 失败: %w", dirPath, err)
 		}
 
 		out, err := os.Create(filePath)
 		if err != nil {
-			return err
+			return partCount, err
 		}
 		defer out.Close()
 		_, err = io.Copy(out, fileResp.Body)
 		if err != nil {
-			return err
+			return partCount, err
 		}
 		if i == 0 {
 			blocks, err := LoadFBlockPart(chainName, int64(height), 0)
@@ -183,7 +187,7 @@ func DownloadFile(chainName string, height int) error {
 			}
 		}
 	}
-	return nil
+	return partCount, nil
 }
 
 // LoadFBlock 从文件加载、解压并反序列化一个区块

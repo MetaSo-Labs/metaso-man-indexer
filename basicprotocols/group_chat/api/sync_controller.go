@@ -51,6 +51,12 @@ func SyncPinsByTimeRange(c *gin.Context) {
 	host = common.Config.SyncHost
 	protocol = protocols.ProtocolList
 
+	//not yet
+	c.JSON(http.StatusOK, respond.RespSuccess(gin.H{
+		"message": "Not yet implemented",
+	}, t))
+	return
+
 	// Start sync
 	err := service.GetSyncService().SyncPinsByTimeRangeWithBatch(req.StartTs, req.EndTs, host, protocol, req.BatchDurationSeconds)
 	if err != nil {

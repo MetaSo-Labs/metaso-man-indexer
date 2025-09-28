@@ -135,6 +135,8 @@ type groupChatConfig struct {
 	LogFileOutput    bool   `toml:"logFileOutput"`
 	// IsActiveResync is used to determine if the resync is active
 	IsActiveResync bool `toml:"isActiveResync"`
+	// IsMempoolDataWaitingResync is used to determine if the mempool data is waiting for resync
+	IsMempoolDataWaitingResync bool `toml:"isMempoolDataWaitingResync"`
 }
 type socketConfig struct {
 	IsEnble          bool   `toml:"isEnble"`
@@ -228,6 +230,8 @@ func InitConfig(filePath string) {
 			Config.GroupChat.Host = *v
 		case "is_active_resync":
 			Config.GroupChat.IsActiveResync = *v == "true"
+		case "is_mempool_data_waiting_resync":
+			Config.GroupChat.IsMempoolDataWaitingResync = *v == "true"
 		// case "socket_port":
 		// 	Config.Socket.Port = *v
 		// case "socket_max_connections":

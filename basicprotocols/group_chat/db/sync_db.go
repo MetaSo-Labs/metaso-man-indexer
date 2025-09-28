@@ -31,25 +31,30 @@ func NewSyncDB(pb *Pebble) *SyncDB {
 
 // SyncInfo Sync info for time-based synchronization across chains
 type SyncInfo struct {
-	Timestamp            int64     `json:"timestamp"`            // Sync timestamp (seconds)
-	LastSyncTime         int64     `json:"lastSyncTime"`         // Last synced timestamp (seconds)
-	TargetSyncTime       int64     `json:"targetSyncTime"`       // Target synced timestamp (seconds)
-	CurrentTime          int64     `json:"currentTime"`          // Current timestamp (seconds)
-	LastSyncTimeRange    int64     `json:"lastSyncTimeRange"`    // Last synced time range end (seconds)
-	FirstPinTime         int64     `json:"firstPinTime"`         // First pin timestamp (seconds)
-	LastProcessedPinTime int64     `json:"lastProcessedPinTime"` // Last processed pin timestamp for resume (seconds)
-	TotalPins            int       `json:"totalPins"`            // Total pins processed
-	ProcessedPins        int       `json:"processedPins"`        // Processed pins count
-	SuccessPins          int       `json:"successPins"`          // Successfully processed pins
-	FailedPins           int       `json:"failedPins"`           // Failed pins count
-	IsAutoSync           bool      `json:"isAutoSync"`           // Whether auto sync is enabled
-	ErrorMessage         string    `json:"errorMessage"`         // Error message if any
-	LastSyncStartTime    time.Time `json:"lastSyncStartTime"`    // Last sync start time
-	LastSyncEndTime      time.Time `json:"lastSyncEndTime"`      // Last sync end time
-	SyncInterval         int64     `json:"syncInterval"`         // Sync check interval in seconds
-	BatchSize            int       `json:"batchSize"`            // Batch size for processing
-	RetryCount           int       `json:"retryCount"`           // Retry count for failed syncs
-	TimeRangeSize        int64     `json:"timeRangeSize"`        // Time range size in seconds for each sync batch
+	Timestamp              int64     `json:"timestamp"`              // Sync timestamp (seconds)
+	LastSyncTime           int64     `json:"lastSyncTime"`           // Last synced timestamp (seconds)
+	TargetSyncTime         int64     `json:"targetSyncTime"`         // Target synced timestamp (seconds)
+	CurrentTime            int64     `json:"currentTime"`            // Current timestamp (seconds)
+	LastSyncTimeRange      int64     `json:"lastSyncTimeRange"`      // Last synced time range end (seconds)
+	FirstPinTime           int64     `json:"firstPinTime"`           // First pin timestamp (seconds)
+	LastProcessedPinTime   int64     `json:"lastProcessedPinTime"`   // Last processed pin timestamp for resume (seconds)
+	TotalPins              int       `json:"totalPins"`              // Total pins processed
+	ProcessedPins          int       `json:"processedPins"`          // Processed pins count
+	SuccessPins            int       `json:"successPins"`            // Successfully processed pins
+	FailedPins             int       `json:"failedPins"`             // Failed pins count
+	IsAutoSync             bool      `json:"isAutoSync"`             // Whether auto sync is enabled
+	ErrorMessage           string    `json:"errorMessage"`           // Error message if any
+	LastSyncStartTime      time.Time `json:"lastSyncStartTime"`      // Last sync start time
+	LastSyncEndTime        time.Time `json:"lastSyncEndTime"`        // Last sync end time
+	SyncInterval           int64     `json:"syncInterval"`           // Sync check interval in seconds
+	BatchSize              int       `json:"batchSize"`              // Batch size for processing
+	RetryCount             int       `json:"retryCount"`             // Retry count for failed syncs
+	TimeRangeSize          int64     `json:"timeRangeSize"`          // Time range size in seconds for each sync batch
+	FristTimeSyncStartTime int64     `json:"fristTimeSyncStartTime"` // First time sync start time
+	FristTimeSyncEndTime   int64     `json:"fristTimeSyncEndTime"`   // First time sync end time
+
+	LastIsCompleted     bool  `json:"lastIsCompleted"`     // Last is completed
+	LastIsCompletedTime int64 `json:"lastIsCompletedTime"` // Last is completed time
 
 	// Block height tracking for each chain
 	LastProcessedBlockHeight map[string]int64 `json:"lastProcessedBlockHeight"` // Last processed block height for each chain
@@ -80,6 +85,11 @@ type SyncDBService struct {
 	// Global sync completion status
 	isSyncCompleted bool // Global flag indicating if sync is completed
 
+	isGroupChatIndexingCompleted   bool // Global flag indicating if group chat indexing is completed
+	groupChatIndexingRemaining     int  // Global flag indicating if group chat indexing is completed
+	isPrivateChatIndexingCompleted bool // Global flag indicating if private chat indexing is completed
+	privateChatIndexingRemaining   int  // Global flag indicating if private chat indexing is completed
+
 	// In-memory sync status (not persisted to database)
 	isSyncing bool // Whether currently syncing (memory only)
 }
@@ -89,17 +99,22 @@ func NewSyncDBService(pb *Pebble, adapter map[string]adapter.Chain) *SyncDBServi
 	log.Printf("[SYNC]Hosts: %v", common.Config.SyncHost)
 	log.Printf("[SYNC]Protocols: %v", protocols.ProtocolList)
 
-	return &SyncDBService{
+	service := &SyncDBService{
 		syncDB:        NewSyncDB(pb),
 		isRunning:     false,
 		cancelChan:    make(chan struct{}),
 		chainAdapter:  adapter,
 		syncInterval:  30,   // Default 30 seconds
-		batchSize:     100,  // Default batch size
+		batchSize:     1000, // Default batch size
 		timeRangeSize: 3600, // Default 1 hour time range
 		hosts:         common.Config.SyncHost,
 		protocols:     protocols.ProtocolList,
 	}
+
+	// Check last sync completion status on initialization
+	service.checkLastSyncCompletionOnInit()
+
+	return service
 }
 
 // SetProcessPinFunc Set callback function for processing pins
@@ -107,9 +122,113 @@ func (s *SyncDBService) SetProcessPinFunc(fn func(pin *pin.PinInscription, tx in
 	s.processPinFunc = fn
 }
 
+// checkLastSyncCompletionOnInit Check last sync completion status on initialization
+func (s *SyncDBService) checkLastSyncCompletionOnInit() {
+	// Get current sync info
+	syncInfo, err := s.syncDB.GetSyncInfo()
+	if err != nil {
+		log.Printf("[SYNC]Failed to get sync info during initialization: %v", err)
+		return
+	}
+
+	if syncInfo == nil {
+		log.Printf("[SYNC]No sync info found during initialization")
+		return
+	}
+
+	if common.Config.GroupChat.IsMempoolDataWaitingResync {
+		// Check if last sync was completed and within 10 minutes
+		if syncInfo.LastIsCompleted && syncInfo.LastIsCompletedTime > 0 {
+			currentTime := time.Now().Unix()
+			timeDiff := currentTime - syncInfo.LastIsCompletedTime
+
+			// 10 minutes = 600 seconds
+			if timeDiff <= 600 {
+				s.isSyncCompleted = true
+				log.Printf("[SYNC]Last sync was completed within 10 minutes (time diff: %d seconds), setting isSyncCompleted=true", timeDiff)
+			} else {
+				log.Printf("[SYNC]Last sync completion was %d seconds ago (more than 10 minutes), keeping isSyncCompleted=false", timeDiff)
+			}
+		} else {
+			log.Printf("[SYNC]Last sync was not completed or no completion time recorded, keeping isSyncCompleted=false")
+		}
+	} else {
+		s.isSyncCompleted = true
+	}
+
+	// Check queue indexing status
+	// s.updateQueueIndexingStatus()
+}
+
 // SetSyncInterval Set sync check interval
 func (s *SyncDBService) SetSyncInterval(intervalSeconds int64) {
 	s.syncInterval = intervalSeconds
+}
+
+// updateQueueIndexingStatus Update queue indexing completion status (safe concurrent access)
+func (s *SyncDBService) updateQueueIndexingStatus() {
+	// Check group chat queue status with timeout protection
+	groupChatRemaining := s.getGroupChatQueuePendingCount()
+	if groupChatRemaining <= 0 {
+		s.isGroupChatIndexingCompleted = true
+		log.Printf("[SYNC]Group chat indexing completed or no data, remaining: %d", groupChatRemaining)
+	} else {
+		log.Printf("[SYNC]Group chat indexing in progress, approximately %d messages", groupChatRemaining)
+	}
+	s.groupChatIndexingRemaining = groupChatRemaining
+
+	// Check private chat queue status with timeout protection
+	privateChatRemaining := s.getPrivateChatQueuePendingCount()
+	if privateChatRemaining <= 0 {
+		s.isPrivateChatIndexingCompleted = true
+		log.Printf("[SYNC]Private chat indexing completed or no data, remaining: %d", privateChatRemaining)
+	} else {
+		log.Printf("[SYNC]Private chat indexing in progress, approximately %d messages", privateChatRemaining)
+	}
+	s.privateChatIndexingRemaining = privateChatRemaining
+}
+
+// getGroupChatQueuePendingCount Get approximate pending count from group chat queue (safe concurrent read)
+func (s *SyncDBService) getGroupChatQueuePendingCount() int {
+	// Check if collection exists
+	if _, exists := Pb[TalkGroupChatQueueCollection]; !exists {
+		log.Printf("[SYNC]Group chat queue collection does not exist")
+		return -1
+	}
+
+	// Use a simple estimation approach that's safe for concurrent access
+	// Since we can't easily get metrics, use a limited iteration approach
+	return s.getSimpleQueueCount(TalkGroupChatQueueCollection, 10) // Limit to 500 for safety
+}
+
+// getPrivateChatQueuePendingCount Get approximate pending count from private chat queue (safe concurrent read)
+func (s *SyncDBService) getPrivateChatQueuePendingCount() int {
+	// Check if collection exists
+	if _, exists := Pb[TalkPrivateChatQueueCollection]; !exists {
+		log.Printf("[SYNC]Private chat queue collection does not exist")
+		return -1
+	}
+
+	// Use a simple estimation approach that's safe for concurrent access
+	// Since we can't easily get metrics, use a limited iteration approach
+	return s.getSimpleQueueCount(TalkPrivateChatQueueCollection, 10) // Limit to 500 for safety
+}
+
+// getSimpleQueueCount Get simple queue count with iteration limit for safety
+func (s *SyncDBService) getSimpleQueueCount(collection string, maxCount int) int {
+	iter, err := Pb[collection].NewIter(nil)
+	if err != nil {
+		log.Printf("[SYNC]Failed to create iterator for %s: %v", collection, err)
+		return -1
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid() && count < maxCount; iter.Next() {
+		count++
+	}
+
+	return count
 }
 
 // SetBatchSize Set batch size for processing
@@ -279,6 +398,8 @@ func (s *SyncDBService) autoSyncLoop() {
 
 // checkAndSyncByTime Check and sync by time range across all chains
 func (s *SyncDBService) checkAndSyncByTime() {
+	log.Printf("[SYNC]checkAndSyncByTime started")
+
 	// Get current sync info
 	syncInfo, err := s.syncDB.GetSyncInfo()
 	if err != nil {
@@ -298,6 +419,10 @@ func (s *SyncDBService) checkAndSyncByTime() {
 			BatchSize:                s.batchSize,
 			TimeRangeSize:            s.timeRangeSize,
 			RetryCount:               0,
+			FristTimeSyncStartTime:   0,
+			FristTimeSyncEndTime:     0,
+			LastIsCompleted:          false,
+			LastIsCompletedTime:      0,
 			LastProcessedBlockHeight: make(map[string]int64),
 			CurrentBlockHeight:       make(map[string]int64),
 			MaxProcessedBlockHeight:  make(map[string]int64),
@@ -336,19 +461,24 @@ func (s *SyncDBService) checkAndSyncByTime() {
 	}
 
 	// Check if all chains are up to date before proceeding with sync
+	log.Printf("[SYNC]Checking if all chains are up to date...")
 	if !s.checkAllChainsUpToDate() {
 		log.Printf("[SYNC]Some chains are not up to date, skipping sync")
 		s.syncDB.SaveSyncInfo(syncInfo)
 		return
 	}
+	log.Printf("[SYNC]All chains are up to date, proceeding with sync check")
 
+	log.Printf("[SYNC]Time check: currentTime=%d, startTime=%d", currentTime, startTime)
 	if currentTime <= startTime {
 		// No new time range, update last sync time
+		log.Printf("[SYNC]No new time range, skipping sync (currentTime <= startTime)")
 		s.syncDB.SaveSyncInfo(syncInfo)
 		return
 	}
 
 	// Check if already syncing (use in-memory status)
+	log.Printf("[SYNC]Checking sync status: isSyncing=%v", s.isSyncing)
 	if s.isSyncing {
 		log.Printf("[SYNC]Sync is already in progress, skipping")
 		return
@@ -364,6 +494,13 @@ func (s *SyncDBService) syncByTimeRange(syncInfo *SyncInfo, startTime, targetTim
 	// Mark as syncing (in-memory only)
 	s.isSyncing = true
 	syncInfo.LastSyncStartTime = time.Now()
+
+	// Record first time sync start time if not already set
+	if syncInfo.FristTimeSyncStartTime == 0 {
+		syncInfo.FristTimeSyncStartTime = time.Now().Unix()
+		log.Printf("[SYNC]Recording first time sync start time: %d", syncInfo.FristTimeSyncStartTime)
+	}
+
 	syncInfo.ErrorMessage = ""
 	s.syncDB.SaveSyncInfo(syncInfo)
 
@@ -381,6 +518,13 @@ func (s *SyncDBService) syncByTimeRange(syncInfo *SyncInfo, startTime, targetTim
 		case <-s.cancelChan:
 			log.Printf("[SYNC]Sync cancelled at time %d", currentStartTime)
 			s.isSyncing = false // Use in-memory status
+
+			// Record first time sync end time if start time was recorded and end time not set yet
+			// if syncInfo.FristTimeSyncStartTime > 0 && syncInfo.FristTimeSyncEndTime == 0 {
+			// 	syncInfo.FristTimeSyncEndTime = time.Now().Unix()
+			// 	log.Printf("[SYNC]Recording first time sync end time (cancelled): %d", syncInfo.FristTimeSyncEndTime)
+			// }
+
 			s.syncDB.SaveSyncInfo(syncInfo)
 			return
 		default:
@@ -457,13 +601,30 @@ func (s *SyncDBService) syncByTimeRange(syncInfo *SyncInfo, startTime, targetTim
 	// Check if sync is completed
 	isCompleted := s.checkSyncCompletion(syncInfo)
 	if isCompleted {
+		// Record first time sync end time if start time was recorded and end time not set yet
+		if syncInfo.FristTimeSyncStartTime > 0 && syncInfo.FristTimeSyncEndTime == 0 {
+			syncInfo.FristTimeSyncEndTime = time.Now().Unix()
+			log.Printf("[SYNC]Recording first time sync end time: %d", syncInfo.FristTimeSyncEndTime)
+		}
+
+		// Record last completion status and time
+		syncInfo.LastIsCompleted = true
+		syncInfo.LastIsCompletedTime = time.Now().Unix()
+		log.Printf("[SYNC]Recording sync completion: LastIsCompleted=true, LastIsCompletedTime=%d", syncInfo.LastIsCompletedTime)
+
 		// once sync is completed, set sync completed status
 		s.SetSyncCompleted(isCompleted)
+	} else {
+		// Record last completion status as false
+		syncInfo.LastIsCompleted = false
+		// syncInfo.LastIsCompletedTime = time.Now().Unix()
+		log.Printf("[SYNC]Recording sync completion: LastIsCompleted=false, LastIsCompletedTime=%d", syncInfo.LastIsCompletedTime)
 	}
 
 	// Mark sync as completed (in-memory only)
 	s.isSyncing = false
 	syncInfo.LastSyncEndTime = time.Now()
+
 	syncInfo.RetryCount = 0
 	s.syncDB.SaveSyncInfo(syncInfo)
 
@@ -674,6 +835,8 @@ func (s *SyncDBService) GetSyncStats() (map[string]interface{}, error) {
 	stats["batchSize"] = s.batchSize
 	stats["timeRangeSize"] = s.timeRangeSize
 
+	s.updateQueueIndexingStatus()
+
 	if syncInfo != nil {
 		stats["totalPins"] = syncInfo.TotalPins
 		stats["totalProcessed"] = syncInfo.ProcessedPins
@@ -686,6 +849,42 @@ func (s *SyncDBService) GetSyncStats() (map[string]interface{}, error) {
 		stats["lastProcessedBlockHeight"] = syncInfo.LastProcessedBlockHeight
 		stats["currentBlockHeight"] = syncInfo.CurrentBlockHeight
 		stats["maxProcessedBlockHeight"] = syncInfo.MaxProcessedBlockHeight
+		stats["firstPinTimeStr"] = time.Unix(syncInfo.FirstPinTime, 0).Format("2006-01-02 15:04:05")
+		stats["lastProcessedPinTimeStr"] = time.Unix(syncInfo.LastProcessedPinTime, 0).Format("2006-01-02 15:04:05")
+		stats["lastSyncStartTime"] = syncInfo.LastSyncStartTime.Format("2006-01-02 15:04:05")
+		stats["lastSyncEndTime"] = syncInfo.LastSyncEndTime.Format("2006-01-02 15:04:05")
+
+		// Calculate total sync duration
+		var totalSyncDuration int64
+		if !syncInfo.LastSyncStartTime.IsZero() && !syncInfo.LastSyncEndTime.IsZero() {
+			totalSyncDuration = syncInfo.LastSyncEndTime.Sub(syncInfo.LastSyncStartTime).Milliseconds()
+		}
+		stats["totalSyncDurationMs"] = totalSyncDuration
+		stats["totalSyncDurationStr"] = formatDuration(totalSyncDuration)
+
+		// Calculate first time sync duration
+		var firstTimeSyncDuration int64
+		if syncInfo.FristTimeSyncStartTime > 0 && syncInfo.FristTimeSyncEndTime > 0 {
+			firstTimeSyncDuration = (syncInfo.FristTimeSyncEndTime - syncInfo.FristTimeSyncStartTime) * 1000 // Convert seconds to milliseconds
+		}
+		stats["firstTimeSyncStartTime"] = syncInfo.FristTimeSyncStartTime
+		stats["firstTimeSyncEndTime"] = syncInfo.FristTimeSyncEndTime
+		stats["firstTimeSyncStartTimeStr"] = time.Unix(syncInfo.FristTimeSyncStartTime, 0).Format("2006-01-02 15:04:05")
+		stats["firstTimeSyncEndTimeStr"] = time.Unix(syncInfo.FristTimeSyncEndTime, 0).Format("2006-01-02 15:04:05")
+		stats["firstTimeSyncDurationMs"] = firstTimeSyncDuration
+		stats["firstTimeSyncDurationStr"] = formatDuration(firstTimeSyncDuration)
+
+		// Add last completion status and time
+		stats["lastIsCompleted"] = syncInfo.LastIsCompleted
+		stats["lastIsCompletedTime"] = syncInfo.LastIsCompletedTime
+		stats["lastIsCompletedTimeStr"] = time.Unix(syncInfo.LastIsCompletedTime, 0).Format("2006-01-02 15:04:05")
+
+		// Add queue indexing status
+		// s.updateQueueIndexingStatus() // Update status before returning
+		stats["isGroupChatIndexingCompleted"] = s.isGroupChatIndexingCompleted
+		stats["groupChatIndexingRemaining"] = s.groupChatIndexingRemaining
+		stats["isPrivateChatIndexingCompleted"] = s.isPrivateChatIndexingCompleted
+		stats["privateChatIndexingRemaining"] = s.privateChatIndexingRemaining
 
 		if syncInfo.TotalPins > 0 {
 			stats["overallProgress"] = float64(syncInfo.ProcessedPins) / float64(syncInfo.TotalPins) * 100
@@ -705,6 +904,26 @@ func (s *SyncDBService) GetSyncStats() (map[string]interface{}, error) {
 		stats["lastProcessedBlockHeight"] = make(map[string]int64)
 		stats["currentBlockHeight"] = make(map[string]int64)
 		stats["maxProcessedBlockHeight"] = make(map[string]int64)
+		stats["lastSyncStartTime"] = ""
+		stats["lastSyncEndTime"] = ""
+		stats["totalSyncDurationMs"] = int64(0)
+		stats["totalSyncDurationStr"] = "0ms"
+		stats["firstTimeSyncStartTime"] = int64(0)
+		stats["firstTimeSyncEndTime"] = int64(0)
+		stats["firstTimeSyncStartTimeStr"] = ""
+		stats["firstTimeSyncEndTimeStr"] = ""
+		stats["firstTimeSyncDurationMs"] = int64(0)
+		stats["firstTimeSyncDurationStr"] = "0ms"
+		stats["lastIsCompleted"] = false
+		stats["lastIsCompletedTime"] = int64(0)
+		stats["lastIsCompletedTimeStr"] = ""
+
+		// Add default queue indexing status
+		// s.updateQueueIndexingStatus() // Update status before returning
+		stats["isGroupChatIndexingCompleted"] = s.isGroupChatIndexingCompleted
+		stats["groupChatIndexingRemaining"] = s.groupChatIndexingRemaining
+		stats["isPrivateChatIndexingCompleted"] = s.isPrivateChatIndexingCompleted
+		stats["privateChatIndexingRemaining"] = s.privateChatIndexingRemaining
 	}
 
 	stats["lastUpdateTime"] = time.Now().Unix()
@@ -879,6 +1098,28 @@ func (s *SyncDBService) getPebbleHeight(chainName string) (int64, error) {
 	}
 
 	return height, nil
+}
+
+// formatDuration Format duration in milliseconds to human readable string
+func formatDuration(durationMs int64) string {
+	if durationMs <= 0 {
+		return "0ms"
+	}
+
+	seconds := durationMs / 1000
+	minutes := seconds / 60
+	hours := minutes / 60
+	days := hours / 24
+
+	if days > 0 {
+		return fmt.Sprintf("%dd %dh %dm %ds", days, hours%24, minutes%60, seconds%60)
+	} else if hours > 0 {
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes%60, seconds%60)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%dm %ds", minutes, seconds%60)
+	} else {
+		return fmt.Sprintf("%ds %dms", seconds, durationMs%1000)
+	}
 }
 
 // GetPinsCountByTimeRange Get pins count by time range
