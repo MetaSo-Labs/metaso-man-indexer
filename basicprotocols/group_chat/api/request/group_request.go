@@ -58,6 +58,14 @@ type FetchPrivateChatListRequest struct {
 	Timestamp   int64  `form:"timestamp"`
 }
 
+// FetchPrivateChatListByIndexRequest Get private chat list by index range request
+type FetchPrivateChatListByIndexRequest struct {
+	MetaId      string `form:"metaId"`      // Current user MetaId
+	OtherMetaId string `form:"otherMetaId"` // Other user MetaId
+	StartIndex  int64  `form:"startIndex"`  // Start index for pagination
+	Size        int64  `form:"size"`        // Page size
+}
+
 // FetchLuckyBagInfoRequest Get lucky bag info request
 type FetchLuckyBagInfoRequest struct {
 	GroupId string `form:"groupId"` // Group ID

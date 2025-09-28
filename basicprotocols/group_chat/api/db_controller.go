@@ -1080,6 +1080,7 @@ func GetOpenLuckyBagList(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param metaId query string true "MetaId"
+// @Param groupId query string false "Group ID to filter by (optional)"
 // @Success 200 {object} map[string]interface{} "MetaId join list with detailed information"
 // @Failure 400 {object} map[string]interface{} "Parameter error"
 // @Failure 500 {object} map[string]interface{} "Server error"
@@ -1087,12 +1088,14 @@ func GetOpenLuckyBagList(ctx *gin.Context) {
 func GetMetaIdJoinList(ctx *gin.Context) {
 	var t = time.Now().UnixMilli()
 	metaId := ctx.Query("metaId")
+	groupId := ctx.Query("groupId") // Optional groupId parameter
+
 	if metaId == "" {
 		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId parameter cannot be empty"), t, 1))
 		return
 	}
 
-	result, err := service.QueryMetaIdJoinList(metaId)
+	result, err := service.QueryMetaIdJoinList(metaId, groupId)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
@@ -2358,4 +2361,235 @@ func GetChatStatistics(ctx *gin.Context) {
 		"success": true,
 		"data":    result,
 	})
+}
+
+// GetDbSyncStats Get sync statistics from database service
+// @Summary Get sync statistics from database service
+// @Description Get synchronization statistics including sync status, block heights, and progress
+// @Tags Database
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Success response with sync statistics"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/sync-stats [get]
+func GetDbSyncStats(ctx *gin.Context) {
+	result, err := service.GetSyncStats()
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get sync statistics: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetPinSyncStatus Get pin sync status by pinId
+// @Summary Get pin sync status by pinId
+// @Description Get synchronization status for a specific pin ID
+// @Tags Database
+// @Produce json
+// @Param pinId query string true "Pin ID to check sync status"
+// @Success 200 {object} map[string]interface{} "Success response with pin sync status"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/pin-sync/status [get]
+func GetPinSyncStatus(ctx *gin.Context) {
+	pinId := ctx.Query("pinId")
+	if pinId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "pinId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.GetPinSyncStatus(pinId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get pin sync status: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetAllSyncedPins Get all synced pins with pagination
+// @Summary Get all synced pins with pagination
+// @Description Get paginated list of all synced pins
+// @Tags Database
+// @Produce json
+// @Param cursor query int false "Cursor for pagination (default: 0)"
+// @Param size query int false "Number of items to return (default: 20, max: 100)"
+// @Success 200 {object} map[string]interface{} "Success response with synced pins list"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/pin-sync/synced-pins [get]
+func GetAllSyncedPins(ctx *gin.Context) {
+	cursor := 0
+	size := 20
+
+	if cursorStr := ctx.Query("cursor"); cursorStr != "" {
+		if c, err := strconv.Atoi(cursorStr); err == nil && c >= 0 {
+			cursor = c
+		}
+	}
+
+	if sizeStr := ctx.Query("size"); sizeStr != "" {
+		if s, err := strconv.Atoi(sizeStr); err == nil && s > 0 && s <= 100 {
+			size = s
+		}
+	}
+
+	result, err := service.GetAllSyncedPins(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get synced pins: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// @Summary Get pins count by time range
+// @Description Get pins count within a specified time range
+// @Tags Database Operations
+// @Accept json
+// @Produce json
+// @Param startTime query int64 true "Start timestamp (seconds)"
+// @Param endTime query int64 true "End timestamp (seconds)"
+// @Success 200 {object} map[string]interface{} "Success response with pins count"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/pin-sync/pins-count-by-time-range [get]
+func GetPinsCountByTimeRange(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	startTimeStr := ctx.Query("startTime")
+	endTimeStr := ctx.Query("endTime")
+
+	if startTimeStr == "" || endTimeStr == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("startTime and endTime parameters are required"), t, 1))
+		return
+	}
+
+	startTime, err := strconv.ParseInt(startTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("startTime parameter must be a valid timestamp"), t, 1))
+		return
+	}
+
+	endTime, err := strconv.ParseInt(endTimeStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("endTime parameter must be a valid timestamp"), t, 1))
+		return
+	}
+
+	result, err := service.GetPinsCountByTimeRange(startTime, endTime)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Check pin existence by chain and block height
+// @Description Check if a pin exists by chain name, block height and pinId
+// @Tags Database Operations
+// @Accept json
+// @Produce json
+// @Param chainName query string true "Chain name (e.g., btc, mvc)"
+// @Param blockHeight query int64 true "Block height"
+// @Param pinId query string true "Pin ID"
+// @Success 200 {object} map[string]interface{} "Success response with pin existence status"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/pin-sync/check-pin-exists [get]
+func CheckPinExistsByChainAndHeight(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	chainName := ctx.Query("chainName")
+	blockHeightStr := ctx.Query("blockHeight")
+	pinId := ctx.Query("pinId")
+
+	if chainName == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("chainName parameter is required"), t, 1))
+		return
+	}
+
+	if blockHeightStr == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("blockHeight parameter is required"), t, 1))
+		return
+	}
+
+	if pinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("pinId parameter is required"), t, 1))
+		return
+	}
+
+	blockHeight, err := strconv.ParseInt(blockHeightStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("blockHeight parameter must be a valid integer"), t, 1))
+		return
+	}
+
+	result, err := service.CheckPinExistsByChainAndHeight(chainName, blockHeight, pinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// @Summary Get pin IDs by chain and block height
+// @Description Get all pin IDs for a specific chain and block height
+// @Tags Database Operations
+// @Accept json
+// @Produce json
+// @Param chainName query string true "Chain name (e.g., btc, mvc)"
+// @Param blockHeight query int64 true "Block height"
+// @Success 200 {object} map[string]interface{} "Success response with pin IDs list"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/pin-sync/get-pin-ids-by-height [get]
+func GetPinIdsByChainAndHeight(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	chainName := ctx.Query("chainName")
+	blockHeightStr := ctx.Query("blockHeight")
+
+	if chainName == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("chainName parameter is required"), t, 1))
+		return
+	}
+
+	if blockHeightStr == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("blockHeight parameter is required"), t, 1))
+		return
+	}
+
+	blockHeight, err := strconv.ParseInt(blockHeightStr, 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("blockHeight parameter must be a valid integer"), t, 1))
+		return
+	}
+
+	result, err := service.GetPinIdsByChainAndHeight(chainName, blockHeight)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }

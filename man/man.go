@@ -192,7 +192,7 @@ func doZmqRun(chain string, indexer adapter.Indexer) {
 			}
 
 			//group chat
-			group_chat.ProcessGroupChatPin(pinNode, x.Tx)
+			group_chat.ProcessGroupChatPin(pinNode, x.Tx, false)
 
 		}
 		list := []interface{}{x.Tx}

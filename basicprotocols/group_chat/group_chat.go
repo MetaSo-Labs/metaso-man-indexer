@@ -1,12 +1,14 @@
 package group_chat
 
 import (
+	"errors"
 	"log"
 	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api"
 	"manindexer/basicprotocols/group_chat/indexer"
 	"manindexer/basicprotocols/group_chat/service"
 	"manindexer/basicprotocols/group_chat/service/socket_service"
+	"manindexer/common"
 	"manindexer/pin"
 	"sync"
 
@@ -32,7 +34,7 @@ func Init(indexerChainAdapter map[string]adapter.Chain) error {
 
 	// 1. Create and initialize indexer
 	var err error
-	groupChatIndexer, err = indexer.NewGroupChatIndexer()
+	groupChatIndexer, err = indexer.NewGroupChatIndexer(indexerChainAdapter)
 	if err != nil {
 		log.Printf("Failed to create group chat indexer: %v", err)
 		return err
@@ -92,7 +94,7 @@ func RegisterRoutes(router *gin.Engine) error {
 }
 
 // ProcessPin process single Pin (external interface)
-func ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
+func ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}, isResync bool) error {
 	if !initialized {
 		err := Init(nil)
 		if err != nil {
@@ -100,7 +102,19 @@ func ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
 		}
 	}
 
-	err := groupChatIndexer.ProcessPin(pin, tx)
+	if common.Config.GroupChat.IsActiveResync {
+		if groupChatIndexer.GetSyncDBService() == nil {
+			log.Println("sync database service is not initialized")
+			return errors.New("sync database service is not initialized")
+		}
+
+		if !groupChatIndexer.GetSyncDBService().IsSyncCompleted() && !isResync {
+			log.Println("sync is not completed, skip process zmq group chat pin")
+			return nil
+		}
+	}
+
+	err := groupChatIndexer.ProcessPin(pin, tx, isResync)
 	if err != nil {
 		log.Printf("Failed to process group chat pin: %v", err)
 	}

@@ -2,8 +2,10 @@ package indexer
 
 import (
 	"log"
+	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/protocols"
+	"manindexer/common"
 	"manindexer/pin"
 	"strings"
 )
@@ -18,10 +20,12 @@ type GroupChatIndexer struct {
 	globalBlockDB *db.GlobalBlockDB
 	socketInfoDB  *db.SocketInfoDB
 	pb            *db.Pebble
+
+	syncDBService *db.SyncDBService
 }
 
 // NewGroupChatIndexer Create new group chat indexer
-func NewGroupChatIndexer() (*GroupChatIndexer, error) {
+func NewGroupChatIndexer(adapter map[string]adapter.Chain) (*GroupChatIndexer, error) {
 	pb := &db.Pebble{}
 
 	// Initialize database
@@ -35,7 +39,9 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 	gdb := db.NewGroupDB(pb, ch)
 	ch.SetGdb(gdb)
 
-	return &GroupChatIndexer{
+	syncDBService := db.NewSyncDBService(pb, adapter)
+
+	gci := &GroupChatIndexer{
 		communityDB:   db.NewCommunityDB(pb),
 		groupDB:       gdb,
 		chatDB:        ch,
@@ -43,13 +49,32 @@ func NewGroupChatIndexer() (*GroupChatIndexer, error) {
 		userDB:        db.NewUserInfoDB(pb),
 		globalBlockDB: db.NewGlobalBlockDB(pb),
 		socketInfoDB:  db.NewSocketInfoDB(pb),
+		syncDBService: syncDBService,
 		pb:            pb,
-	}, nil
+	}
+
+	// Set process pin function for sync service
+	syncDBService.SetProcessPinFunc(gci.ProcessPin)
+
+	return gci, nil
+}
+
+// GetSyncDBService Get sync database service instance
+func (gci *GroupChatIndexer) GetSyncDBService() *db.SyncDBService {
+	return gci.syncDBService
 }
 
 // Start Start group chat indexer
 func (gci *GroupChatIndexer) Start() error {
 	log.Println("Starting Group Chat Indexer...")
+
+	if common.Config.GroupChat.IsActiveResync {
+		log.Println("Resync is active, start sync service")
+		// Start sync service
+		gci.syncDBService.StartAutoSync()
+	} else {
+		log.Println("Resync is not active, skip start sync service")
+	}
 
 	// Start chat queue processor
 	gci.chatDB.StartQueueProcessor(gci.groupDB)
@@ -65,6 +90,9 @@ func (gci *GroupChatIndexer) Start() error {
 func (gci *GroupChatIndexer) Stop() error {
 	log.Println("Stopping Group Chat Indexer...")
 
+	// Stop sync service
+	gci.syncDBService.StopAutoSync()
+
 	// Close all database connections
 	gci.pb.CloseAll()
 
@@ -73,7 +101,7 @@ func (gci *GroupChatIndexer) Stop() error {
 }
 
 // ProcessPin Process single Pin
-func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{}) error {
+func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{}, isResync bool) error {
 	if pin == nil {
 		return nil
 	}
@@ -115,7 +143,7 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		strings.ToLower(protocols.MonitorSimpleGroupWhitelist):
 		log.Printf("[%s]Group protocol: %s", pin.ChainName, pin.Path)
 		// Group related protocols
-		return gci.groupDB.ProcessGroupPin(pin)
+		return gci.groupDB.ProcessGroupPin(pin, isResync)
 	case strings.ToLower(protocols.MonitorSimpleGroupChat),
 		strings.ToLower(protocols.MonitorSimpleFileGroupChat),
 		strings.ToLower(protocols.MonitorSimpleGroupLuckyBag),
@@ -123,13 +151,13 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{})
 		strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag):
 		log.Printf("[%s]Chat protocol: %s", pin.ChainName, pin.Path)
 		// Chat related protocols
-		return gci.chatDB.ProcessGroupChatPin(pin, tx)
+		return gci.chatDB.ProcessGroupChatPin(pin, tx, isResync)
 	case strings.ToLower(protocols.MonitorSimpleMsg),
 		strings.ToLower(protocols.MonitorSimpleFileMsg),
 		strings.ToLower(protocols.MonitorSimplePrivateBlock):
 		log.Printf("[%s]Private chat protocol: %s", pin.ChainName, pin.Path)
 		// Private chat related protocols
-		return gci.privateDB.ProcessPrivateChatPin(pin)
+		return gci.privateDB.ProcessPrivateChatPin(pin, isResync)
 	default:
 		log.Printf("[%s]Unknown protocol: %s", pin.ChainName, protocol)
 		return nil
@@ -185,4 +213,9 @@ func (gci *GroupChatIndexer) GetUserInfoDB() *db.UserInfoDB {
 // GetSocketInfoDB Get socket info database instance
 func (gci *GroupChatIndexer) GetSocketInfoDB() *db.SocketInfoDB {
 	return gci.socketInfoDB
+}
+
+// GetGlobalBlockDB Get global block database instance
+func (gci *GroupChatIndexer) GetGlobalBlockDB() *db.GlobalBlockDB {
+	return gci.globalBlockDB
 }

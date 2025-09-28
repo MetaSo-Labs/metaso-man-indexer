@@ -55,7 +55,18 @@ func NewGroupDB(pb *Pebble, c *ChatDB) *GroupDB {
 }
 
 // Save group info
-func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel) error {
+func (gdb *GroupDB) SaveGroupInfo(group *models.TalkGroupModel, isResync bool) error {
+	if isResync {
+		dbGroup, err := gdb.GetGroupVersionInfoByGroupIdAndPinId(group.GroupId, group.PinId)
+		if err != nil {
+			return err
+		}
+		if dbGroup != nil && dbGroup.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
+	}
+
 	// First get existing group info
 	existingGroup, err := gdb.getGroupInfoByGroupId(group.GroupId)
 	if err != nil {
@@ -293,11 +304,26 @@ func (gdb *GroupDB) GetGroupsByCommunityId(communityId string) ([]*models.TalkGr
 }
 
 // Get group list
-func (gdb *GroupDB) GetGroupList(page, size int64) ([]*models.TalkGroupModel, error) {
+func (gdb *GroupDB) GetGroupList(page, size int64) ([]*models.TalkGroupModel, int64, error) {
 	var groups []*models.TalkGroupModel
+	var total int64 = 0
+
+	// First count total groups
 	iter, err := Pb[TalkGroupInfoCollection].NewIter(nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	// Count total groups
+	for iter.First(); iter.Valid(); iter.Next() {
+		total++
+	}
+
+	// Restart iteration for pagination
+	iter, err = Pb[TalkGroupInfoCollection].NewIter(nil)
+	if err != nil {
+		return nil, 0, err
 	}
 	defer iter.Close()
 
@@ -322,7 +348,7 @@ func (gdb *GroupDB) GetGroupList(page, size int64) ([]*models.TalkGroupModel, er
 		groups = append(groups, &group)
 	}
 
-	return groups, nil
+	return groups, total, nil
 }
 
 // Delete group
@@ -332,40 +358,40 @@ func (gdb *GroupDB) DeleteGroup(groupId string) error {
 }
 
 // Main method to process Group
-func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
+func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription, isResync bool) error {
 	switch pin.Operation {
 	case "create":
 		path := pin.Path
 		protocol := strings.Replace(path, "/protocols/", "", -1)
 		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupCreate) {
-			return gdb.processGroupCreate(pin)
+			return gdb.processGroupCreate(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupChannel) {
-			return gdb.processGroupChannelCreate(pin)
+			return gdb.processGroupChannelCreate(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupJoin) {
-			return gdb.processGroupJoin(pin)
+			return gdb.processGroupJoin(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupRemoveUser) {
-			return gdb.processGroupRemoveUser(pin)
+			return gdb.processGroupRemoveUser(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupAdmin) {
-			return gdb.processGroupAdmin(pin, "")
+			return gdb.processGroupAdmin(pin, "", isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupBlock) {
-			return gdb.processGroupBlock(pin, "")
+			return gdb.processGroupBlock(pin, "", isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
-			return gdb.processGroupWhitelist(pin, "")
+			return gdb.processGroupWhitelist(pin, "", isResync)
 		}
 	case "modify":
 		// Check ParentPath
 		parentPath := pin.Path
 		parentProtocol := strings.Replace(parentPath, "/protocols/", "", -1)
 		if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupCreate) {
-			return gdb.processGroupModify(pin)
+			return gdb.processGroupModify(pin, isResync)
 		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupChannel) {
-			return gdb.processGroupChannelModify(pin)
+			return gdb.processGroupChannelModify(pin, isResync)
 		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupAdmin) {
-			return gdb.processGroupAdminModify(pin)
+			return gdb.processGroupAdminModify(pin, isResync)
 		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupBlock) {
-			return gdb.processGroupBlockModify(pin)
+			return gdb.processGroupBlockModify(pin, isResync)
 		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
-			return gdb.processGroupWhitelistModify(pin)
+			return gdb.processGroupWhitelistModify(pin, isResync)
 		}
 		return nil
 	default:
@@ -375,10 +401,19 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription) error {
 }
 
 // Process group creation
-func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupCreate protocols.SimpleGroupCreate
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
 	if err != nil {
 		return err
 	}
@@ -403,6 +438,7 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		Chain:             pin.ChainName,
 		Timestamp:         pin.Timestamp,
 		BlockHeight:       pin.GenesisHeight,
+		SyncState:         -1,
 	}
 
 	// Save to version info table
@@ -411,8 +447,19 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 		return err
 	}
 
+	if isResync {
+		dbGroup, err := gdb.GetGroupVersionInfoByGroupIdAndPinId(group.GroupId, group.PinId)
+		if err != nil {
+			return err
+		}
+		if dbGroup != nil && dbGroup.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
+	}
+
 	// Save to basic info table
-	err = gdb.SaveGroupInfo(group)
+	err = gdb.SaveGroupInfo(group, false)
 	if err != nil {
 		return err
 	}
@@ -452,14 +499,37 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription) error {
 	// Trigger cache update
 	gdb.triggerCacheUpdate(group.GroupId)
 
+	// Update sync state
+	group.SyncState = 1
+	err = gdb.SaveGroupVersionInfo(group)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Process group modification
-func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription, isResync bool) error {
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupCreate protocols.SimpleGroupCreate
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupCreate)
 	if err != nil {
 		return err
 	}
@@ -498,6 +568,44 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	oldCommunityId := existingGroup.CommunityId
 	newCommunityId := simpleGroupCreate.CommunityId
 
+	modifyGroup := &models.TalkGroupModel{
+		GroupId:           simpleGroupCreate.GroupId,
+		CommunityId:       simpleGroupCreate.CommunityId,
+		TxId:              pin.Id[:len(pin.Id)-2],
+		PinId:             pin.Id,
+		RoomName:          simpleGroupCreate.GroupName,
+		RoomNote:          simpleGroupCreate.GroupNote,
+		RoomIcon:          simpleGroupCreate.GroupIcon,
+		RoomType:          getStringValue(simpleGroupCreate.GroupType),
+		RoomStatus:        getStringValue(simpleGroupCreate.Status),
+		RoomJoinType:      getStringValue(simpleGroupCreate.JoinType),
+		ChatSettingType:   getInt64Value(simpleGroupCreate.ChatSettingType),
+		DeleteStatus:      getInt64Value(simpleGroupCreate.DeleteStatus),
+		CreateUserMetaId:  pin.CreateMetaId,
+		CreateUserAddress: pin.CreateAddress,
+		Chain:             pin.ChainName,
+		Timestamp:         pin.Timestamp,
+		BlockHeight:       pin.GenesisHeight,
+		SyncState:         -1,
+	}
+
+	// Save to version info table
+	err = gdb.SaveGroupVersionInfo(modifyGroup)
+	if err != nil {
+		return err
+	}
+
+	if isResync {
+		dbGroup, err := gdb.GetGroupVersionInfoByGroupIdAndPinId(modifyGroup.GroupId, modifyGroup.PinId)
+		if err != nil {
+			return err
+		}
+		if dbGroup != nil && dbGroup.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
+	}
+
 	// Case 1: No communityId before, now has one
 	if oldCommunityId == "" && newCommunityId != "" {
 		existingGroup.CommunityId = newCommunityId
@@ -534,14 +642,8 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 		}
 	}
 
-	// Save to version info table
-	err = gdb.SaveGroupVersionInfo(existingGroup)
-	if err != nil {
-		return err
-	}
-
 	// Save to basic info table
-	err = gdb.SaveGroupInfo(existingGroup)
+	err = gdb.SaveGroupInfo(existingGroup, isResync)
 	if err != nil {
 		return err
 	}
@@ -549,14 +651,37 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription) error {
 	// Trigger cache update
 	gdb.triggerCacheUpdate(existingGroup.GroupId)
 
+	// Update sync state
+	modifyGroup.SyncState = 1
+	err = gdb.SaveGroupVersionInfo(modifyGroup)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Process group join
-func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) error {
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupJoin protocols.SimpleGroupJoin
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupJoin)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupJoin)
 	if err != nil {
 		return err
 	}
@@ -588,12 +713,24 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 		Chain:        pin.ChainName,
 		ConfirmState: 0,
 		Timestamp:    pin.Timestamp,
+		SyncState:    -1,
 	}
 
 	// Save group join info (save regardless of state)
 	err = gdb.SaveGroupJoin(join)
 	if err != nil {
 		return err
+	}
+
+	if isResync {
+		dbJoin, err := gdb.GetGroupJoinByGroupIdAndPinId(join.GroupId, join.PinId)
+		if err != nil {
+			return err
+		}
+		if dbJoin != nil && dbJoin.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
 	}
 
 	// Get existing member info
@@ -685,6 +822,19 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription) error {
 			}
 		}
 		// If state hasn't changed, no need to update
+	}
+
+	// Update sync state
+	join.SyncState = 1
+	err = gdb.SaveGroupJoin(join)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -1546,8 +1696,9 @@ func (gdb *GroupDB) GetGroupPersonList(groupId string) ([]*models.TalkGroupPerso
 }
 
 // Get group list joined by user based on MetaId
-func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*models.TalkGroupModel, error) {
+func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*models.TalkGroupModel, int64, error) {
 	var groups []*models.TalkGroupModel
+	var total int64 = 0
 
 	// Use prefix query to get all groups joined by this MetaId
 	// Key format is MetaId_GroupId in TalkGroupPersonCollection
@@ -1557,7 +1708,31 @@ func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*
 		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with metaId_
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	// First count total groups joined by this user
+	for iter.First(); iter.Valid(); iter.Next() {
+		var person models.TalkGroupPerson
+		err := json.Unmarshal(iter.Value(), &person)
+		if err != nil {
+			continue
+		}
+
+		// Only count groups where user is in the group
+		if person.GroupState == models.RoomStateIn {
+			total++
+		}
+	}
+
+	// Restart iteration for pagination
+	iter, err = Pb[TalkGroupPersonCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, 0, err
 	}
 	defer iter.Close()
 
@@ -1593,7 +1768,7 @@ func (gdb *GroupDB) GetGroupListByMetaId(metaId string, cursor, size int64) ([]*
 		}
 	}
 
-	return groups, nil
+	return groups, total, nil
 }
 
 // Group MetaId join record item
@@ -1684,9 +1859,11 @@ func (gdb *GroupDB) addGroupJoinToMetaIdList(
 	for i, item := range existingList.Items {
 		// Determine if already exists by JoinPinId (because each join has different PinId)
 		if item.JoinPinId == pinId {
-			// Update existing item
-			existingList.Items[i] = newItem
 			found = true
+			if item.JoinTimestamp >= newItem.JoinTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
 			break
 		}
 	}
@@ -1716,10 +1893,19 @@ func (gdb *GroupDB) sortGroupJoinListByTimestamp(joinList *GroupMetaIdJoinList) 
 }
 
 // Process group remove user
-func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupRemoveUser protocols.SimpleGroupRemoveUser
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupRemoveUser)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupRemoveUser)
 	if err != nil {
 		return err
 	}
@@ -1798,6 +1984,7 @@ func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription) error {
 		pin.CreateMetaId,
 		pin.CreateAddress,
 		pin,
+		isResync,
 	)
 	if err != nil {
 		return err
@@ -1814,7 +2001,15 @@ func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription) error {
 		IsRemoved: true,
 	}
 
-	go dealGroupRoleInfoChangeList(roleInfo)
+	if !isResync {
+		go dealGroupRoleInfoChangeList(roleInfo)
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1897,7 +2092,8 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 	removeReason string,
 	removeByMetaId string,
 	removeByAddress string,
-	pin *pin.PinInscription) error {
+	pin *pin.PinInscription,
+	isResync bool) error {
 
 	// make reference to chatDB
 	cdb := gdb.cdb
@@ -1941,14 +2137,14 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 	}
 
 	// Save timestamp index with state
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(systemChat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(systemChat, isResync)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous processing
 	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(systemChat)
+		err = cdb.EnqueueChatMessage(systemChat, isResync)
 		if err != nil {
 			return err
 		}
@@ -1958,10 +2154,19 @@ func (gdb *GroupDB) generateRemoveUserSystemMessage(
 }
 
 // Process group admin setting
-func (gdb *GroupDB) processGroupAdmin(pin *pin.PinInscription, operation string) error {
+func (gdb *GroupDB) processGroupAdmin(pin *pin.PinInscription, operation string, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupAdmin protocols.SimpleGroupAdmin
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupAdmin)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupAdmin)
 	if err != nil {
 		return err
 	}
@@ -1984,7 +2189,13 @@ func (gdb *GroupDB) processGroupAdmin(pin *pin.PinInscription, operation string)
 		operation = "create"
 	}
 	// Add admin record to group admin list
-	err = gdb.addGroupAdminToGroupList(simpleGroupAdmin.GroupId, pin.Id, operation, pin, simpleGroupAdmin.Admins)
+	err = gdb.addGroupAdminToGroupList(simpleGroupAdmin.GroupId, pin.Id, operation, pin, simpleGroupAdmin.Admins, isResync)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -1993,15 +2204,24 @@ func (gdb *GroupDB) processGroupAdmin(pin *pin.PinInscription, operation string)
 }
 
 // Process group admin modify
-func (gdb *GroupDB) processGroupAdminModify(pin *pin.PinInscription) error {
-	return gdb.processGroupAdmin(pin, "modify")
+func (gdb *GroupDB) processGroupAdminModify(pin *pin.PinInscription, isResync bool) error {
+	return gdb.processGroupAdmin(pin, "modify", isResync)
 }
 
 // Process group block setting
-func (gdb *GroupDB) processGroupBlock(pin *pin.PinInscription, operation string) error {
+func (gdb *GroupDB) processGroupBlock(pin *pin.PinInscription, operation string, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupBlock protocols.SimpleGroupBlock
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupBlock)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupBlock)
 	if err != nil {
 		return err
 	}
@@ -2031,7 +2251,13 @@ func (gdb *GroupDB) processGroupBlock(pin *pin.PinInscription, operation string)
 		operation = "create"
 	}
 	// Add block record to group block list
-	err = gdb.addGroupBlockToGroupList(simpleGroupBlock.GroupId, pin.Id, operation, pin, simpleGroupBlock.Users)
+	err = gdb.addGroupBlockToGroupList(simpleGroupBlock.GroupId, pin.Id, operation, pin, simpleGroupBlock.Users, isResync)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -2040,15 +2266,24 @@ func (gdb *GroupDB) processGroupBlock(pin *pin.PinInscription, operation string)
 }
 
 // Process group block modify
-func (gdb *GroupDB) processGroupBlockModify(pin *pin.PinInscription) error {
-	return gdb.processGroupBlock(pin, "modify")
+func (gdb *GroupDB) processGroupBlockModify(pin *pin.PinInscription, isResync bool) error {
+	return gdb.processGroupBlock(pin, "modify", isResync)
 }
 
 // Process group whitelist setting
-func (gdb *GroupDB) processGroupWhitelist(pin *pin.PinInscription, operation string) error {
+func (gdb *GroupDB) processGroupWhitelist(pin *pin.PinInscription, operation string, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupWhitelist protocols.SimpleGroupWhitelist
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupWhitelist)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupWhitelist)
 	if err != nil {
 		return err
 	}
@@ -2078,7 +2313,13 @@ func (gdb *GroupDB) processGroupWhitelist(pin *pin.PinInscription, operation str
 		operation = "create"
 	}
 	// Add whitelist record to group whitelist list
-	err = gdb.addGroupWhitelistToGroupList(simpleGroupWhitelist.GroupId, pin.Id, operation, pin, simpleGroupWhitelist.Users)
+	err = gdb.addGroupWhitelistToGroupList(simpleGroupWhitelist.GroupId, pin.Id, operation, pin, simpleGroupWhitelist.Users, isResync)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -2087,8 +2328,8 @@ func (gdb *GroupDB) processGroupWhitelist(pin *pin.PinInscription, operation str
 }
 
 // Process group whitelist modify
-func (gdb *GroupDB) processGroupWhitelistModify(pin *pin.PinInscription) error {
-	return gdb.processGroupWhitelist(pin, "modify")
+func (gdb *GroupDB) processGroupWhitelistModify(pin *pin.PinInscription, isResync bool) error {
+	return gdb.processGroupWhitelist(pin, "modify", isResync)
 }
 
 // GetGroupAdminList Get group admin list (exported method)
@@ -2138,7 +2379,7 @@ func (gdb *GroupDB) saveGroupAdminList(adminList *models.GroupAdminList) error {
 // Add group admin record to group admin list
 func (gdb *GroupDB) addGroupAdminToGroupList(
 	groupId, pinId, adminType string,
-	pin *pin.PinInscription, admins []string) error {
+	pin *pin.PinInscription, admins []string, isResync bool) error {
 	// Add lock for TalkGroupAdminCollection operations
 	mutex := GetGroupAdminMutex(groupId)
 	mutex.Lock()
@@ -2167,9 +2408,11 @@ func (gdb *GroupDB) addGroupAdminToGroupList(
 	for i, item := range existingList.Items {
 		// Determine if already exists by AdminPinId (because each admin has different PinId)
 		if item.AdminPinId == pinId {
-			// Update existing item
-			existingList.Items[i] = newItem
 			found = true
+			if item.AdminTimestamp >= newItem.AdminTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
 			break
 		}
 	}
@@ -2199,7 +2442,7 @@ func (gdb *GroupDB) addGroupAdminToGroupList(
 			}
 		}
 
-		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds, isResync)
 
 	}
 	return nil
@@ -2265,7 +2508,7 @@ func (gdb *GroupDB) saveGroupBlockList(blockList *models.GroupBlockList) error {
 // Add group block record to group block list
 func (gdb *GroupDB) addGroupBlockToGroupList(
 	groupId, pinId, blockType string,
-	pin *pin.PinInscription, blockedUsers []string) error {
+	pin *pin.PinInscription, blockedUsers []string, isResync bool) error {
 	// Add lock for TalkGroupBlockCollection operations
 	mutex := GetGroupBlockMutex(groupId)
 	mutex.Lock()
@@ -2294,9 +2537,11 @@ func (gdb *GroupDB) addGroupBlockToGroupList(
 	for i, item := range existingList.Items {
 		// Determine if already exists by BlockPinId (because each block has different PinId)
 		if item.BlockPinId == pinId {
-			// Update existing item
-			existingList.Items[i] = newItem
 			found = true
+			if item.BlockTimestamp >= newItem.BlockTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
 			break
 		}
 	}
@@ -2326,7 +2571,7 @@ func (gdb *GroupDB) addGroupBlockToGroupList(
 			}
 		}
 
-		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds, isResync)
 
 	}
 
@@ -2392,7 +2637,7 @@ func (gdb *GroupDB) saveGroupWhitelistList(whitelistList *models.GroupWhitelistL
 // Add group whitelist record to group whitelist list
 func (gdb *GroupDB) addGroupWhitelistToGroupList(
 	groupId, pinId, whitelistType string,
-	pin *pin.PinInscription, whitelistUsers []string) error {
+	pin *pin.PinInscription, whitelistUsers []string, isResync bool) error {
 	// Add lock for TalkGroupWhitelistCollection operations
 	mutex := GetGroupWhitelistMutex(groupId)
 	mutex.Lock()
@@ -2421,9 +2666,11 @@ func (gdb *GroupDB) addGroupWhitelistToGroupList(
 	for i, item := range existingList.Items {
 		// Determine if already exists by WhitelistPinId (because each whitelist has different PinId)
 		if item.WhitelistPinId == pinId {
-			// Update existing item
-			existingList.Items[i] = newItem
 			found = true
+			if item.WhitelistTimestamp >= newItem.WhitelistTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
 			break
 		}
 	}
@@ -2453,7 +2700,7 @@ func (gdb *GroupDB) addGroupWhitelistToGroupList(
 			}
 		}
 
-		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds)
+		gdb.dealGroupRoleInfoChangeList(groupId, previousMetaIds, latestMetaIds, isResync)
 
 	}
 	return nil
@@ -3010,10 +3257,19 @@ func (gdb *GroupDB) DeleteChannel(channelId string) error {
 }
 
 // Process channel creation
-func (gdb *GroupDB) processGroupChannelCreate(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupChannelCreate(pin *pin.PinInscription, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupChannel protocols.SimpleGroupChannel
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
 	if err != nil {
 		return err
 	}
@@ -3056,12 +3312,24 @@ func (gdb *GroupDB) processGroupChannelCreate(pin *pin.PinInscription) error {
 		DeleteStatus:      0, // Default to normal
 		Timestamp:         pin.Timestamp,
 		BlockHeight:       pin.GenesisHeight,
+		SyncState:         -1,
 	}
 
 	// Save to version info table
 	err = gdb.SaveChannelVersionInfo(channel)
 	if err != nil {
 		return err
+	}
+
+	if isResync {
+		dbChannel, err := gdb.GetChannelVersionInfoByChannelIdAndPinId(channel.ChannelId, channel.PinId)
+		if err != nil {
+			return err
+		}
+		if dbChannel != nil && dbChannel.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
 	}
 
 	// Save to basic info table
@@ -3076,14 +3344,36 @@ func (gdb *GroupDB) processGroupChannelCreate(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Update sync state
+	channel.SyncState = 1
+	err = gdb.SaveChannelVersionInfo(channel)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Process channel modification
-func (gdb *GroupDB) processGroupChannelModify(pin *pin.PinInscription) error {
+func (gdb *GroupDB) processGroupChannelModify(pin *pin.PinInscription, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleGroupChannel protocols.SimpleGroupChannel
-	err := json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupChannel)
 	if err != nil {
 		return err
 	}
@@ -3121,14 +3411,55 @@ func (gdb *GroupDB) processGroupChannelModify(pin *pin.PinInscription) error {
 	existingChannel.Timestamp = pin.Timestamp
 	existingChannel.BlockHeight = pin.GenesisHeight
 
+	modifyChannel := &models.TalkGroupChannelModel{
+		ChannelId:         simpleGroupChannel.ChannelId,
+		GroupId:           simpleGroupChannel.GroupId,
+		TxId:              pin.Id[:len(pin.Id)-2],
+		PinId:             pin.Id,
+		ChannelName:       simpleGroupChannel.ChannelName,
+		ChannelNote:       simpleGroupChannel.ChannelNote,
+		ChannelIcon:       simpleGroupChannel.ChannelIcon,
+		ChannelType:       simpleGroupChannel.ChannelType,
+		CreateUserMetaId:  pin.CreateMetaId,
+		CreateUserAddress: pin.CreateAddress,
+		Chain:             pin.ChainName,
+		DeleteStatus:      0, // Default to normal
+		Timestamp:         pin.Timestamp,
+		BlockHeight:       pin.GenesisHeight,
+		SyncState:         -1,
+	}
 	// Save to version info table
-	err = gdb.SaveChannelVersionInfo(existingChannel)
+	err = gdb.SaveChannelVersionInfo(modifyChannel)
 	if err != nil {
 		return err
 	}
 
+	if isResync {
+		dbChannel, err := gdb.GetChannelVersionInfoByChannelIdAndPinId(modifyChannel.ChannelId, modifyChannel.PinId)
+		if err != nil {
+			return err
+		}
+		if dbChannel != nil && dbChannel.SyncState != -1 {
+			//already has SyncState, skip
+			return nil
+		}
+	}
+
 	// Save to basic info table
 	err = gdb.SaveChannelInfo(existingChannel)
+	if err != nil {
+		return err
+	}
+
+	// Update sync state
+	modifyChannel.SyncState = 1
+	err = gdb.SaveChannelVersionInfo(modifyChannel)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -3208,7 +3539,7 @@ func (gdb *GroupDB) getChangedMetaIds(oldList, newList []string) (added, removed
 	return added, removed
 }
 
-func (gdb *GroupDB) dealGroupRoleInfoChangeList(groupId string, previousMetaIds, latestMetaIds []string) {
+func (gdb *GroupDB) dealGroupRoleInfoChangeList(groupId string, previousMetaIds, latestMetaIds []string, isResync bool) {
 	// Get changed metaIds
 	addedMetaIds, removedMetaIds := gdb.getChangedMetaIds(previousMetaIds, latestMetaIds)
 
@@ -3220,7 +3551,9 @@ func (gdb *GroupDB) dealGroupRoleInfoChangeList(groupId string, previousMetaIds,
 	for _, metaId := range changeList {
 		roleInfo, _ := gdb.GetGroupUserRoleInfo(groupId, "", metaId)
 		if roleInfo != nil {
-			go dealGroupRoleInfoChangeList(roleInfo)
+			if !isResync {
+				go dealGroupRoleInfoChangeList(roleInfo)
+			}
 		}
 	}
 }

@@ -27,6 +27,7 @@ type PrivateQueueChatMessage struct {
 	Timestamp  int64                     `json:"timestamp"`  // Enqueue timestamp
 	RetryCount int                       `json:"retryCount"` // Retry count
 	Status     string                    `json:"status"`     // Processing status: pending, processing, completed, failed
+	IsResync   bool                      `json:"isResync"`   // Is resync
 }
 
 // Private chat database operations
@@ -53,7 +54,19 @@ func (pcdb *PrivateChatDB) SavePrivateChat(chat *models.TalkPrivateChatV3) error
 }
 
 // Save private chat timestamp index (bidirectional index: from_to_timestamp and to_from_timestamp)
-func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		isDuplicate, err := pcdb.CheckDuplicatePinIdInTimeRange(chat, TalkPrivateChatTimestampCollection)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Generate a 6-digit random number for uniqueness
 	randomNum := generateRandomNumber(6)
 
@@ -74,12 +87,26 @@ func (pcdb *PrivateChatDB) SavePrivateChatTimestamp(chat *models.TalkPrivateChat
 		return err
 	}
 
-	go dealPrivateChatItem(chat)
+	if !isResync {
+		go dealPrivateChatItem(chat)
+	}
 	return nil
 }
 
 // Save private chat out timestamp index (for blocked messages)
-func (pcdb *PrivateChatDB) SavePrivateChatOutTimestamp(chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) SavePrivateChatOutTimestamp(chat *models.TalkPrivateChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		isDuplicate, err := pcdb.CheckDuplicatePinIdInTimeRange(chat, TalkPrivateChatTimestampOutCollection)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Generate a 6-digit random number for uniqueness
 	randomNum := generateRandomNumber(6)
 
@@ -192,7 +219,7 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 	startKey := []byte(selfMetaId + "_" + otherMetaId + "_" + startTimestampStr)
 	for iter.SeekLT(startKey); iter.Valid() && iter.Key() != nil; iter.Prev() {
 		key := string(iter.Key())
-		fmt.Printf("[PrivateChatDB] GetPrivateChatsByMetaIdsAndTimestampRange key: %s\n", key)
+		// fmt.Printf("[PrivateChatDB] GetPrivateChatsByMetaIdsAndTimestampRange key: %s\n", key)
 
 		// Parse key to extract timestamp
 		// Key format: from_to_timestamp+number(6)
@@ -242,6 +269,92 @@ func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndTimestampRange(selfMetaId,
 	return chats, nextTimestamp, nil
 }
 
+// GetPrivateChatsByMetaIdsAndStartIndexRange gets private chat messages by two MetaIds and start index range (ascending order)
+// This function handles the key format: from_to_index (with zero-padding)
+// Example: from_to_0000000000000000000000000000000000000001
+// Returns chat list, last index, and error
+func (pcdb *PrivateChatDB) GetPrivateChatsByMetaIdsAndStartIndexRange(selfMetaId, otherMetaId string, startIndex int64, size int64) ([]*models.TalkPrivateChatV3, int64, error) {
+	var chats []*models.TalkPrivateChatV3
+
+	// Create iter options to limit the range to only keys for these two users
+	iterOptions := &pebble.IterOptions{
+		LowerBound: []byte(selfMetaId + "_" + otherMetaId + "_"),
+		UpperBound: []byte(selfMetaId + "_" + otherMetaId + "_" + string([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})),
+	}
+
+	iter, err := Pb[TalkPrivateChatIndexCollection].NewIter(iterOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	lastIndex := int64(0)
+
+	// Construct query start key: selfMetaId_otherMetaId_startIndex (with zero-padding)
+	// Since key format is from_to_index with zero-padding, we can use proper range scanning
+	// Example: from_to_0000000000000000000000000000000000000001
+	startKey := []byte(selfMetaId + "_" + otherMetaId + "_" + fmt.Sprintf("%040d", startIndex))
+
+	// Start iteration from specified index (ascending order)
+	// Use SeekGE to find the first key that is greater than or equal to our startKey
+	for iter.SeekGE(startKey); iter.Valid() && iter.Key() != nil; iter.Next() {
+		key := string(iter.Key())
+		// fmt.Printf("[PrivateChatDB] GetPrivateChatsByMetaIdsAndStartIndexRange key: %s\n", key)
+
+		// Parse key to extract index
+		// Key format: from_to_index (with zero-padding)
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 3 {
+			continue
+		}
+
+		// Extract index from key (remove leading zeros)
+		indexStr := strings.TrimLeft(keyParts[2], "0")
+		if indexStr == "" {
+			indexStr = "0" // If all zeros, treat as 0
+		}
+		index, err := strconv.ParseInt(indexStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// Skip messages before our start index (since we're going forwards)
+		if index < startIndex {
+			continue
+		}
+
+		// Parse value: pinId_chatType_timestamp_state
+		value := string(iter.Value())
+		valueParts := strings.Split(value, "_")
+		if len(valueParts) < 1 {
+			continue
+		}
+
+		pinId := valueParts[0]
+		// fmt.Printf("[PrivateChatDB] GetPrivateChatsByMetaIdsAndStartIndexRange index: %d, pinId: %s\n", index, pinId)
+
+		// Get complete private chat message
+		chat, err := pcdb.GetPrivateChatByPinId(pinId)
+		if err != nil || chat == nil {
+			continue
+		}
+
+		if index > lastIndex {
+			lastIndex = index
+		}
+
+		// Add to results
+		chats = append(chats, chat)
+
+		// Check pagination limit
+		if int64(len(chats)) >= size {
+			break
+		}
+	}
+
+	return chats, lastIndex, nil
+}
+
 // Get latest private chat messages between two users (reverse order based on timestamp)
 func (pcdb *PrivateChatDB) GetLatestPrivateChatsByMetaIds(selfMetaId, otherMetaId string, size int64) ([]*models.TalkPrivateChatV3, int64, error) {
 	// Use current time as start timestamp
@@ -257,7 +370,7 @@ func (pcdb *PrivateChatDB) DeletePrivateChat(pinId string) error {
 }
 
 // Enqueue private chat message (asynchronous processing)
-func (pcdb *PrivateChatDB) EnqueuePrivateChatMessage(chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) EnqueuePrivateChatMessage(chat *models.TalkPrivateChatV3, isResync bool) error {
 	queueMessage := &PrivateQueueChatMessage{
 		PinId:      chat.PinId,
 		From:       chat.From,
@@ -266,6 +379,7 @@ func (pcdb *PrivateChatDB) EnqueuePrivateChatMessage(chat *models.TalkPrivateCha
 		Timestamp:  time.Now().Unix(),
 		RetryCount: 0,
 		Status:     "pending",
+		IsResync:   isResync,
 	}
 
 	data, err := json.Marshal(queueMessage)
@@ -367,7 +481,18 @@ func (pcdb *PrivateChatDB) SaveMetaIdContextList(contextList *models.MetaIdConte
 }
 
 // Update private chat context list
-func (pcdb *PrivateChatDB) UpdatePrivateContextList(chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) UpdatePrivateContextList(chat *models.TalkPrivateChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := pcdb.GetPrivateChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
 	// Update sender's context list
 	err := pcdb.updateSingleUserPrivateContextList(chat.From, chat.To, chat)
 	if err != nil {
@@ -417,12 +542,11 @@ func (pcdb *PrivateChatDB) updateSingleUserPrivateContextList(selfMetaId, otherM
 	for i, item := range contextList.Items {
 		// For private chat, identify by GroupId and Type
 		if item.MetaId == otherMetaId && item.Type == "2" {
-			contextList.Items[i] = newItem
 			found = true
 			// Check if update is needed
-			if item.LastMessagePinId != newItem.LastMessagePinId ||
-				item.BlockHeight != newItem.BlockHeight {
+			if item.LastMessagePinId != newItem.LastMessagePinId && item.Timestamp < newItem.Timestamp {
 				// Update existing item
+				contextList.Items[i] = newItem
 				shouldUpdate = true
 			}
 
@@ -506,14 +630,14 @@ func (pcdb *PrivateChatDB) ProcessPrivateQueueMessages(batchSize int) error {
 		hasError := false
 
 		// Update private chat contact list
-		err = pcdb.UpdatePrivateContextList(message.Chat)
+		err = pcdb.UpdatePrivateContextList(message.Chat, message.IsResync)
 		if err != nil {
 			log.Printf("Failed to update private contact list for pinId %s: %v", message.PinId, err)
 			hasError = true
 		}
 
 		// Update private chat index
-		err = pcdb.UpdatePrivateChatIndex(message.Chat)
+		err = pcdb.UpdatePrivateChatIndex(message.Chat, message.IsResync)
 		if err != nil {
 			log.Printf("Failed to update private chat index for pinId %s: %v", message.PinId, err)
 			hasError = true
@@ -575,17 +699,17 @@ func (pcdb *PrivateChatDB) StartPrivateQueueProcessor() {
 }
 
 // Main method to process private chat Pin
-func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription) error {
+func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription, isResync bool) error {
 	switch pin.Operation {
 	case "create":
 		path := pin.Path
 		protocol := strings.Replace(path, "/protocols/", "", -1)
 		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleMsg) {
-			return pcdb.processPrivateChat(pin)
+			return pcdb.processPrivateChat(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleFileMsg) {
-			return pcdb.processFilePrivateChat(pin)
+			return pcdb.processFilePrivateChat(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimplePrivateBlock) {
-			return pcdb.processPrivateChatBlock(pin)
+			return pcdb.processPrivateChatBlock(pin, isResync)
 		}
 	default:
 		return nil // Unknown operation type, skip
@@ -594,7 +718,7 @@ func (pcdb *PrivateChatDB) ProcessPrivateChatPin(pin *pin.PinInscription) error 
 }
 
 // Process private chat message
-func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
+func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingChat, err := pcdb.GetPrivateChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
@@ -606,6 +730,15 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 			}
 		}
 		// Already exists, skip processing
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -637,6 +770,7 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
+		Index:       -1,
 	}
 
 	// Save private chat message to TalkPrivateChatPinCollection
@@ -651,20 +785,20 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 	if err != nil {
 		log.Printf("Failed to check block status for chat %s: %v", chat.PinId, err)
 		// If we can't determine block status, save to normal collection as fallback
-		err = pcdb.SavePrivateChatTimestamp(chat)
+		err = pcdb.SavePrivateChatTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
 	} else if isBlocked {
 		// If blocked, save to out collection
-		err = pcdb.SavePrivateChatOutTimestamp(chat)
+		err = pcdb.SavePrivateChatOutTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
 		isGoEnqueue = false
 	} else {
 		// If not blocked, save to normal collection
-		err = pcdb.SavePrivateChatTimestamp(chat)
+		err = pcdb.SavePrivateChatTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
@@ -672,17 +806,23 @@ func (pcdb *PrivateChatDB) processPrivateChat(pin *pin.PinInscription) error {
 
 	// Enqueue message for asynchronous processing
 	if isGoEnqueue {
-		err = pcdb.EnqueuePrivateChatMessage(chat)
+		err = pcdb.EnqueuePrivateChatMessage(chat, isResync)
 		if err != nil {
 			return err
 		}
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // Process file private chat message
-func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error {
+func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingChat, err := pcdb.GetPrivateChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
@@ -694,6 +834,15 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 			}
 		}
 		// Already exists, skip processing
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -723,6 +872,7 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 		Timestamp:   pin.Timestamp,
 		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,
+		Index:       -1,
 	}
 
 	// Save private chat message to TalkPrivateChatPinCollection
@@ -737,20 +887,20 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 	if err != nil {
 		log.Printf("Failed to check block status for file chat %s: %v", chat.PinId, err)
 		// If we can't determine block status, save to normal collection as fallback
-		err = pcdb.SavePrivateChatTimestamp(chat)
+		err = pcdb.SavePrivateChatTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
 	} else if isBlocked {
 		// If blocked, save to out collection
-		err = pcdb.SavePrivateChatOutTimestamp(chat)
+		err = pcdb.SavePrivateChatOutTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
 		isGoEnqueue = false
 	} else {
 		// If not blocked, save to normal collection
-		err = pcdb.SavePrivateChatTimestamp(chat)
+		err = pcdb.SavePrivateChatTimestamp(chat, isResync)
 		if err != nil {
 			return err
 		}
@@ -758,17 +908,35 @@ func (pcdb *PrivateChatDB) processFilePrivateChat(pin *pin.PinInscription) error
 
 	if isGoEnqueue {
 		// Enqueue message for asynchronous processing
-		err = pcdb.EnqueuePrivateChatMessage(chat)
+		err = pcdb.EnqueuePrivateChatMessage(chat, isResync)
 		if err != nil {
 			return err
 		}
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // UpdatePrivateChatIndex updates the chat index for a private chat message
-func (pcdb *PrivateChatDB) UpdatePrivateChatIndex(chat *models.TalkPrivateChatV3) error {
+func (pcdb *PrivateChatDB) UpdatePrivateChatIndex(chat *models.TalkPrivateChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := pcdb.GetPrivateChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Get the next index for this conversation (from_to)
 	nextIndex, err := pcdb.getNextPrivateChatIndex(chat.From, chat.To)
 	if err != nil {
@@ -902,7 +1070,7 @@ func (pcdb *PrivateChatDB) convertToMetaId(input string) string {
 }
 
 // Process private chat block operation
-func (pcdb *PrivateChatDB) processPrivateChatBlock(pin *pin.PinInscription) error {
+func (pcdb *PrivateChatDB) processPrivateChatBlock(pin *pin.PinInscription, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingBlock, err := pcdb.GetPrivateChatBlockByPinId(pin.Id)
 	if err == nil && existingBlock != nil {
@@ -914,6 +1082,15 @@ func (pcdb *PrivateChatDB) processPrivateChatBlock(pin *pin.PinInscription) erro
 			}
 		}
 		// Already exists, skip processing
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -947,6 +1124,12 @@ func (pcdb *PrivateChatDB) processPrivateChatBlock(pin *pin.PinInscription) erro
 
 	// Update the block list in TalkPrivateChatMetaIdBlockListCollection
 	err = pcdb.UpdatePrivateChatBlockList(pin.CreateMetaId, toMetaId, blockRecord)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -1007,9 +1190,11 @@ func (pcdb *PrivateChatDB) UpdatePrivateChatBlockList(fromMetaId, toMetaId strin
 	found := false
 	for i, item := range blockList.Items {
 		if item.BlockPinId == blockRecord.PinId {
-			// Update existing item
-			blockList.Items[i] = newBlockItem
 			found = true
+			if item.BlockTimestamp >= newBlockItem.BlockTimestamp {
+				// Update existing item
+				blockList.Items[i] = newBlockItem
+			}
 			break
 		}
 	}
@@ -1126,4 +1311,139 @@ func (pcdb *PrivateChatDB) GetUserBlockList(metaId string) ([]*models.SimplePriv
 	}
 
 	return blockRecords, nil
+}
+
+// CheckDuplicatePinIdInTimeRange 检查指定时间戳前1小时内是否存在相同的pinId
+// 用于重跑数据时避免重复处理
+func (pcdb *PrivateChatDB) CheckDuplicatePinIdInTimeRange(chat *models.TalkPrivateChatV3, collection string) (bool, error) {
+	if chat == nil {
+		return false, fmt.Errorf("chat cannot be nil")
+	}
+
+	// 计算1小时前的时间戳（秒）
+	oneHourAgo := chat.Timestamp - 3600 // 3600秒 = 1小时
+
+	// 构建查询范围：from_to_timestamp 和 to_from_timestamp
+	// 使用LowerBound和UpperBound来限制查询范围，提高性能
+	lowerBound1 := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(oneHourAgo, 10))
+	upperBound1 := []byte(chat.From + "_" + chat.To + "_" + strconv.FormatInt(chat.Timestamp, 10) + "999999")
+
+	lowerBound2 := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(oneHourAgo, 10))
+	upperBound2 := []byte(chat.To + "_" + chat.From + "_" + strconv.FormatInt(chat.Timestamp, 10) + "999999")
+
+	// 检查第一个方向：from_to_timestamp
+	iter1, err := Pb[collection].NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound1,
+		UpperBound: upperBound1,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to create iterator 1: %v", err)
+	}
+	defer iter1.Close()
+
+	// 遍历第一个方向的记录
+	for iter1.First(); iter1.Valid(); iter1.Next() {
+		key := iter1.Key()
+		value := iter1.Value()
+
+		// 解析key: from_to_timestamp+number(6)
+		keyStr := string(key)
+		parts := strings.Split(keyStr, "_")
+		if len(parts) < 3 {
+			continue
+		}
+
+		// 提取时间戳部分（去掉最后6位随机数）
+		timestampStr := parts[2]
+		if len(timestampStr) > 6 {
+			timestampStr = timestampStr[:len(timestampStr)-6] // 去掉最后6位随机数
+		}
+
+		// 解析时间戳
+		recordTimestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// 检查时间戳是否在1小时前到当前时间戳之间
+		if recordTimestamp >= oneHourAgo && recordTimestamp <= chat.Timestamp {
+			// 解析value: pinId_chatType_timestamp_number
+			valueStr := string(value)
+			valueParts := strings.Split(valueStr, "_")
+			if len(valueParts) >= 1 {
+				recordPinId := valueParts[0]
+
+				// 检查pinId是否相同
+				if recordPinId == chat.PinId {
+					log.Printf("Found duplicate pinId %s in time range [%d, %d] for private chat %s_%s",
+						chat.PinId, oneHourAgo, chat.Timestamp, chat.From, chat.To)
+					return true, nil
+				}
+			}
+		}
+	}
+
+	// 检查迭代器错误
+	if err = iter1.Error(); err != nil {
+		return false, fmt.Errorf("iterator 1 error: %v", err)
+	}
+
+	// 检查第二个方向：to_from_timestamp
+	iter2, err := Pb[collection].NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound2,
+		UpperBound: upperBound2,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to create iterator 2: %v", err)
+	}
+	defer iter2.Close()
+
+	// 遍历第二个方向的记录
+	for iter2.First(); iter2.Valid(); iter2.Next() {
+		key := iter2.Key()
+		value := iter2.Value()
+
+		// 解析key: to_from_timestamp+number(6)
+		keyStr := string(key)
+		parts := strings.Split(keyStr, "_")
+		if len(parts) < 3 {
+			continue
+		}
+
+		// 提取时间戳部分（去掉最后6位随机数）
+		timestampStr := parts[2]
+		if len(timestampStr) > 6 {
+			timestampStr = timestampStr[:len(timestampStr)-6] // 去掉最后6位随机数
+		}
+
+		// 解析时间戳
+		recordTimestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// 检查时间戳是否在1小时前到当前时间戳之间
+		if recordTimestamp >= oneHourAgo && recordTimestamp <= chat.Timestamp {
+			// 解析value: pinId_chatType_timestamp_number
+			valueStr := string(value)
+			valueParts := strings.Split(valueStr, "_")
+			if len(valueParts) >= 1 {
+				recordPinId := valueParts[0]
+
+				// 检查pinId是否相同
+				if recordPinId == chat.PinId {
+					log.Printf("Found duplicate pinId %s in time range [%d, %d] for private chat %s_%s",
+						chat.PinId, oneHourAgo, chat.Timestamp, chat.To, chat.From)
+					return true, nil
+				}
+			}
+		}
+	}
+
+	// 检查迭代器错误
+	if err = iter2.Error(); err != nil {
+		return false, fmt.Errorf("iterator 2 error: %v", err)
+	}
+
+	return false, nil
 }

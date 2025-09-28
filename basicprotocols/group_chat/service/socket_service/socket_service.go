@@ -165,6 +165,10 @@ func GetSocketManager() *socket_util.SocketManager {
 // GetConnectionStats Get connection statistics
 func GetConnectionStats() *socket_util.ConnectionStats {
 	socketManager := socket_util.GetSocketManager()
+	if socketManager == nil {
+		log.Printf("Socket manager not initialized")
+		return nil
+	}
 	return socketManager.GetStats()
 }
 

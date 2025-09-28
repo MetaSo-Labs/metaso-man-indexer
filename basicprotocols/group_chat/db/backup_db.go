@@ -129,6 +129,9 @@ func (bdb *BackupDB) performBackup() error {
 
 	// Define all collections to backup
 	collections := []string{
+		// All pin collection
+		TalkAllPinCollection,
+
 		// Community related collections
 		TalkCommunityVersionInfoCollection,
 		TalkCommunityInfoCollection,
@@ -216,6 +219,9 @@ func (bdb *BackupDB) performBackup() error {
 
 		// Socket info snapshot collection
 		TalkSocketInfoSnapshotCollection,
+
+		// Sync info collection
+		TalkSyncInfoCollection,
 	}
 
 	// Backup each collection
@@ -324,6 +330,7 @@ Collections Backed Up: %d/%d
 Status: %s
 
 Collections:
+- TalkAllPinCollection
 - TalkCommunityVersionInfoCollection
 - TalkCommunityInfoCollection
 - TalkCommunityAddressCollection
@@ -359,6 +366,7 @@ Collections:
 - TalkVersionInfoCollection
 - TalkGroupLuckyBagCodeAddressKeyCollection
 - TalkGroupLuckyBagCodeAddressKeyCompletedCollection
+- TalkSyncInfoCollection
 
 Backup completed at: %s
 `,

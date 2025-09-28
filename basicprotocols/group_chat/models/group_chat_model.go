@@ -74,6 +74,7 @@ type TalkGroupJoinModel struct {
 	BlockHeight  int64 `json:"blockHeight"`
 	ConfirmState int64 `json:"confirmState"`
 	Timestamp    int64 `json:"timestamp"` //
+	SyncState    int64 `json:"syncState"` // Sync state, -1:not sync, 1:synced
 }
 
 type TalkGroupPerson struct {
@@ -117,6 +118,7 @@ type TalkGroupModel struct {
 	DeleteStatus      int64  `json:"deleteStatus"`      // Delete status, 0-normal, 1-deleted
 	Timestamp         int64  `json:"timestamp"`         // Timestamp when creating the room
 	BlockHeight       int64  `json:"blockHeight"`       // Block height
+	SyncState         int64  `json:"syncState"`         // Sync state, -1:not sync, 1:synced
 }
 
 type TalkGroupChannelModel struct {
@@ -134,6 +136,7 @@ type TalkGroupChannelModel struct {
 	DeleteStatus      int64  `json:"deleteStatus"`      // Delete status, 0-normal, 1-deleted
 	Timestamp         int64  `json:"timestamp"`         // Timestamp when creating the channel
 	BlockHeight       int64  `json:"blockHeight"`       // Block height
+	SyncState         int64  `json:"syncState"`         // Sync state, -1:not sync, 1:synced
 }
 
 type TalkGroupTxV3 struct {

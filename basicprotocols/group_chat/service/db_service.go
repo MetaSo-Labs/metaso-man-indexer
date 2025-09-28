@@ -416,8 +416,8 @@ func GetDetailedOpenLuckyBagList(luckyBagPinId string) (map[string]interface{}, 
 	return response, nil
 }
 
-// QueryMetaIdJoinList gets MetaId join list by metaId
-func QueryMetaIdJoinList(metaId string) (map[string]interface{}, error) {
+// QueryMetaIdJoinList gets MetaId join list by metaId with optional groupId filter
+func QueryMetaIdJoinList(metaId, groupId string) (map[string]interface{}, error) {
 	// Query database directly using prefix
 	prefix := metaId + "_"
 	results, err := QueryByPrefix(db.TalkGroupMetaIdJoinCollection, prefix, 1000) // Use large limit to get all records
@@ -427,12 +427,32 @@ func QueryMetaIdJoinList(metaId string) (map[string]interface{}, error) {
 
 	// Build response
 	response := map[string]interface{}{
-		"metaId": metaId,
-		"items":  []map[string]interface{}{},
+		"metaId":  metaId,
+		"groupId": groupId, // Include groupId in response
+		"items":   []map[string]interface{}{},
 	}
 
 	// Process each result
 	for _, result := range results {
+		// Get key from result to extract groupId
+		key, ok := result["key"].(string)
+		if !ok {
+			continue
+		}
+
+		// Parse groupId from key (format: metaid_groupId)
+		// Extract groupId from key after the first underscore
+		keyParts := strings.Split(key, "_")
+		if len(keyParts) < 2 {
+			continue
+		}
+		itemGroupId := strings.Join(keyParts[1:], "_") // Join remaining parts in case groupId contains underscores
+
+		// Filter by groupId if provided
+		if groupId != "" && itemGroupId != groupId {
+			continue
+		}
+
 		// Parse the join list data
 		if value, ok := result["value"]; ok {
 			if joinListData, ok := value.(map[string]interface{}); ok {
@@ -452,6 +472,7 @@ func QueryMetaIdJoinList(metaId string) (map[string]interface{}, error) {
 								"joinType":      joinItem["joinType"],
 								"joinTimestamp": joinItem["joinTimestamp"],
 								"groupState":    joinItem["groupState"],
+								"groupId":       itemGroupId, // Include groupId from key
 								"address":       address,
 								"referrer":      joinItem["referrer"],
 								"blockHeight":   joinItem["blockHeight"],
@@ -3590,4 +3611,62 @@ func CheckGlobalBlockAddress(address string) (map[string]interface{}, error) {
 	}
 
 	return result, nil
+}
+
+// GetSyncStats Get sync statistics from sync database service
+func GetSyncStats() (map[string]interface{}, error) {
+	return syncDbService.GetSyncStats()
+}
+
+// GetPinSyncStatus Get pin sync status by pinId
+func GetPinSyncStatus(pinId string) (map[string]interface{}, error) {
+	return db.GetPinSyncStatus(pinId)
+}
+
+// GetAllSyncedPins Get all synced pins with pagination
+func GetAllSyncedPins(cursor, size int) (map[string]interface{}, error) {
+	return db.GetAllSyncedPins(cursor, size)
+}
+
+// GetPinsCountByTimeRange Get pins count by time range
+func GetPinsCountByTimeRange(startTime, endTime int64) (map[string]interface{}, error) {
+	return syncDbService.GetPinsCountByTimeRange(startTime, endTime)
+}
+
+// CheckPinExistsByChainAndHeight Check if a pin exists by chain name, block height and pinId
+func CheckPinExistsByChainAndHeight(chainName string, blockHeight int64, pinId string) (map[string]interface{}, error) {
+	exists, pin, err := syncDbService.CheckPinExistsByChainAndHeight(chainName, blockHeight, pinId)
+	if err != nil {
+		return nil, err
+	}
+
+	result := map[string]interface{}{
+		"exists":      exists,
+		"chainName":   chainName,
+		"blockHeight": blockHeight,
+		"pinId":       pinId,
+	}
+
+	if exists && pin != nil {
+		result["pin"] = map[string]interface{}{
+			"id":            pin.Id,
+			"chainName":     pin.ChainName,
+			"genesisHeight": pin.GenesisHeight,
+			"timestamp":     pin.Timestamp,
+			"address":       pin.Address,
+			"createAddress": pin.CreateAddress,
+			"createMetaId":  pin.CreateMetaId,
+			"operation":     pin.Operation,
+			"path":          pin.Path,
+			"contentType":   pin.ContentType,
+			"contentLength": pin.ContentLength,
+		}
+	}
+
+	return result, nil
+}
+
+// GetPinIdsByChainAndHeight Get pin IDs by chain name and block height
+func GetPinIdsByChainAndHeight(chainName string, blockHeight int64) (map[string]interface{}, error) {
+	return syncDbService.GetPinIdsByChainAndHeight(chainName, blockHeight)
 }

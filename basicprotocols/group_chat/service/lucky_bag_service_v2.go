@@ -566,6 +566,14 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 		totalTime              int64
 	}{}
 
+	isAddressGloballyBlocked, _ := globalBlockDB.IsAddressGloballyBlocked(address)
+	// if err != nil {
+	// 	return "", err
+	// }
+	if isAddressGloballyBlocked {
+		return "", errors.New("address is blocked")
+	}
+
 	t := time.Now().UnixMilli()
 	// 1. First get lucky bag object from cache
 	luckyBag, err := cache_service.GetCacheLuckyBag(groupId, pinId)

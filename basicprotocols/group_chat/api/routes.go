@@ -49,6 +49,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get private chat records
 		group.GET("/private-chat-list", GetPrivateChatList)
 
+		// Get private chat records by index range
+		group.GET("/private-chat-list-by-index", GetPrivateChatListByIndex)
+
 		// Get group member list
 		group.GET("/group-member-list", GetGroupMemberList)
 
@@ -57,6 +60,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 
 		// Get group user role info
 		group.GET("/group-user-role", GetGroupUserRoleInfo)
+
+		// Check if sync is completed
+		group.GET("/sync-completed", IsSyncCompleted)
 
 		// Get user info by address
 		group.GET("/user-info", GetUserInfoByAddress)
@@ -122,9 +128,28 @@ func RegisterSocketRoutes(router *gin.Engine) {
 	}
 }
 
+// RegisterSyncRoutes Register synchronization-related routes
+func RegisterSyncRoutes(router *gin.Engine) {
+	// Sync management API group
+	syncGroup := router.Group("/group-chat/sync")
+	{
+		// Sync operations
+		syncGroup.POST("/pins-by-time-range", SyncPinsByTimeRange)
+
+		// Block query operations
+		syncGroup.POST("/block-height-by-timestamp", GetBlockHeightByTimestamp)
+
+		// Sync status and control
+		syncGroup.GET("/stats", GetSyncStats)
+		syncGroup.GET("/status", GetSyncStatus)
+		syncGroup.POST("/stop", StopSync)
+	}
+}
+
 // RegisterAllRoutes Register all routes
 func RegisterAllRoutes(router *gin.Engine) {
 	RegisterGroupRoutes(router)
 	RegisterDbRoutes(router)
 	RegisterSocketRoutes(router)
+	RegisterSyncRoutes(router)
 }

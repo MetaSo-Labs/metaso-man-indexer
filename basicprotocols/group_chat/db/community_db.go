@@ -302,9 +302,18 @@ func (cdb *CommunityDB) ProcessCommunityPin(pin *pin.PinInscription) error {
 
 // Process community creation
 func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleCommunity protocols.SimpleCommunity
-	err := json.Unmarshal(pin.ContentBody, &simpleCommunity)
+	err = json.Unmarshal(pin.ContentBody, &simpleCommunity)
 	if err != nil {
 		return err
 	}
@@ -350,14 +359,29 @@ func (cdb *CommunityDB) processCommunityCreate(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Process community join
 func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleCommunityJoin protocols.SimpleCommunityJoin
-	err := json.Unmarshal(pin.ContentBody, &simpleCommunityJoin)
+	err = json.Unmarshal(pin.ContentBody, &simpleCommunityJoin)
 	if err != nil {
 		return err
 	}
@@ -412,14 +436,29 @@ func (cdb *CommunityDB) processCommunityJoin(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Process community modification
 func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Parse protocol data
 	var simpleCommunity protocols.SimpleCommunity
-	err := json.Unmarshal(pin.ContentBody, &simpleCommunity)
+	err = json.Unmarshal(pin.ContentBody, &simpleCommunity)
 	if err != nil {
 		return err
 	}
@@ -460,6 +499,12 @@ func (cdb *CommunityDB) processCommunityModify(pin *pin.PinInscription) error {
 
 	// Save to basic info table
 	err = cdb.SaveCommunityInfo(existingCommunity)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}

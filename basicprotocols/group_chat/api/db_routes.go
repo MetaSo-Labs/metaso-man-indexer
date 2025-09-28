@@ -60,6 +60,12 @@ func RegisterDbRoutes(router *gin.Engine) {
 			}
 		}
 
+		// Private chat-related APIs
+		privateChatGroup := dbGroup.Group("/private-chat")
+		{
+			privateChatGroup.GET("/timestamp/list", GetPrivateChatTimestampList)
+		}
+
 		// User-related APIs
 		userGroup := dbGroup.Group("/user")
 		{
@@ -77,6 +83,17 @@ func RegisterDbRoutes(router *gin.Engine) {
 		dbGroup.GET("/stats", GetDatabaseStats)
 		dbGroup.GET("/collections", GetCollections)
 		dbGroup.GET("/chat-statistics", GetChatStatistics)
+		dbGroup.GET("/sync-stats", GetDbSyncStats)
+
+		// Pin sync status-related APIs
+		pinSyncGroup := dbGroup.Group("/pin-sync")
+		{
+			pinSyncGroup.GET("/status", GetPinSyncStatus)
+			pinSyncGroup.GET("/synced-pins", GetAllSyncedPins)
+			pinSyncGroup.GET("/pins-count-by-time-range", GetPinsCountByTimeRange)
+			pinSyncGroup.GET("/check-pin-exists", CheckPinExistsByChainAndHeight)
+			pinSyncGroup.GET("/get-pin-ids-by-height", GetPinIdsByChainAndHeight)
+		}
 
 		// Lucky bag-related APIs
 		luckyBagGroup := dbGroup.Group("/luckybag")
@@ -113,12 +130,6 @@ func RegisterDbRoutes(router *gin.Engine) {
 		{
 			residueLuckyBagGroup.GET("/pinid", GetResidueLuckyBagByPinId)
 			residueLuckyBagGroup.GET("/list", GetResidueLuckyBagList)
-		}
-
-		// Private chat-related APIs
-		privateChatGroup := dbGroup.Group("/private-chat")
-		{
-			privateChatGroup.GET("/timestamp/list", GetPrivateChatTimestampList)
 		}
 
 		// Migration-related APIs

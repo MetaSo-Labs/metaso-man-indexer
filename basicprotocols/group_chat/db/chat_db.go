@@ -32,6 +32,7 @@ type QueueChatMessage struct {
 	Timestamp  int64                   `json:"timestamp"`  // Enqueue timestamp
 	RetryCount int                     `json:"retryCount"` // Retry count
 	Status     string                  `json:"status"`     // Processing status: pending, processing, completed, failed
+	IsResync   bool                    `json:"isResync"`   // Is resync
 }
 
 // Chat database operations
@@ -192,7 +193,7 @@ func (cdb *ChatDB) SaveChat(chat *models.TalkGroupChatV3) error {
 }
 
 // Save chat timestamp index
-func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3, isResync bool) error {
 	// Construct timestamp index value: pinId_chatType_timestamp
 	value := chat.PinId + "_" + strconv.FormatInt(int64(chat.ChatType), 10) + "_" + strconv.FormatInt(chat.Timestamp, 10)
 
@@ -203,18 +204,30 @@ func (cdb *ChatDB) SaveChatTimestamp(chat *models.TalkGroupChatV3) error {
 	}
 
 	// Use GroupId_Timestamp_PinId as primary key to support timestamp range queries
-	cdb.saveChatTimestamp2(chat)
+	cdb.saveChatTimestamp2(chat, isResync)
 	return nil
 }
 
-func (cdb *ChatDB) saveChatTimestamp2(chat *models.TalkGroupChatV3) error {
-	return cdb.saveChatTimestamp2WithCollection(chat, TalkGroupChatTimestamp2Collection)
+func (cdb *ChatDB) saveChatTimestamp2(chat *models.TalkGroupChatV3, isResync bool) error {
+	return cdb.saveChatTimestamp2WithCollection(chat, TalkGroupChatTimestamp2Collection, isResync)
 }
 
 // saveChatTimestamp2WithCollection saves chat timestamp to a specific collection with timestamp + random number format
 // This method handles the new key format: groupId_timestamp+number(6) for collection2
 // Example: groupId_1755500889000001 (timestamp 1755500889 + random 000001)
-func (cdb *ChatDB) saveChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string) error {
+func (cdb *ChatDB) saveChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		isDuplicate, err := cdb.CheckDuplicatePinIdInTimeRange(chat, collection)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Generate a 6-digit random number for uniqueness
 	randomNum := generateRandomNumber(6)
 
@@ -1083,7 +1096,20 @@ func (cdb *ChatDB) SaveMetaIdContextList(contextList *models.MetaIdContextList) 
 }
 
 // Update group list for all members in the group (when there's a new message)
-func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.TalkGroupChatV3, groupDB *GroupDB) error {
+func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.TalkGroupChatV3, groupDB *GroupDB, isResync bool) error {
+
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := cdb.GetChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Update group latest chat record
 	err := cdb.updateGroupLatestChat(groupId, chat)
 	if err != nil {
@@ -1110,6 +1136,7 @@ func (cdb *ChatDB) UpdateGroupMembersContextList(groupId string, chat *models.Ta
 
 // Update group latest chat record
 func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupChatV3) error {
+
 	// First get existing latest chat record
 	existingLatestChat, err := cdb.GetGroupLatestChat(groupId)
 	if err != nil {
@@ -1197,7 +1224,19 @@ func (cdb *ChatDB) GetGroupLatestChat(groupId string) (*models.TalkGroupLatestCh
 }
 
 // Update group channel latest chat record
-func (cdb *ChatDB) updateGroupChannelLatestChat(channelId string, chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) updateGroupChannelLatestChat(channelId string, chat *models.TalkGroupChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := cdb.GetChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// First get existing latest chat record
 	existingLatestChat, err := cdb.GetGroupChannelLatestChat(channelId)
 	if err != nil {
@@ -1317,11 +1356,10 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 	found := false
 	for i, item := range contextList.Items {
 		if item.GroupId == groupId {
-			// Update existing item
-			contextList.Items[i] = newItem
 			found = true
-			if item.LastMessagePinId != newItem.LastMessagePinId ||
-				item.BlockHeight != newItem.BlockHeight {
+			if item.LastMessagePinId != newItem.LastMessagePinId && item.Timestamp < newItem.Timestamp {
+				// Update existing item
+				contextList.Items[i] = newItem
 				shouldUpdate = true
 			}
 			break
@@ -1358,7 +1396,7 @@ func (cdb *ChatDB) sortContextListByTimestamp(contextList *models.MetaIdContextL
 }
 
 // Enqueue chat message (asynchronous processing for group list updates)
-func (cdb *ChatDB) EnqueueChatMessage(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) EnqueueChatMessage(chat *models.TalkGroupChatV3, isResync bool) error {
 	queueMessage := &QueueChatMessage{
 		PinId:      chat.PinId,
 		GroupId:    chat.GroupId,
@@ -1366,6 +1404,7 @@ func (cdb *ChatDB) EnqueueChatMessage(chat *models.TalkGroupChatV3) error {
 		Timestamp:  time.Now().Unix(),
 		RetryCount: 0,
 		Status:     "pending",
+		IsResync:   isResync,
 	}
 
 	data, err := json.Marshal(queueMessage)
@@ -1722,14 +1761,14 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 		hasError := false
 
 		if message.ChannelId != "" {
-			err = cdb.updateGroupChannelLatestChat(message.ChannelId, message.Chat)
+			err = cdb.updateGroupChannelLatestChat(message.ChannelId, message.Chat, message.IsResync)
 			if err != nil {
 				log.Printf("Failed to update group channel latest chat for pinId %s: %v", message.PinId, err)
 				hasError = true
 			}
 
 			// Update channel chat index
-			err = cdb.UpdateChannelChatIndex(message.Chat)
+			err = cdb.UpdateChannelChatIndex(message.Chat, message.IsResync)
 			if err != nil {
 				log.Printf("Failed to update channel chat index for pinId %s: %v", message.PinId, err)
 				hasError = true
@@ -1737,14 +1776,14 @@ func (cdb *ChatDB) ProcessQueueMessages(groupDB *GroupDB, batchSize int) error {
 
 		} else {
 			// Update group list for all members in the group
-			err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB)
+			err = cdb.UpdateGroupMembersContextList(message.GroupId, message.Chat, groupDB, message.IsResync)
 			if err != nil {
 				log.Printf("Failed to update group members context list for pinId %s: %v", message.PinId, err)
 				hasError = true
 			}
 
 			// Update chat index
-			err = cdb.UpdateChatIndex(message.Chat)
+			err = cdb.UpdateChatIndex(message.Chat, message.IsResync)
 			if err != nil {
 				log.Printf("Failed to update chat index for pinId %s: %v", message.PinId, err)
 				hasError = true
@@ -1806,7 +1845,7 @@ func (cdb *ChatDB) StartQueueProcessor(groupDB *GroupDB) {
 }
 
 // Main method to process Group Chat
-func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) error {
+func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}, isResync bool) error {
 	switch pin.Operation {
 	case "create":
 		path := pin.Path
@@ -1852,15 +1891,15 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) 
 		}
 
 		if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupChat) {
-			return cdb.processGroupChat(pin)
+			return cdb.processGroupChat(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleFileGroupChat) {
-			return cdb.processFileGroupChat(pin)
+			return cdb.processFileGroupChat(pin, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupLuckyBag) {
-			return cdb.processGroupLuckyBag(pin, txData)
+			return cdb.processGroupLuckyBag(pin, txData, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupOpenLuckyBag) {
-			return cdb.processGroupOpenLuckyBag(pin, txData)
+			return cdb.processGroupOpenLuckyBag(pin, txData, isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupResidueLuckyBag) {
-			return cdb.processGroupResidueLuckyBag(pin, txData)
+			return cdb.processGroupResidueLuckyBag(pin, txData, isResync)
 		}
 	default:
 		return nil // Unknown operation type, skip
@@ -1869,7 +1908,7 @@ func (cdb *ChatDB) ProcessGroupChatPin(pin *pin.PinInscription, tx interface{}) 
 }
 
 // Process group chat
-func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
+func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
@@ -1881,6 +1920,15 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 			}
 		}
 		// Already exists, skip processing
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -1910,6 +1958,7 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 		Version:     pin.Version,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
+		Index:       -1,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection
@@ -1921,11 +1970,17 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription) error {
 	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
 	if chat.ChannelId != "" {
 		// This is a channel chat
-		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+		err = cdb.processChannelChatTimestampAndEnqueue(chat, isResync)
 	} else {
 		// This is a group chat
-		err = cdb.processChatTimestampAndEnqueue(chat)
+		err = cdb.processChatTimestampAndEnqueue(chat, isResync)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -2243,14 +2298,14 @@ func (cdb *ChatDB) getChannelInfo(channelId string) (*models.TalkGroupChannelMod
 }
 
 // Save chat timestamp index (decide which collection to save to based on user state and group type)
-func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
+func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3, isResync bool) (bool, error) {
 	// Check if message should be placed in group
 	t := time.Now().UnixMilli()
 	shouldPlaceInGroup, outReason, err := cdb.shouldPlaceMessageInGroup(chat)
 	fmt.Println("[indexer]SaveChatTimestampWithState time:", time.Now().UnixMilli()-t)
 	if err != nil {
 		// If check fails, default to saving to normal collection
-		return true, cdb.SaveChatTimestamp(chat)
+		return true, cdb.SaveChatTimestamp(chat, isResync)
 	}
 
 	// Construct timestamp index value: pinId_chatType_timestamp
@@ -2282,13 +2337,15 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (boo
 
 	// Use GroupId_Timestamp as primary key to support timestamp range queries
 	// For collection2, we need to handle array format
-	err = cdb.saveChatTimestamp2WithCollection(chat, collection2)
+	err = cdb.saveChatTimestamp2WithCollection(chat, collection2, isResync)
 	if err != nil {
 		return isGoEnqueue, err
 	}
 
 	if shouldPlaceInGroup {
-		go dealGroupChatItem(chat)
+		if !isResync {
+			go dealGroupChatItem(chat)
+		}
 	} else {
 		cdb.SaveChat(chat)
 	}
@@ -2297,7 +2354,7 @@ func (cdb *ChatDB) SaveChatTimestampWithState(chat *models.TalkGroupChatV3) (boo
 }
 
 // Process file group chat
-func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
+func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingChat, err := cdb.GetChatByPinId(pin.Id)
 	if err == nil && existingChat != nil {
@@ -2309,6 +2366,15 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 			}
 		}
 		// Already exists, skip processing
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -2337,6 +2403,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,
 		Chain:       pin.ChainName,
+		Index:       -1,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection
@@ -2348,11 +2415,17 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
 	if chat.ChannelId != "" {
 		// This is a channel chat
-		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+		err = cdb.processChannelChatTimestampAndEnqueue(chat, isResync)
 	} else {
 		// This is a group chat
-		err = cdb.processChatTimestampAndEnqueue(chat)
+		err = cdb.processChatTimestampAndEnqueue(chat, isResync)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -2361,7 +2434,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription) error {
 }
 
 // Process group lucky bag
-func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
+func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingRed, err := cdb.GetLuckyBagByPinId(pin.Id)
 	if err == nil && existingRed != nil {
@@ -2373,6 +2446,15 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 				return err
 			}
 		}
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -2617,10 +2699,12 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		}
 	}
 
-	// Save lucky bag to appropriate collection based on error status
-	err = cdb.SaveLuckyBagPendingToCollection(redEnvelope)
-	if err != nil {
-		return err
+	if redEnvelope.GenType != 0 && redEnvelope.GenType != 2 {
+		// Save lucky bag to appropriate collection based on error status
+		err = cdb.SaveLuckyBagPendingToCollection(redEnvelope)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create chat message model (for group chat display)
@@ -2642,6 +2726,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
 		Version:     pin.Version,
+		Index:       -1,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection
@@ -2653,11 +2738,17 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	// Process chat timestamp and enqueue based on whether it's a channel chat or group chat
 	if chat.ChannelId != "" {
 		// This is a channel chat
-		err = cdb.processChannelChatTimestampAndEnqueue(chat)
+		err = cdb.processChannelChatTimestampAndEnqueue(chat, isResync)
 	} else {
 		// This is a group chat
-		err = cdb.processChatTimestampAndEnqueue(chat)
+		err = cdb.processChatTimestampAndEnqueue(chat, isResync)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
 	if err != nil {
 		return err
 	}
@@ -2675,7 +2766,7 @@ func contains(slice []string, item string) bool {
 }
 
 // Process group grab lucky bag
-func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
+func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingOpen, err := cdb.GetOpenLuckyBagByPinId(pin.Id)
 	if err == nil && existingOpen != nil {
@@ -2687,6 +2778,15 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 				return err
 			}
 		}
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -2781,6 +2881,7 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 		Timestamp:   pin.Timestamp,
 		Chain:       pin.ChainName,
 		BlockHeight: pin.GenesisHeight,
+		Index:       -1,
 	}
 
 	// Save chat message to TalkGroupChatPinCollection
@@ -2790,24 +2891,30 @@ func (cdb *ChatDB) processGroupOpenLuckyBag(pin *pin.PinInscription, txData *wir
 	}
 
 	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat, isResync)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
 	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(chat)
+		err = cdb.EnqueueChatMessage(chat, isResync)
 		if err != nil {
 			return err
 		}
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // Process group reclaim lucky bag
-func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx) error {
+func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *wire.MsgTx, isResync bool) error {
 	// Check if this PinId has already been saved
 	existingResidue, err := cdb.GetResidueLuckyBagByLuckyBagPinId(pin.Id)
 	if err == nil && existingResidue != nil {
@@ -2819,6 +2926,15 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 				return err
 			}
 		}
+		return nil
+	}
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
 		return nil
 	}
 
@@ -2890,6 +3006,12 @@ func (cdb *ChatDB) processGroupResidueLuckyBag(pin *pin.PinInscription, txData *
 	if err != nil {
 		log.Printf("SaveResidueLuckyBagList err: %v", err)
 		// Don't return error because main flow has succeeded
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -3048,7 +3170,19 @@ func toBool(v interface{}) bool {
 }
 
 // UpdateChatIndex updates the chat index for a group chat message
-func (cdb *ChatDB) UpdateChatIndex(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) UpdateChatIndex(chat *models.TalkGroupChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := cdb.GetChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Get the next index for this group
 	nextIndex, err := cdb.getNextGroupChatIndex(chat.GroupId)
 	if err != nil {
@@ -3767,16 +3901,16 @@ func (cdb *ChatDB) SaveResidueLuckyBagError(pinId string, luckyBagPinId string) 
 // ==================== Chat Processing Helper Methods ====================
 
 // Process chat timestamp and enqueue for group chats
-func (cdb *ChatDB) processChatTimestampAndEnqueue(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) processChatTimestampAndEnqueue(chat *models.TalkGroupChatV3, isResync bool) error {
 	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChatTimestampWithState(chat, isResync)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous group list updates
 	if isGoEnqueue {
-		err = cdb.EnqueueChatMessage(chat)
+		err = cdb.EnqueueChatMessage(chat, isResync)
 		if err != nil {
 			return err
 		}
@@ -3786,16 +3920,16 @@ func (cdb *ChatDB) processChatTimestampAndEnqueue(chat *models.TalkGroupChatV3) 
 }
 
 // Process chat timestamp and enqueue for channel chats
-func (cdb *ChatDB) processChannelChatTimestampAndEnqueue(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) processChannelChatTimestampAndEnqueue(chat *models.TalkGroupChatV3, isResync bool) error {
 	// Save timestamp index (decide which collection to save to based on user state)
-	isGoEnqueue, err := cdb.SaveChannelChatTimestampWithState(chat)
+	isGoEnqueue, err := cdb.SaveChannelChatTimestampWithState(chat, isResync)
 	if err != nil {
 		return err
 	}
 
 	// Enqueue message for asynchronous channel list updates
 	if isGoEnqueue {
-		err = cdb.EnqueueChannelChatMessage(chat)
+		err = cdb.EnqueueChannelChatMessage(chat, isResync)
 		if err != nil {
 			return err
 		}
@@ -3805,14 +3939,14 @@ func (cdb *ChatDB) processChannelChatTimestampAndEnqueue(chat *models.TalkGroupC
 }
 
 // Save channel chat timestamp index (decide which collection to save to based on user state and channel type)
-func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV3) (bool, error) {
+func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV3, isResync bool) (bool, error) {
 	// Check if message should be placed in channel
 	t := time.Now().UnixMilli()
 	shouldPlaceInChannel, outReason, err := cdb.shouldPlaceMessageInChannel(chat)
 	fmt.Println("[indexer]SaveChannelChatTimestampWithState time:", time.Now().UnixMilli()-t)
 	if err != nil {
 		// If check fails, default to saving to normal collection
-		return true, cdb.SaveChannelChatTimestamp(chat)
+		return true, cdb.SaveChannelChatTimestamp(chat, isResync)
 	}
 
 	// Decide which collection to save to based on shouldPlaceInChannel
@@ -3832,13 +3966,15 @@ func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV
 
 	// Use ChannelId_Timestamp as primary key to support timestamp range queries
 	// For collection2, we need to handle array format
-	err = cdb.saveChannelChatTimestamp2WithCollection(chat, collection2)
+	err = cdb.saveChannelChatTimestamp2WithCollection(chat, collection2, isResync)
 	if err != nil {
 		return isGoEnqueue, err
 	}
 
 	if shouldPlaceInChannel {
-		go dealGroupChatItem(chat)
+		if !isResync {
+			go dealGroupChatItem(chat)
+		}
 	} else {
 		cdb.SaveChat(chat)
 	}
@@ -3847,7 +3983,7 @@ func (cdb *ChatDB) SaveChannelChatTimestampWithState(chat *models.TalkGroupChatV
 }
 
 // Enqueue channel chat message for asynchronous processing
-func (cdb *ChatDB) EnqueueChannelChatMessage(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) EnqueueChannelChatMessage(chat *models.TalkGroupChatV3, isResync bool) error {
 	queueMessage := &QueueChatMessage{
 		PinId:      chat.PinId,
 		GroupId:    chat.GroupId,
@@ -3869,7 +4005,19 @@ func (cdb *ChatDB) EnqueueChannelChatMessage(chat *models.TalkGroupChatV3) error
 }
 
 // Save channel chat timestamp (helper method for channel chats)
-func (cdb *ChatDB) SaveChannelChatTimestamp(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) SaveChannelChatTimestamp(chat *models.TalkGroupChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		isDuplicate, err := cdb.CheckDuplicatePinIdInTimeRange(chat, TalkGroupChannelChatTimestamp2Collection)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Generate a 6-digit random number for uniqueness
 	randomNum := generateRandomNumber(6)
 
@@ -3882,7 +4030,19 @@ func (cdb *ChatDB) SaveChannelChatTimestamp(chat *models.TalkGroupChatV3) error 
 }
 
 // Save channel chat timestamp2 with collection (helper method)
-func (cdb *ChatDB) saveChannelChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string) error {
+func (cdb *ChatDB) saveChannelChatTimestamp2WithCollection(chat *models.TalkGroupChatV3, collection string, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		isDuplicate, err := cdb.CheckDuplicatePinIdInTimeRange(chat, collection)
+		if err != nil {
+			return err
+		}
+		if isDuplicate {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Generate a 6-digit random number for uniqueness
 	randomNum := generateRandomNumber(6)
 
@@ -3897,7 +4057,19 @@ func (cdb *ChatDB) saveChannelChatTimestamp2WithCollection(chat *models.TalkGrou
 // ==================== Channel Chat Index Methods ====================
 
 // UpdateChannelChatIndex updates the chat index for channel chats
-func (cdb *ChatDB) UpdateChannelChatIndex(chat *models.TalkGroupChatV3) error {
+func (cdb *ChatDB) UpdateChannelChatIndex(chat *models.TalkGroupChatV3, isResync bool) error {
+	//if isResync, frist get chat from database
+	if isResync {
+		dbChat, err := cdb.GetChatByPinId(chat.PinId)
+		if err != nil && err != pebble.ErrNotFound {
+			return err
+		}
+		if dbChat != nil && dbChat.Index != -1 {
+			//already has index, skip
+			return nil
+		}
+	}
+
 	// Get the next index for this channel
 	nextIndex, err := cdb.getNextChannelChatIndex(chat.ChannelId)
 	if err != nil {
@@ -4008,4 +4180,79 @@ func (cdb *ChatDB) GetCurrentMaxChannelChatIndex(channelId string) (int64, error
 
 	// Fallback: if parsing fails, return 0
 	return 0, nil
+}
+
+// CheckDuplicatePinIdInTimeRange 检查指定时间戳前1小时内是否存在相同的pinId
+// 用于重跑数据时避免重复处理
+func (cdb *ChatDB) CheckDuplicatePinIdInTimeRange(chat *models.TalkGroupChatV3, collection string) (bool, error) {
+	if chat == nil {
+		return false, fmt.Errorf("chat cannot be nil")
+	}
+
+	// 计算1小时前的时间戳（秒）
+	oneHourAgo := chat.Timestamp - 3600 // 3600秒 = 1小时
+
+	// 构建查询范围：groupId_timestamp
+	// 使用LowerBound和UpperBound来限制查询范围，提高性能
+	lowerBound := []byte(chat.GroupId + "_" + strconv.FormatInt(oneHourAgo, 10))
+	upperBound := []byte(chat.GroupId + "_" + strconv.FormatInt(chat.Timestamp, 10) + "999999") // 添加最大随机数后缀
+
+	// 创建迭代器，使用范围限制
+	iter, err := Pb[collection].NewIter(&pebble.IterOptions{
+		LowerBound: lowerBound,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// 遍历指定范围内的记录
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+
+		// 解析key: groupId_timestamp+number(6)
+		keyStr := string(key)
+		parts := strings.Split(keyStr, "_")
+		if len(parts) < 2 {
+			continue
+		}
+
+		// 提取时间戳部分（去掉最后6位随机数）
+		timestampStr := parts[1]
+		if len(timestampStr) > 6 {
+			timestampStr = timestampStr[:len(timestampStr)-6] // 去掉最后6位随机数
+		}
+
+		// 解析时间戳
+		recordTimestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+		if err != nil {
+			continue
+		}
+
+		// 检查时间戳是否在1小时前到当前时间戳之间
+		if recordTimestamp >= oneHourAgo && recordTimestamp <= chat.Timestamp {
+			// 解析value: pinId_chatType_timestamp_number
+			valueStr := string(value)
+			valueParts := strings.Split(valueStr, "_")
+			if len(valueParts) >= 1 {
+				recordPinId := valueParts[0]
+
+				// 检查pinId是否相同
+				if recordPinId == chat.PinId {
+					log.Printf("Found duplicate pinId %s in time range [%d, %d] for groupId %s",
+						chat.PinId, oneHourAgo, chat.Timestamp, chat.GroupId)
+					return true, nil
+				}
+			}
+		}
+	}
+
+	// 检查迭代器错误
+	if err = iter.Error(); err != nil {
+		return false, fmt.Errorf("iterator error: %v", err)
+	}
+
+	return false, nil
 }

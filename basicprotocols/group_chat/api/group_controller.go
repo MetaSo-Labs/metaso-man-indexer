@@ -364,6 +364,53 @@ func GetPrivateChatList(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Get private chat list by index range
+// @Description Get private chat records by index range (ascending order) for pagination
+// @Produce json
+// @Param metaId query string true "Current user MetaId"
+// @Param otherMetaId query string true "Other user MetaId"
+// @Param startIndex query int false "Start index for pagination, default is 0"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.PrivateChatResponse} "Successfully return private chat records by index"
+// @Router /group-chat/private-chat-list-by-index [get]
+func GetPrivateChatListByIndex(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchPrivateChatListByIndexRequest{
+			MetaId:      c.DefaultQuery("metaId", ""),
+			OtherMetaId: c.DefaultQuery("otherMetaId", ""),
+			StartIndex: func() int64 {
+				startIndex, _ := strconv.ParseInt(c.DefaultQuery("startIndex", "0"), 10, 64)
+				return startIndex
+			}(),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "20"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is empty"), t, 1))
+		return
+	}
+
+	if req.OtherMetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("otherMetaId is empty"), t, 1))
+		return
+	}
+
+	response, err := service.FetchPrivateChatListByIndex(req)
+	if err != nil {
+		log.Printf("Failed to fetch private chat list by index for metaId %s and otherMetaId %s: %v", req.MetaId, req.OtherMetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
 // @Summary Get lucky bag info
 // @Description Get lucky bag object and unclaimed list based on groupId and pinId
 // @Produce json
@@ -1353,18 +1400,18 @@ func GetGroupChannelList(c *gin.Context) {
 	c.JSON(http.StatusOK, respond.RespSuccess(result, time.Now().UnixMilli()))
 }
 
-// GetGroupUserRoleInfo 获取用户在群组中的角色信息
-// @Summary 获取用户在群组中的角色信息
-// @Description 获取指定用户在指定群组中的角色信息，包括是否为创建者、管理员、是否被拉黑、是否在白名单中等
-// @Tags 群组管理
+// GetGroupUserRoleInfo Fetch group user role info
+// @Summary Fetch group user role info
+// @Description Get user's role information in the group, including whether they are creator, admin, blacklisted, whitelisted, etc.
+// @Tags Group Management
 // @Accept json
 // @Produce json
-// @Param groupId query string true "群组ID"
-// @Param channelId query string false "频道ID（可选）"
-// @Param metaId query string true "用户MetaId"
-// @Success 200 {object} respond.RespSuccess{data=respond.GroupUserRoleInfo} "成功获取用户角色信息"
-// @Failure 400 {object} respond.RespError "请求参数错误"
-// @Failure 500 {object} respond.RespError "服务器内部错误"
+// @Param groupId query string true "Group ID"
+// @Param channelId query string false "Channel ID (optional)"
+// @Param metaId query string true "User MetaId"
+// @Success 200 {object} respond.RespSuccess{data=respond.GroupUserRoleInfo} "Successfully get user role information"
+// @Failure 400 {object} respond.RespError "Request parameter error"
+// @Failure 500 {object} respond.RespError "Internal server error"
 // @Router /group-chat/group-user-role [get]
 func GetGroupUserRoleInfo(c *gin.Context) {
 	var (
@@ -1376,7 +1423,7 @@ func GetGroupUserRoleInfo(c *gin.Context) {
 		}
 	)
 
-	// 参数验证
+	// Parameter validation
 	if req.GroupId == "" {
 		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
 		return
@@ -1391,6 +1438,23 @@ func GetGroupUserRoleInfo(c *gin.Context) {
 		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
 		return
 	}
+
+	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// IsSyncCompleted Check if sync is completed
+// @Summary Check if sync is completed
+// @Description Check if data synchronization is completed
+// @Tags Group Management
+// @Accept json
+// @Produce json
+// @Success 200 {object} respond.RespSuccess{data=bool} "Successfully return sync status"
+// @Failure 500 {object} respond.RespError "Internal server error"
+// @Router /group-chat/sync-completed [get]
+func IsSyncCompleted(c *gin.Context) {
+	var t = time.Now().UnixMilli()
+
+	result := service.IsSyncCompleted()
 
 	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
 }

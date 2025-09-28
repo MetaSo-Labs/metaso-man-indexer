@@ -16,6 +16,9 @@ var (
 )
 
 const (
+	// All pin collection
+	TalkAllPinCollection string = "talk_all_pin" // key: pinId, value: isResync
+
 	// Community related databases
 	TalkCommunityVersionInfoCollection string = "talk_community_version_info" // key: communityId_pinId and pinId_communityId
 	TalkCommunityInfoCollection        string = "talk_community_info"         // key: communityId
@@ -106,6 +109,9 @@ const (
 
 	// Socket info snapshot
 	TalkSocketInfoSnapshotCollection string = "talk_socket_info_snapshot" // key: timestamp，value: ConnectionStats
+
+	// Sync info
+	TalkSyncInfoCollection string = "talk_sync_info" // key: sync_chain，value: []{timestamp, blockHeight, chain}
 )
 
 type Pebble struct{}
@@ -124,8 +130,13 @@ var Pb map[string]*pebble.DB
 func (pb *Pebble) InitDatabase() error {
 	Pb = make(map[string]*pebble.DB, 10)
 
+	err := open(TalkAllPinCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkAllPinCollection, err)
+	}
+
 	// Initialize community related databases
-	err := open(TalkCommunityVersionInfoCollection)
+	err = open(TalkCommunityVersionInfoCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkCommunityVersionInfoCollection, err)
 	}
@@ -401,6 +412,11 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkSocketInfoSnapshotCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkSocketInfoSnapshotCollection, err)
+	}
+
+	err = open(TalkSyncInfoCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkSyncInfoCollection, err)
 	}
 
 	err = CheckAndMigrateDatabase()

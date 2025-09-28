@@ -41,6 +41,7 @@ type AllConfig struct {
 	GroupChat   groupChatConfig
 	Socket      socketConfig
 	Redis       redisConfig
+	Blockfile   blockfileConfig
 }
 type syncConfig struct {
 	SyncAllData   bool     `toml:"syncAllData"`
@@ -119,6 +120,7 @@ type pebble struct {
 type groupChatConfig struct {
 	Port            string `toml:"port"`
 	Host            string `toml:"host"`
+	SwaggerHost     string `toml:"swaggerHost"`
 	ManHost         string `toml:"manHost"`
 	BackupHour      int    `toml:"backupHour"`
 	BackupRetention int    `toml:"backupRetention"`
@@ -131,6 +133,8 @@ type groupChatConfig struct {
 	LogMaxAge        int    `toml:"logMaxAge"`
 	LogConsoleOutput bool   `toml:"logConsoleOutput"`
 	LogFileOutput    bool   `toml:"logFileOutput"`
+	// IsActiveResync is used to determine if the resync is active
+	IsActiveResync bool `toml:"isActiveResync"`
 }
 type socketConfig struct {
 	IsEnble          bool   `toml:"isEnble"`
@@ -146,6 +150,13 @@ type redisConfig struct {
 	RedisAddr     string `toml:"redisAddr"`
 	RedisPassword string `toml:"redisPassword"`
 	RedisDB       int    `toml:"redisDB"`
+}
+
+type blockfileConfig struct {
+	SyncHost              string `toml:"syncHost"`
+	DataPath              string `toml:"dataPath"`
+	DefaultBeginHeightBTC int64  `toml:"defaultBeginHeightBTC"`
+	DefaultBeginHeightMVC int64  `toml:"defaultBeginHeightMVC"`
 }
 
 func InitConfig(filePath string) {
@@ -215,6 +226,8 @@ func InitConfig(filePath string) {
 			Config.GroupChat.Port = *v
 		case "group_chat_host":
 			Config.GroupChat.Host = *v
+		case "is_active_resync":
+			Config.GroupChat.IsActiveResync = *v == "true"
 		// case "socket_port":
 		// 	Config.Socket.Port = *v
 		// case "socket_max_connections":
@@ -233,6 +246,14 @@ func InitConfig(filePath string) {
 			Config.Redis.RedisPassword = *v
 		case "redis_db":
 			Config.Redis.RedisDB, _ = strconv.Atoi(*v)
+		case "sync_host":
+			Config.Blockfile.SyncHost = *v
+		case "data_path":
+			Config.Blockfile.DataPath = *v
+		case "default_begin_height_btc":
+			Config.Blockfile.DefaultBeginHeightBTC, _ = strconv.ParseInt(*v, 10, 64)
+		case "default_begin_height_mvc":
+			Config.Blockfile.DefaultBeginHeightMVC, _ = strconv.ParseInt(*v, 10, 64)
 		}
 
 	}

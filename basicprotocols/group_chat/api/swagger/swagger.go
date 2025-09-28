@@ -1,7 +1,7 @@
 package swagger
 
 import (
-	"manindexer/basicprotocols/group_chat/api/swagger/docs"
+	"manindexer/common"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -11,8 +11,6 @@ import (
 
 // SetupSwagger Setup Swagger routes for group chat module
 func SetupSwagger(router *gin.Engine) {
-	// Manually register Swagger
-	docs.RegisterSwagger()
 	// Add group chat module Swagger JSON documentation route
 	router.GET("/group-chat/api-docs.json", func(c *gin.Context) {
 		// Set correct Content-Type
@@ -20,24 +18,44 @@ func SetupSwagger(router *gin.Engine) {
 
 		// Detect proxy path prefix from request headers or URL
 		basePath := "/"
-		host := c.Request.Host
 
-		// Check for common proxy headers
-		if xForwardedPath := c.GetHeader("X-Forwarded-Path"); xForwardedPath != "" {
-			basePath = xForwardedPath + "/"
-		} else if xOriginalURI := c.GetHeader("X-Original-URI"); xOriginalURI != "" {
-			// Extract base path from X-Original-URI
-			// Example: /chat-api-test/group-chat/api-docs.json -> /chat-api-test/
-			if len(xOriginalURI) > 0 && xOriginalURI != "/group-chat/api-docs.json" {
-				// Find the position where /group-chat/api-docs.json starts
-				if idx := len(xOriginalURI) - len("/group-chat/api-docs.json"); idx > 0 {
-					basePath = xOriginalURI[:idx] + "/"
+		// Use configured SwaggerHost if available, otherwise fall back to request host
+		host := c.Request.Host
+		swaggerHost := ""
+		if common.Config != nil && common.Config.GroupChat.SwaggerHost != "" {
+			swaggerHost = common.Config.GroupChat.SwaggerHost
+			// Check if SwaggerHost contains path
+			if strings.Contains(swaggerHost, "/") {
+				// Split host and path
+				parts := strings.SplitN(swaggerHost, "/", 2)
+				host = parts[0]
+				basePath = "/" + parts[1] + "/"
+			} else {
+				host = swaggerHost
+			}
+		}
+
+		// Check for common proxy headers (only if basePath not already set from SwaggerHost)
+		if basePath == "/" {
+			if xForwardedPath := c.GetHeader("X-Forwarded-Path"); xForwardedPath != "" {
+				basePath = xForwardedPath + "/"
+			} else if xOriginalURI := c.GetHeader("X-Original-URI"); xOriginalURI != "" {
+				// Extract base path from X-Original-URI
+				if len(xOriginalURI) > 0 && xOriginalURI != "/group-chat/api-docs.json" {
+					// Find the position where /group-chat/api-docs.json starts
+					if idx := len(xOriginalURI) - len("/group-chat/api-docs.json"); idx > 0 {
+						extractedPath := xOriginalURI[:idx]
+						// Remove leading slash and add trailing slash
+						extractedPath = strings.TrimPrefix(extractedPath, "/")
+						if extractedPath != "" {
+							basePath = "/" + extractedPath + "/"
+						}
+					}
 				}
 			}
-		} else {
+
 			// Try to detect from Referer header
 			if referer := c.GetHeader("Referer"); referer != "" {
-				// Example: https://www.show.now/chat-api-test/group-chat/docs/index.html
 				if idx := strings.Index(referer, "/group-chat/docs/"); idx != -1 {
 					// Extract everything before /group-chat/docs/
 					if protocolIdx := strings.Index(referer, "://"); protocolIdx != -1 {
@@ -75,7 +93,7 @@ func SetupSwagger(router *gin.Engine) {
     "host": "` + host + `",
     "basePath": "` + basePath + `",
     "paths": {
-        "group-chat/group-list": {
+        "/group-chat/group-list": {
             "get": {
                 "description": "Get group list with pagination support",
                 "produces": ["application/json"],
@@ -387,6 +405,25 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/private-chat-list-by-index": {
+            "get": {
+                "description": "Get private chat records by index range (ascending order) for pagination",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get private chat records by index range",
+                "parameters": [
+                    {"type": "string", "description": "Current user MetaId", "name": "metaId", "in": "query", "required": true},
+                    {"type": "string", "description": "Other user MetaId", "name": "otherMetaId", "in": "query", "required": true},
+                    {"type": "integer", "description": "Start index for pagination, default is 0", "name": "startIndex", "in": "query", "required": false},
+                    {"type": "integer", "description": "Page size, default is 20", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully return private chat records by index", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/group-member-list": {
             "get": {
                 "description": "Get member list of a group, support pagination",
@@ -426,19 +463,31 @@ func SetupSwagger(router *gin.Engine) {
         },
         "/group-chat/group-user-role": {
             "get": {
-                "description": "获取用户在群组中的角色信息，包括是否为创建者、管理员、是否被拉黑、是否在白名单中等",
+                "description": "Get user's role information in the group, including whether they are creator, admin, blacklisted, whitelisted, etc.",
                 "produces": ["application/json"],
                 "tags": ["Group Management"],
-                "summary": "获取用户在群组中的角色信息",
+                "summary": "Get user's role information in group",
                 "parameters": [
-                    {"type": "string", "description": "群组ID", "name": "groupId", "in": "query", "required": true},
-                    {"type": "string", "description": "频道ID（可选）", "name": "channelId", "in": "query", "required": false},
-                    {"type": "string", "description": "用户MetaId", "name": "metaId", "in": "query", "required": true}
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true},
+                    {"type": "string", "description": "Channel ID (optional)", "name": "channelId", "in": "query", "required": false},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": true}
                 ],
                 "responses": {
-                    "200": {"description": "成功获取用户角色信息", "schema": {"type": "object"}},
-                    "400": {"description": "请求参数错误", "schema": {"type": "object"}},
-                    "500": {"description": "服务器内部错误", "schema": {"type": "object"}}
+                    "200": {"description": "Successfully get user role information", "schema": {"type": "object"}},
+                    "400": {"description": "Request parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/group-chat/sync-completed": {
+            "get": {
+                "description": "Check if data synchronization is completed",
+                "produces": ["application/json"],
+                "tags": ["System Status"],
+                "summary": "Check if sync is completed",
+                "responses": {
+                    "200": {"description": "Successfully return sync status", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
         },
@@ -904,7 +953,7 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
-        "api/db/community/version": {
+        "/api/db/community/version": {
             "get": {
                 "description": "Query TalkCommunityVersionInfoCollection data by communityId or pinId",
                 "produces": ["application/json"],
@@ -1519,12 +1568,13 @@ func SetupSwagger(router *gin.Engine) {
         },
         "/api/db/metaid/join": {
             "get": {
-                "description": "Query TalkGroupMetaIdJoinCollection data by metaId",
+                "description": "Query TalkGroupMetaIdJoinCollection data by metaId with optional groupId filter",
                 "produces": ["application/json"],
                 "tags": ["Database Operations"],
                 "summary": "Get MetaId join list by metaId",
                 "parameters": [
-                    {"type": "string", "description": "MetaId", "name": "metaId", "in": "query", "required": true}
+                    {"type": "string", "description": "MetaId", "name": "metaId", "in": "query", "required": true},
+                    {"type": "string", "description": "Group ID to filter by (optional)", "name": "groupId", "in": "query", "required": false}
                 ],
                 "responses": {
                     "200": {"description": "MetaId join list with detailed information", "schema": {"type": "object"}},
@@ -2050,6 +2100,500 @@ func SetupSwagger(router *gin.Engine) {
                     "500": {"description": "Internal server error", "schema": {"type": "object"}}
                 }
             }
+        },
+        "/group-chat/sync/pins-by-time-range": {
+            "post": {
+                "description": "Sync pin data by timestamp range with automatic batch processing (default 1 hour per batch)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Sync pin data by timestamp range (auto batch)",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "startTs": {
+                                    "type": "integer",
+                                    "description": "Start timestamp (Unix timestamp)",
+                                    "example": 1640995200
+                                },
+                                "endTs": {
+                                    "type": "integer", 
+                                    "description": "End timestamp (Unix timestamp)",
+                                    "example": 1641081600
+                                },
+                                "host": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Host filter conditions (optional)",
+                                    "example": ["bc1p20k3x2c4mglfxr5wa5sgtgechwstpld80kru2cg4gmm4urvuaqqsvapxu0"]
+                                },
+                                "protocol": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Protocol filter conditions (optional)",
+                                    "example": ["/protocols/simplefilegroupchat"]
+                                }
+                            },
+                            "required": ["startTs", "endTs"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Sync started successfully",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {"type": "string", "description": "Sync start message"},
+                                        "startTime": {"type": "string", "description": "Start time"},
+                                        "startTs": {"type": "integer", "description": "Start timestamp"},
+                                        "endTs": {"type": "integer", "description": "End timestamp"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Request parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/sync/pins-by-time-range-batch": {
+            "post": {
+                "description": "Sync pin data by timestamp range with custom batch size support",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Sync pin data by timestamp range (custom batch)",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "startTs": {
+                                    "type": "integer",
+                                    "description": "Start timestamp (Unix timestamp)",
+                                    "example": 1640995200
+                                },
+                                "endTs": {
+                                    "type": "integer",
+                                    "description": "End timestamp (Unix timestamp)",
+                                    "example": 1641081600
+                                },
+                                "batchDurationSeconds": {
+                                    "type": "integer",
+                                    "description": "Batch duration in seconds",
+                                    "example": 3600
+                                },
+                                "host": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Host filter conditions (optional)",
+                                    "example": ["bc1p20k3x2c4mglfxr5wa5sgtgechwstpld80kru2cg4gmm4urvuaqqsvapxu0"]
+                                },
+                                "protocol": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Protocol filter conditions (optional)",
+                                    "example": ["/protocols/simplefilegroupchat"]
+                                }
+                            },
+                            "required": ["startTs", "endTs"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Batch sync started successfully",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {"type": "string", "description": "Sync start message"},
+                                        "startTime": {"type": "string", "description": "Start time"},
+                                        "startTs": {"type": "integer", "description": "Start timestamp"},
+                                        "endTs": {"type": "integer", "description": "End timestamp"},
+                                        "batchDurationSeconds": {"type": "integer", "description": "Batch duration"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Request parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/sync/stats": {
+            "get": {
+                "description": "Get current sync service status, progress and statistics including progress percentage and status",
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Get sync status and progress",
+                "responses": {
+                    "200": {
+                        "description": "Successfully get sync status and progress",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "totalPins": {"type": "integer", "description": "Total pin count"},
+                                        "processedPins": {"type": "integer", "description": "Processed pin count"},
+                                        "successPins": {"type": "integer", "description": "Successfully processed pin count"},
+                                        "failedPins": {"type": "integer", "description": "Failed pin count"},
+                                        "startTime": {"type": "string", "description": "Start time"},
+                                        "endTime": {"type": "string", "description": "End time"},
+                                        "isCompleted": {"type": "boolean", "description": "Whether completed"},
+                                        "errorMessage": {"type": "string", "description": "Error message"},
+                                        "progress": {"type": "number", "description": "Progress percentage"},
+                                        "status": {"type": "string", "description": "Status (waiting/in progress/completed)"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/sync/status": {
+            "get": {
+                "description": "Check if sync service is running",
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Get sync running status",
+                "responses": {
+                    "200": {
+                        "description": "Successfully get running status",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "isRunning": {"type": "boolean", "description": "Whether running"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/sync/stop": {
+            "post": {
+                "description": "Stop running sync service, gracefully cancel ongoing sync operations",
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Stop sync service",
+                "responses": {
+                    "200": {
+                        "description": "Stop sync successfully",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {"type": "string", "description": "Stop message"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Sync service is not running", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/sync/block-height-by-timestamp": {
+            "post": {
+                "description": "Find block heights closest to the specified timestamp on MVC and BTC chains",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Sync Management"],
+                "summary": "Query block height by timestamp",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/GetBlockHeightByTimestampRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully get block height information",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "timestamp": {"type": "integer", "format": "int64", "description": "Target timestamp"},
+                                        "results": {
+                                            "type": "array",
+                                            "items": {"$ref": "#/definitions/BlockHeightResultResponse"},
+                                            "description": "Block height query result list"
+                                        },
+                                        "count": {"type": "integer", "description": "Result count"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Request parameter error",
+                        "schema": {"$ref": "#/definitions/Message"}
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {"$ref": "#/definitions/Message"}
+                    }
+                }
+            }
+        },
+        "/api/db/pin-sync/status": {
+            "get": {
+                "description": "Get pin sync status by pinId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get pin sync status by pinId",
+                "parameters": [
+                    {"type": "string", "description": "Pin ID to check sync status", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with pin sync status", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/pin-sync/synced-pins": {
+            "get": {
+                "description": "Get all synced pins with pagination",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get all synced pins with pagination",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor for pagination (default: 0)", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Number of items to return (default: 20, max: 100)", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with synced pins list", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/sync-stats": {
+            "get": {
+                "description": "Get current sync service status, progress and statistics including progress percentage and status",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get sync status and progress",
+                "responses": {
+                    "200": {
+                        "description": "Successfully get sync status and progress",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "totalPins": {"type": "integer", "description": "Total pin count"},
+                                        "processedPins": {"type": "integer", "description": "Processed pin count"},
+                                        "successPins": {"type": "integer", "description": "Successfully processed pin count"},
+                                        "failedPins": {"type": "integer", "description": "Failed pin count"},
+                                        "startTime": {"type": "string", "description": "Start time"},
+                                        "endTime": {"type": "string", "description": "End time"},
+                                        "isCompleted": {"type": "boolean", "description": "Whether completed"},
+                                        "errorMessage": {"type": "string", "description": "Error message"},
+                                        "progress": {"type": "number", "description": "Progress percentage"},
+                                        "status": {"type": "string", "description": "Status (waiting/in progress/completed)"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/pin-sync/pins-count-by-time-range": {
+            "get": {
+                "description": "Get pins count within a specified time range",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get pins count by time range",
+                "parameters": [
+                    {"type": "integer", "description": "Start timestamp (seconds)", "name": "startTime", "in": "query", "required": true},
+                    {"type": "integer", "description": "End timestamp (seconds)", "name": "endTime", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully get pins count by time range",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "startTime": {"type": "integer", "description": "Start timestamp"},
+                                        "endTime": {"type": "integer", "description": "End timestamp"},
+                                        "totalCount": {"type": "integer", "description": "Total pins count"},
+                                        "chainCounts": {
+                                            "type": "object",
+                                            "description": "Pins count by chain",
+                                            "additionalProperties": {"type": "integer"}
+                                        },
+                                        "queryTime": {"type": "integer", "description": "Query execution timestamp"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/pin-sync/check-pin-exists": {
+            "get": {
+                "description": "Check if a pin exists by chain name, block height and pinId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Check pin existence by chain and block height",
+                "parameters": [
+                    {"type": "string", "description": "Chain name (e.g., btc, mvc)", "name": "chainName", "in": "query", "required": true},
+                    {"type": "integer", "description": "Block height", "name": "blockHeight", "in": "query", "required": true},
+                    {"type": "string", "description": "Pin ID", "name": "pinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully check pin existence",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "exists": {"type": "boolean", "description": "Whether the pin exists"},
+                                        "chainName": {"type": "string", "description": "Chain name"},
+                                        "blockHeight": {"type": "integer", "description": "Block height"},
+                                        "pinId": {"type": "string", "description": "Pin ID"},
+                                        "pin": {
+                                            "type": "object",
+                                            "description": "Pin details (only present if exists is true)",
+                                            "properties": {
+                                                "id": {"type": "string", "description": "Pin ID"},
+                                                "chainName": {"type": "string", "description": "Chain name"},
+                                                "genesisHeight": {"type": "integer", "description": "Genesis block height"},
+                                                "timestamp": {"type": "integer", "description": "Pin timestamp"},
+                                                "address": {"type": "string", "description": "Pin address"},
+                                                "createAddress": {"type": "string", "description": "Creator address"},
+                                                "createMetaId": {"type": "string", "description": "Creator MetaId"},
+                                                "operation": {"type": "string", "description": "Pin operation"},
+                                                "path": {"type": "string", "description": "Pin path"},
+                                                "contentType": {"type": "string", "description": "Content type"},
+                                                "contentLength": {"type": "integer", "description": "Content length"}
+                                            }
+                                        }
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/pin-sync/get-pin-ids-by-height": {
+            "get": {
+                "description": "Get all pin IDs for a specific chain and block height",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get pin IDs by chain and block height",
+                "parameters": [
+                    {"type": "string", "description": "Chain name (e.g., btc, mvc)", "name": "chainName", "in": "query", "required": true},
+                    {"type": "integer", "description": "Block height", "name": "blockHeight", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved pin IDs",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "chainName": {"type": "string", "description": "Chain name"},
+                                        "blockHeight": {"type": "integer", "description": "Block height"},
+                                        "pinIds": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "description": "List of pin IDs"
+                                        },
+                                        "pinsTotal": {"type": "integer", "description": "Total number of pins found in time range"},
+                                        "startTime": {"type": "integer", "description": "Start time of search range"},
+                                        "endTime": {"type": "integer", "description": "End time of search range"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
         }
     },
     "tags": [
@@ -2076,6 +2620,10 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "System health and status related APIs",
             "name": "System"
+        },
+        {
+            "description": "Pin data synchronization management APIs for syncing blockchain data",
+            "name": "Sync Management"
         }
     ],
     "definitions": {
@@ -2097,6 +2645,36 @@ func SetupSwagger(router *gin.Engine) {
                 "timestamp": {
                     "type": "integer",
                     "description": "Response timestamp"
+                }
+            }
+        },
+        "GetBlockHeightByTimestampRequest": {
+            "type": "object",
+            "required": ["timestamp"],
+            "properties": {
+                "timestamp": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Target timestamp"
+                }
+            }
+        },
+        "BlockHeightResultResponse": {
+            "type": "object",
+            "properties": {
+                "chainName": {
+                    "type": "string",
+                    "description": "Chain name (mvc or btc)"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Block height"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "Block timestamp"
                 }
             }
         },
@@ -3037,13 +3615,14 @@ func SetupSwagger(router *gin.Engine) {
     }
 }`
 
-		// Process the document template to adjust paths if needed
+		// Process the document template to ensure consistent path format
 		doc := docTemplate
 
-		// Convert absolute paths to relative paths for proper proxy support
-		// Replace all "/api/ with "api/ and "/health with "health
-		doc = strings.ReplaceAll(doc, `"/api/`, `"api/`)
-		doc = strings.ReplaceAll(doc, `"/health`, `"health`)
+		// Convert all absolute paths to relative paths for consistent basePath handling
+		// Remove leading slashes from all paths to make them relative to basePath
+		doc = strings.ReplaceAll(doc, `"group-chat/`, `"/group-chat/`)
+		doc = strings.ReplaceAll(doc, `"api/db/`, `"/api/db/`)
+		doc = strings.ReplaceAll(doc, `"health"`, `"/health"`)
 
 		c.Data(200, "application/json", []byte(doc))
 	})

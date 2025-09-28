@@ -1,5 +1,10 @@
 package protocols
 
+import (
+	"fmt"
+	"strings"
+)
+
 /*
 *
 
@@ -518,4 +523,27 @@ const (
 // info
 const (
 	MonitorInfoChatpubkey = "chatpubkey"
+)
+
+var (
+	ProtocolList = []string{
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleCommunity)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleCommunityJoin)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupCreate)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupChannel)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupJoin)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupRemoveUser)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupAdmin)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupBlock)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupWhitelist)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupChat)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleFileGroupChat)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupLuckyBag)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupOpenLuckyBag)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupResidueLuckyBag)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleMsg)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleFileMsg)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimplePrivateBlock)),
+		fmt.Sprintf("/info/%s", strings.ToLower(MonitorInfoChatpubkey)),
+	}
 )

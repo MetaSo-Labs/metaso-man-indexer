@@ -367,6 +367,15 @@ func (udb *UserInfoDB) ProcessUserInfoPin(pin *pin.PinInscription) error {
 }
 
 func (udb *UserInfoDB) processUserInfoCreate(pin *pin.PinInscription) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	fmt.Printf("[UserInfoDB] processUserInfoCreate: %+v\n", pin)
 	// Get existing history by address (use address as primary check)
 	addressHistory, err := udb.GetUserInfoHistory(pin.CreateAddress, true)
@@ -455,10 +464,26 @@ func (udb *UserInfoDB) processUserInfoCreate(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (udb *UserInfoDB) processUserInfoModify(pin *pin.PinInscription) error {
+
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
 	// Get existing history by address (use address as primary check)
 	addressHistory, err := udb.GetUserInfoHistory(pin.CreateAddress, true)
 	if err != nil {
@@ -547,6 +572,12 @@ func (udb *UserInfoDB) processUserInfoModify(pin *pin.PinInscription) error {
 		return err
 	}
 
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -557,7 +588,7 @@ func (udb *UserInfoDB) GetLatestValidUserInfo(key string, isAddress bool) (*mode
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("[UserInfoDB] GetLatestValidUserInfo history: %+v\n", history)
+	// fmt.Printf("[UserInfoDB] GetLatestValidUserInfo history: %+v\n", history)
 
 	if len(history) == 0 {
 		return nil, nil // No history found

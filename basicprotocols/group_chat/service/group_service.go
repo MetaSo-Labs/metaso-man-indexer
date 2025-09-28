@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"manindexer/adapter"
 	"manindexer/basicprotocols/group_chat/api/request"
 	"manindexer/basicprotocols/group_chat/api/respond"
@@ -20,14 +21,16 @@ import (
 )
 
 var (
-	communityDB  *db.CommunityDB
-	groupDB      *db.GroupDB
-	chatDB       *db.ChatDB
-	privateDB    *db.PrivateChatDB
-	userInfoDB   *db.UserInfoDB
-	socketInfoDB *db.SocketInfoDB
-	pebbleDB     *db.Pebble
-	chainAdapter map[string]adapter.Chain
+	communityDB   *db.CommunityDB
+	groupDB       *db.GroupDB
+	chatDB        *db.ChatDB
+	privateDB     *db.PrivateChatDB
+	userInfoDB    *db.UserInfoDB
+	socketInfoDB  *db.SocketInfoDB
+	pebbleDB      *db.Pebble
+	globalBlockDB *db.GlobalBlockDB
+	chainAdapter  map[string]adapter.Chain
+	syncDbService *db.SyncDBService
 )
 
 // InitService Initialize service
@@ -42,13 +45,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	privateDB = indexer.GetPrivateDB()
 	userInfoDB = indexer.GetUserInfoDB()
 	socketInfoDB = indexer.GetSocketInfoDB()
+	globalBlockDB = indexer.GetGlobalBlockDB()
 	chainAdapter = adapter
-
-	// Start chat queue processor
-	// chatDB.StartQueueProcessor(groupDB)
-
-	// Start private chat queue processor
-	// privateDB.StartPrivateQueueProcessor()
+	syncDbService = indexer.GetSyncDBService()
 
 	StartOpenLuckyBagQueueProcessor()
 	StartResidueLuckyBagQueueProcessor()
@@ -57,6 +56,9 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	db.SetHandleGroupChatItem(wsForGroupChatItem)
 	db.SetHandlePrivateChatItem(wsForPrivateChatItem)
 	db.SetHandleGroupRoleInfoChangeList(wsForGroupRoleInfoChange)
+
+	// Set process pin function for sync service
+	GetSyncService().SetProcessPinFunc(indexer.ProcessPin)
 
 	// Initialize cache service for lucky bag
 	cache_service.InitCacheService(
@@ -84,16 +86,20 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 	if req.Cursor <= 0 {
 		req.Cursor = 0
 	}
+	if req.Size > 100 {
+		req.Size = 100
+	}
 
 	var groups []*models.TalkGroupModel
+	var total int64
 	var err error
 
 	// If metaId is not empty, get user's joined group list
 	if req.MetaId != "" {
-		groups, err = groupDB.GetGroupListByMetaId(req.MetaId, req.Cursor, req.Size)
+		groups, total, err = groupDB.GetGroupListByMetaId(req.MetaId, req.Cursor, req.Size)
 	} else {
 		// Get all group list
-		groups, err = groupDB.GetGroupList(req.Cursor, req.Size)
+		groups, total, err = groupDB.GetGroupList(req.Cursor, req.Size)
 	}
 
 	if err != nil {
@@ -182,7 +188,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 	}
 
 	return &respond.GroupResponse{
-		Total: int64(len(groupItems)),
+		Total: total,
 		List:  groupItems,
 	}, nil
 }
@@ -1522,6 +1528,113 @@ func FetchPrivateChatList(req *request.FetchPrivateChatListRequest) (*respond.Pr
 	}, nil
 }
 
+// FetchPrivateChatListByIndex Get private chat list by index range (ascending order)
+func FetchPrivateChatListByIndex(req *request.FetchPrivateChatListByIndexRequest) (*respond.PrivateChatResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Performance monitoring: record start time
+	startTime := time.Now()
+	var perfStats = struct {
+		getChatsTime       int64
+		responseFormatTime int64
+		userInfoTime       int64
+		totalTime          int64
+	}{}
+
+	var chats []*models.TalkPrivateChatV3
+	var lastIndex int64
+	var err error
+
+	t := time.Now().UnixMilli()
+	chats, lastIndex, err = privateDB.GetPrivateChatsByMetaIdsAndStartIndexRange(req.MetaId, req.OtherMetaId, req.StartIndex, req.Size)
+	perfStats.getChatsTime = time.Now().UnixMilli() - t
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format
+	var chatItems []*respond.PrivateChatItem
+
+	t1 := time.Now().UnixMilli()
+	for _, chat := range chats {
+		chatItem := &respond.PrivateChatItem{
+			From:         chat.From,
+			FromUserInfo: common_service.FetchMetaIDUserInfoInfoByMetaId(chat.From),
+			To:           chat.To,
+			ToUserInfo:   common_service.FetchMetaIDUserInfoInfoByMetaId(chat.To),
+			TxId:         chat.TxId,
+			PinId:        chat.PinId,
+			MetaId:       chat.From, // Message creator MetaId
+			Address:      chat.FromAddress,
+			UserInfo:     common_service.FetchMetaIDUserInfo(chat.FromAddress),
+			NickName:     "", // Need to get from user info
+			Protocol:     chat.Protocol,
+			Content:      chat.Content,
+			ContentType:  chat.ContentType,
+			Encryption:   chat.Encryption,
+			Version:      chat.Version,
+			ChatType:     int64(chat.ChatType),
+			ReplyPin:     chat.ReplyPin,
+			ReplyInfo:    nil,
+			ReplyMetaId:  "",
+			Timestamp:    chat.Timestamp,
+			Chain:        chat.Chain,
+			BlockHeight:  chat.BlockHeight,
+			Index:        chat.Index,
+		}
+
+		// Handle reply information
+		if chat.ReplyPin != "" {
+			replyChat, _ := privateDB.GetPrivateChatByPinId(chat.ReplyPin)
+			if replyChat != nil {
+				chatItem.ReplyInfo = &respond.ReplyInfo{
+					PinId:       replyChat.PinId,
+					MetaId:      replyChat.From,
+					Address:     replyChat.FromAddress,
+					NickName:    "", // Private chat doesn't have NickName field
+					Protocol:    replyChat.Protocol,
+					Content:     replyChat.Content,
+					ContentType: replyChat.ContentType,
+					Encryption:  replyChat.Encryption,
+					Version:     replyChat.Version,
+					ChatType:    replyChat.ChatType,
+					Timestamp:   replyChat.Timestamp,
+					Chain:       replyChat.Chain,
+					Index:       replyChat.Index,
+				}
+				if chatItem.ReplyInfo.Address == "" && chatItem.ReplyInfo.MetaId != "" {
+					chatItem.ReplyInfo.UserInfo = common_service.FetchMetaIDUserInfoInfoByMetaId(chatItem.ReplyInfo.MetaId)
+					if chatItem.ReplyInfo.UserInfo != nil {
+						chatItem.ReplyInfo.Address = chatItem.ReplyInfo.UserInfo.Address
+					}
+				}
+
+				chatItem.ReplyMetaId = replyChat.From
+			}
+		}
+
+		chatItems = append(chatItems, chatItem)
+	}
+	perfStats.responseFormatTime = time.Now().UnixMilli() - t1
+
+	// Performance logging
+	perfStats.totalTime = time.Now().UnixMilli() - startTime.UnixMilli()
+	if perfStats.totalTime > 1000 { // Log if total time > 1 second
+		log.Printf("[PERF] FetchPrivateChatListByIndex - Total: %dms, GetChats: %dms, Format: %dms, UserInfo: %dms",
+			perfStats.totalTime, perfStats.getChatsTime, perfStats.responseFormatTime, perfStats.userInfoTime)
+	}
+
+	return &respond.PrivateChatResponse{
+		Total:         int64(len(chatItems)),
+		NextTimestamp: lastIndex, // Use lastIndex as NextTimestamp for index-based pagination
+		List:          chatItems,
+	}, nil
+}
+
 func wsForGroupChatItem(chat *models.TalkGroupChatV3) error {
 	wsPostGroupMsg(chat)
 	return nil
@@ -2756,4 +2869,9 @@ func takeSocketInfoSnapshot() {
 		timestamp, stats.TotalConnections, stats.ActiveConnections,
 		stats.TotalMessagesSent, stats.TotalMessagesFailed, stats.TotalMemoryMB,
 		stats.MemoryUsagePercent, elapsed)
+}
+
+// IsSyncCompleted Check if synchronization is completed
+func IsSyncCompleted() bool {
+	return syncDbService.IsSyncCompleted()
 }

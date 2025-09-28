@@ -17,6 +17,8 @@ services:
       - ../data/log_chat:/man/log_chat
       # Configuration file mount (optional)
       - ./config_testnet.toml:/man/config_testnet.toml:ro
+      # Blockfile data persistence - map to external host directory
+      - ../data/blockfile_data:/man/blockfile_data
     environment:
       - CONFIG_FILE=/man/config_testnet.toml
       - NETWORK=testnet

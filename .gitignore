@@ -16,3 +16,7 @@ Dockerfile.testnet
 .idea/
 client_test.html
 client_test_2.html
+blockfileData/
+blockfile_data/
+docker-compose.testnet.simple-2.yml
+config_testnet-2.toml

@@ -541,6 +541,14 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		totalTime              int64
 	}{}
 
+	isAddressGloballyBlocked, _ := globalBlockDB.IsAddressGloballyBlocked(address)
+	// if err != nil {
+	// 	return "", err
+	// }
+	if isAddressGloballyBlocked {
+		return "", errors.New("address is blocked")
+	}
+
 	t := time.Now().UnixMilli()
 	luckyBag, err := chatDB.GetLuckyBagByPinId(pinId)
 	if err != nil {

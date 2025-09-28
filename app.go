@@ -9,6 +9,7 @@ import (
 	"manindexer/basicprotocols/metaname"
 	"manindexer/basicprotocols/metaso"
 	"manindexer/basicprotocols/mrc721"
+	"manindexer/blockfile"
 	"manindexer/common"
 	"manindexer/database/mongodb"
 	"manindexer/man"
@@ -50,6 +51,13 @@ func main() {
 		go api.Start(f)
 	}
 
+	blockF := &blockfile.BlockData{}
+	if common.ModuleExist("sync_block_file") {
+		blockfile.InitBlockFileDb()
+		blockfile.InitBlockFile()
+		go blockF.Sync()
+	}
+
 	if common.ModuleExist("group_chat") {
 		go group_chat.Run(man.ChainAdapter)
 	}
@@ -76,6 +84,7 @@ func main() {
 		mrc721 := mrc721.Mrc721{}
 		go mrc721.Synchronization()
 	}
+
 	go mongodb.FixNullMetaIdPinId()
 	for {
 		man.IndexerRun(common.TestNet)
