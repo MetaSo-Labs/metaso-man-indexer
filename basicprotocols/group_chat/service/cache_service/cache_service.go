@@ -63,6 +63,8 @@ func InitCacheService(redisAddr, redisPassword string, redisDB int) {
 
 	// initialize global block cache
 	InitGlobalBlockCache(2 * 60 * time.Minute)
+	// initialize global lucky bag block cache
+	InitGlobalLuckBagBlockCache(2 * 60 * time.Minute)
 
 	// initialize lucky bag cache
 	// InitLuckyBagCache(10 * time.Minute)
@@ -239,6 +241,8 @@ func StartMemoryCacheCleaner() {
 			CleanExpiredGroupChannelListCache()
 			// clean global block cache
 			CleanExpiredGlobalBlockCache()
+			// clean global lucky bag block cache
+			CleanExpiredGlobalLuckBagBlockCache()
 		}
 	}()
 }

@@ -105,7 +105,8 @@ const (
 	TalkUserMetaIdChatPublicKeyCollection  string = "talk_user_metaid_chat_public_key"  // key: metaId，value: []{chatPublicKey, chatPublicKeyId, timestamp, blockHeight, chain}
 
 	// Global block
-	TalkGolbalBlockCollection string = "talk_golbal_block" // key: address，value: reasion
+	TalkGolbalBlockCollection        string = "talk_golbal_block"          // key: address，value: reasion
+	TalkGolbalLuckBagBlockCollection string = "talk_golbal_luck_bag_block" // key: address，value: reasion
 
 	// Socket info snapshot
 	TalkSocketInfoSnapshotCollection string = "talk_socket_info_snapshot" // key: timestamp，value: ConnectionStats
@@ -407,6 +408,10 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGolbalBlockCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGolbalBlockCollection, err)
+	}
+	err = open(TalkGolbalLuckBagBlockCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGolbalLuckBagBlockCollection, err)
 	}
 
 	err = open(TalkSocketInfoSnapshotCollection)

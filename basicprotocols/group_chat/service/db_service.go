@@ -3470,9 +3470,6 @@ func SetGlobalBlockAddress(address, reason string) (map[string]interface{}, erro
 		reason = "No reason provided"
 	}
 
-	// Create global block DB instance
-	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
-
 	// Save the global block address
 	err := globalBlockDB.SaveGlobalBlockAddress(address, reason)
 	if err != nil {
@@ -3493,9 +3490,6 @@ func DeleteGlobalBlockAddress(address string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("address cannot be empty")
 	}
 
-	// Create global block DB instance
-	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
-
 	// Delete the global block address
 	err := globalBlockDB.DeleteGlobalBlockAddress(address)
 	if err != nil {
@@ -3511,8 +3505,6 @@ func DeleteGlobalBlockAddress(address string) (map[string]interface{}, error) {
 
 // GetGlobalBlockStats Get global block list statistics
 func GetGlobalBlockStats() (map[string]interface{}, error) {
-	// Create global block DB instance
-	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
 
 	// Get statistics
 	stats, err := globalBlockDB.GetGlobalBlockStats()
@@ -3531,9 +3523,6 @@ func GetGlobalBlockAddresses(cursor, size int) (map[string]interface{}, error) {
 	if cursor < 0 {
 		cursor = 0 // Default cursor
 	}
-
-	// Create global block DB instance
-	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
 
 	// Get all global block addresses
 	allItems, err := globalBlockDB.GetAllGlobalBlockAddresses()
@@ -3582,9 +3571,6 @@ func CheckGlobalBlockAddress(address string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("address cannot be empty")
 	}
 
-	// Create global block DB instance
-	globalBlockDB := db.NewGlobalBlockDB(&db.Pebble{})
-
 	// Check if address is blocked
 	isBlocked, err := globalBlockDB.IsAddressGloballyBlocked(address)
 	if err != nil {
@@ -3595,6 +3581,146 @@ func CheckGlobalBlockAddress(address string) (map[string]interface{}, error) {
 	var blockDetails *db.GlobalBlockItem
 	if isBlocked {
 		blockDetails, err = globalBlockDB.GetGlobalBlockAddress(address)
+		if err != nil {
+			// If we can't get details, just return the blocked status
+			blockDetails = nil
+		}
+	}
+
+	result := map[string]interface{}{
+		"address":   address,
+		"isBlocked": isBlocked,
+	}
+
+	if blockDetails != nil {
+		result["reason"] = blockDetails.Reason
+	}
+
+	return result, nil
+}
+
+// Global luck bag block list related methods
+
+// SetGlobalLuckBagBlockAddress Set a global luck bag block address
+func SetGlobalLuckBagBlockAddress(address, reason string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	// Save the global luck bag block address
+	err := globalBlockDB.SaveGlobalLuckBagBlockAddress(address, reason)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set global luck bag block address: %v", err)
+	}
+
+	return map[string]interface{}{
+		"address": address,
+		"reason":  reason,
+		"message": "Global luck bag block address set successfully",
+		"success": true,
+	}, nil
+}
+
+// DeleteGlobalLuckBagBlockAddress Delete a global luck bag block address
+func DeleteGlobalLuckBagBlockAddress(address string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	// Delete the global luck bag block address
+	err := globalBlockDB.DeleteGlobalLuckBagBlockAddress(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete global luck bag block address: %v", err)
+	}
+
+	return map[string]interface{}{
+		"address": address,
+		"message": "Global luck bag block address deleted successfully",
+		"success": true,
+	}, nil
+}
+
+// GetGlobalLuckBagBlockStats Get global luck bag block list statistics
+func GetGlobalLuckBagBlockStats() (map[string]interface{}, error) {
+
+	// Get statistics
+	stats, err := globalBlockDB.GetGlobalLuckBagBlockStats()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global luck bag block stats: %v", err)
+	}
+
+	return stats, nil
+}
+
+// GetGlobalLuckBagBlockAddresses Get all global luck bag block addresses with pagination
+func GetGlobalLuckBagBlockAddresses(cursor, size int) (map[string]interface{}, error) {
+	if size <= 0 {
+		size = 20 // Default size
+	}
+	if cursor < 0 {
+		cursor = 0 // Default cursor
+	}
+
+	// Get all global luck bag block addresses
+	allItems, err := globalBlockDB.GetAllGlobalLuckBagBlockAddresses()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global luck bag block addresses: %v", err)
+	}
+
+	// Apply pagination
+	total := len(allItems)
+	start := cursor
+	end := cursor + size
+	if end > total {
+		end = total
+	}
+
+	var results []map[string]interface{}
+	for i := start; i < end; i++ {
+		if i < len(allItems) {
+			item := allItems[i]
+			results = append(results, map[string]interface{}{
+				"address": item.Address,
+				"reason":  item.Reason,
+			})
+		}
+	}
+
+	// Calculate next cursor
+	nextCursor := cursor + size
+	if nextCursor >= total {
+		nextCursor = -1 // No more data
+	}
+
+	return map[string]interface{}{
+		"total":      total,
+		"cursor":     cursor,
+		"size":       size,
+		"nextCursor": nextCursor,
+		"count":      len(results),
+		"data":       results,
+	}, nil
+}
+
+// CheckGlobalLuckBagBlockAddress Check if an address is globally luck bag blocked
+func CheckGlobalLuckBagBlockAddress(address string) (map[string]interface{}, error) {
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	// Check if address is luck bag blocked
+	isBlocked, err := globalBlockDB.IsAddressGloballyLuckBagBlocked(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check global luck bag block address: %v", err)
+	}
+
+	// Get block details if blocked
+	var blockDetails *db.GlobalBlockItem
+	if isBlocked {
+		blockDetails, err = globalBlockDB.GetGlobalLuckBagBlockAddress(address)
 		if err != nil {
 			// If we can't get details, just return the blocked status
 			blockDetails = nil

@@ -20,3 +20,5 @@ blockfileData/
 blockfile_data/
 docker-compose.testnet.simple-2.yml
 config_testnet-2.toml
+config_testnet-3.toml
+docker-compose.testnet.simple-3.yml

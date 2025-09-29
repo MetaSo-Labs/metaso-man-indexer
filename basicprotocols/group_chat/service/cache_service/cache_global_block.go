@@ -17,6 +17,8 @@ type GlobalBlockCache struct {
 	ttl         time.Duration
 	// Independent lock management, address-based locks
 	addressLocks sync.Map // map[string]*sync.RWMutex
+	// Key prefix for Redis operations
+	keyPrefix string
 }
 
 // globalBlockCacheItem Global blocklist cache item
@@ -27,19 +29,34 @@ type globalBlockCacheItem struct {
 }
 
 var (
-	globalBlockCache *GlobalBlockCache
+	globalBlockCache        *GlobalBlockCache
+	globalLuckBagBlockCache *GlobalBlockCache
 )
 
 // InitGlobalBlockCache Initialize global blocklist cache
 func InitGlobalBlockCache(ttl time.Duration) {
 	globalBlockCache = &GlobalBlockCache{
-		ttl: ttl,
+		ttl:       ttl,
+		keyPrefix: "global_block:",
+	}
+}
+
+// InitGlobalLuckBagBlockCache Initialize global luck bag blocklist cache
+func InitGlobalLuckBagBlockCache(ttl time.Duration) {
+	globalLuckBagBlockCache = &GlobalBlockCache{
+		ttl:       ttl,
+		keyPrefix: "global_lucky_bag_block:",
 	}
 }
 
 // GetGlobalBlockCache Get global blocklist cache instance
 func GetGlobalBlockCache() *GlobalBlockCache {
 	return globalBlockCache
+}
+
+// GetGlobalLuckBagBlockCache Get global luck bag blocklist cache instance
+func GetGlobalLuckBagBlockCache() *GlobalBlockCache {
+	return globalLuckBagBlockCache
 }
 
 // getAddressLock Get lock for specified address
@@ -147,7 +164,7 @@ func (gbc *GlobalBlockCache) GetStats() map[string]interface{} {
 // getRedisGlobalBlock Get address block status from Redis
 func (gbc *GlobalBlockCache) getRedisGlobalBlock(address string) (bool, bool) {
 	ctx := context.Background()
-	key := fmt.Sprintf("global_block:%s", address)
+	key := fmt.Sprintf("%s%s", gbc.keyPrefix, address)
 
 	val, err := redisClient.Get(ctx, key).Result()
 	if err != nil {
@@ -178,7 +195,7 @@ func (gbc *GlobalBlockCache) getRedisGlobalBlock(address string) (bool, bool) {
 // setRedisGlobalBlock Set address block status to Redis
 func (gbc *GlobalBlockCache) setRedisGlobalBlock(address string, isBlocked bool) {
 	ctx := context.Background()
-	key := fmt.Sprintf("global_block:%s", address)
+	key := fmt.Sprintf("%s%s", gbc.keyPrefix, address)
 
 	now := time.Now()
 	cacheItem := &globalBlockCacheItem{
@@ -202,7 +219,7 @@ func (gbc *GlobalBlockCache) setRedisGlobalBlock(address string, isBlocked bool)
 // deleteRedisGlobalBlock Delete address block status from Redis
 func (gbc *GlobalBlockCache) deleteRedisGlobalBlock(address string) {
 	ctx := context.Background()
-	key := fmt.Sprintf("global_block:%s", address)
+	key := fmt.Sprintf("%s%s", gbc.keyPrefix, address)
 
 	err := redisClient.Del(ctx, key).Err()
 	if err != nil {
@@ -213,7 +230,7 @@ func (gbc *GlobalBlockCache) deleteRedisGlobalBlock(address string) {
 // clearRedisGlobalBlock Clear all global blocklist cache in Redis
 func (gbc *GlobalBlockCache) clearRedisGlobalBlock() {
 	ctx := context.Background()
-	pattern := "global_block:*"
+	pattern := gbc.keyPrefix + "*"
 
 	keys, err := redisClient.Keys(ctx, pattern).Result()
 	if err != nil {
@@ -232,7 +249,7 @@ func (gbc *GlobalBlockCache) clearRedisGlobalBlock() {
 // getRedisGlobalBlockSize Get size of global blocklist cache in Redis
 func (gbc *GlobalBlockCache) getRedisGlobalBlockSize() int {
 	ctx := context.Background()
-	pattern := "global_block:*"
+	pattern := gbc.keyPrefix + "*"
 
 	keys, err := redisClient.Keys(ctx, pattern).Result()
 	if err != nil {
@@ -251,7 +268,7 @@ func (gbc *GlobalBlockCache) getRedisGlobalBlockStats() map[string]interface{} {
 	stats["last_update_time"] = time.Now().UnixMilli()
 
 	ctx := context.Background()
-	pattern := "global_block:*"
+	pattern := gbc.keyPrefix + "*"
 
 	keys, err := redisClient.Keys(ctx, pattern).Result()
 	if err != nil {
@@ -404,7 +421,7 @@ func (gbc *GlobalBlockCache) CleanExpired() int {
 // cleanExpiredRedisGlobalBlock Clean expired cache items in Redis
 func (gbc *GlobalBlockCache) cleanExpiredRedisGlobalBlock() int {
 	ctx := context.Background()
-	pattern := "global_block:*"
+	pattern := gbc.keyPrefix + "*"
 
 	keys, err := redisClient.Keys(ctx, pattern).Result()
 	if err != nil {
@@ -505,5 +522,65 @@ func RefreshGlobalBlockCacheFromDB(blockedAddresses []string) error {
 	}
 
 	log.Printf("Refreshed global block cache with %d addresses", len(blockedAddresses))
+	return nil
+}
+
+// ==================== Luck Bag Block Cache Convenience Methods ====================
+
+// IsAddressGloballyLuckBagBlockedFromCache Check if address is globally luck bag blocked from cache
+func IsAddressGloballyLuckBagBlockedFromCache(address string) (bool, bool) {
+	if globalLuckBagBlockCache == nil {
+		return false, false
+	}
+	return globalLuckBagBlockCache.Get(address)
+}
+
+// SetGlobalLuckBagBlockAddressToCache Set address luck bag block status to cache
+func SetGlobalLuckBagBlockAddressToCache(address string, isBlocked bool) {
+	if globalLuckBagBlockCache == nil {
+		return
+	}
+	globalLuckBagBlockCache.Set(address, isBlocked)
+}
+
+// DeleteGlobalLuckBagBlockAddressFromCache Delete address luck bag block status from cache
+func DeleteGlobalLuckBagBlockAddressFromCache(address string) {
+	if globalLuckBagBlockCache == nil {
+		return
+	}
+	globalLuckBagBlockCache.Delete(address)
+}
+
+// GetGlobalLuckBagBlockCacheStats Get global luck bag blocklist cache statistics
+func GetGlobalLuckBagBlockCacheStats() map[string]interface{} {
+	if globalLuckBagBlockCache == nil {
+		return map[string]interface{}{
+			"error": "cache not initialized",
+		}
+	}
+	return globalLuckBagBlockCache.GetStats()
+}
+
+// CleanExpiredGlobalLuckBagBlockCache Clean expired global luck bag blocklist cache
+func CleanExpiredGlobalLuckBagBlockCache() int {
+	if globalLuckBagBlockCache == nil {
+		return 0
+	}
+	return globalLuckBagBlockCache.CleanExpired()
+}
+
+// RefreshGlobalLuckBagBlockCacheFromDB Refresh global luck bag blocklist cache from database
+// Note: This method needs to receive a list of blocked addresses, because cache service should not directly depend on database package
+func RefreshGlobalLuckBagBlockCacheFromDB(blockedAddresses []string) error {
+	if globalLuckBagBlockCache == nil {
+		return fmt.Errorf("global luck bag block cache not initialized")
+	}
+
+	// Update cache
+	for _, address := range blockedAddresses {
+		globalLuckBagBlockCache.Set(address, true)
+	}
+
+	log.Printf("Refreshed global luck bag block cache with %d addresses", len(blockedAddresses))
 	return nil
 }

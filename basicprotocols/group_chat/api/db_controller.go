@@ -2313,6 +2313,204 @@ func CheckGlobalBlockAddress(ctx *gin.Context) {
 	})
 }
 
+// SetGlobalLuckBagBlockAddress Set a global luck bag block address
+// @Summary Set global luck bag block address
+// @Description Add an address to the global luck bag block list
+// @Tags Global Luck Bag Block
+// @Accept json
+// @Produce json
+// @Param request body map[string]string true "Request body with address and reason"
+// @Success 200 {object} map[string]interface{} "Success response"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-luck-bag-block/set [post]
+func SetGlobalLuckBagBlockAddress(ctx *gin.Context) {
+	var request map[string]string
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	address, exists := request["address"]
+	if !exists || address == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Address is required",
+		})
+		return
+	}
+
+	reason := request["reason"]
+	if reason == "" {
+		reason = "No reason provided"
+	}
+
+	result, err := service.SetGlobalLuckBagBlockAddress(address, reason)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to set global luck bag block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// DeleteGlobalLuckBagBlockAddress Delete a global luck bag block address
+// @Summary Delete global luck bag block address
+// @Description Remove an address from the global luck bag block list
+// @Tags Global Luck Bag Block
+// @Accept json
+// @Produce json
+// @Param request body map[string]string true "Request body with address"
+// @Success 200 {object} map[string]interface{} "Success response"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-luck-bag-block/delete [post]
+func DeleteGlobalLuckBagBlockAddress(ctx *gin.Context) {
+	var request map[string]string
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Invalid request body",
+		})
+		return
+	}
+
+	address, exists := request["address"]
+	if !exists || address == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Address is required",
+		})
+		return
+	}
+
+	result, err := service.DeleteGlobalLuckBagBlockAddress(address)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to delete global luck bag block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGlobalLuckBagBlockStats Get global luck bag block list statistics
+// @Summary Get global luck bag block statistics
+// @Description Get statistics about the global luck bag block list
+// @Tags Global Luck Bag Block
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Success response with statistics"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-luck-bag-block/stats [get]
+func GetGlobalLuckBagBlockStats(ctx *gin.Context) {
+	result, err := service.GetGlobalLuckBagBlockStats()
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get global luck bag block stats: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGlobalLuckBagBlockAddresses Get all global luck bag block addresses with pagination
+// @Summary Get global luck bag block addresses
+// @Description Get all addresses in the global luck bag block list with pagination
+// @Tags Global Luck Bag Block
+// @Produce json
+// @Param cursor query int false "Cursor for pagination (default: 0)"
+// @Param size query int false "Number of items per page (default: 20)"
+// @Success 200 {object} map[string]interface{} "Success response with paginated data"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-luck-bag-block/addresses [get]
+func GetGlobalLuckBagBlockAddresses(ctx *gin.Context) {
+	cursorStr := ctx.Query("cursor")
+	sizeStr := ctx.Query("size")
+
+	cursor := 0
+	size := 20
+
+	if cursorStr != "" {
+		if c, err := strconv.Atoi(cursorStr); err == nil {
+			cursor = c
+		}
+	}
+
+	if sizeStr != "" {
+		if s, err := strconv.Atoi(sizeStr); err == nil {
+			size = s
+		}
+	}
+
+	result, err := service.GetGlobalLuckBagBlockAddresses(cursor, size)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get global luck bag block addresses: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// CheckGlobalLuckBagBlockAddress Check if an address is globally luck bag blocked
+// @Summary Check global luck bag block status
+// @Description Check if an address is in the global luck bag block list
+// @Tags Global Luck Bag Block
+// @Produce json
+// @Param address query string true "Address to check"
+// @Success 200 {object} map[string]interface{} "Success response with block status"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/global-luck-bag-block/check [get]
+func CheckGlobalLuckBagBlockAddress(ctx *gin.Context) {
+	address := ctx.Query("address")
+	if address == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "Address parameter is required",
+		})
+		return
+	}
+
+	result, err := service.CheckGlobalLuckBagBlockAddress(address)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to check global luck bag block address: %v", err),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
 // GetChatStatistics Get chat statistics within a time range
 // @Summary Get chat statistics
 // @Description Get comprehensive chat statistics including group chat, private chat, channel chat, group creation, and total counts within a time range

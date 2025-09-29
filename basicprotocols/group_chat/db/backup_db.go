@@ -216,6 +216,7 @@ func (bdb *BackupDB) performBackup() error {
 
 		// Global block collection
 		TalkGolbalBlockCollection,
+		TalkGolbalLuckBagBlockCollection,
 
 		// Socket info snapshot collection
 		TalkSocketInfoSnapshotCollection,
@@ -367,6 +368,7 @@ Collections:
 - TalkGroupLuckyBagCodeAddressKeyCollection
 - TalkGroupLuckyBagCodeAddressKeyCompletedCollection
 - TalkSyncInfoCollection
+- TalkGolbalLuckBagBlockCollection
 
 Backup completed at: %s
 `,

@@ -274,3 +274,171 @@ func (gbdb *GlobalBlockDB) GetGlobalBlockStats() (map[string]interface{}, error)
 
 	return stats, nil
 }
+
+// SaveGlobalLuckBagBlockAddress Save global luck bag blocklist address
+func (gbdb *GlobalBlockDB) SaveGlobalLuckBagBlockAddress(address, reason string) error {
+	// Validate address format
+	if address == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+
+	// Create blocklist item
+	blockItem := &GlobalBlockItem{
+		Address: address,
+		Reason:  reason,
+	}
+
+	// Serialize data
+	data, err := json.Marshal(blockItem)
+	if err != nil {
+		return fmt.Errorf("failed to marshal global luck bag block item: %v", err)
+	}
+
+	// Save to database using address as key
+	key := []byte(address)
+	err = Pb[TalkGolbalLuckBagBlockCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to save global luck bag block address: %v", err)
+	}
+
+	// Update cache
+	cache_service.SetGlobalLuckBagBlockAddressToCache(address, true)
+
+	return nil
+}
+
+// DeleteGlobalLuckBagBlockAddress Delete global luck bag blocklist address
+func (gbdb *GlobalBlockDB) DeleteGlobalLuckBagBlockAddress(address string) error {
+	// Validate address format
+	if address == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+
+	// Delete from database
+	key := []byte(address)
+	err := Pb[TalkGolbalLuckBagBlockCollection].Delete(key, pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("failed to delete global luck bag block address: %v", err)
+	}
+
+	// Update cache
+	cache_service.SetGlobalLuckBagBlockAddressToCache(address, false)
+
+	return nil
+}
+
+// GetGlobalLuckBagBlockAddress Get luck bag blocklist information for specified address
+func (gbdb *GlobalBlockDB) GetGlobalLuckBagBlockAddress(address string) (*GlobalBlockItem, error) {
+	// Validate address format
+	if address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	// Get from database
+	key := []byte(address)
+	data, closer, err := Pb[TalkGolbalLuckBagBlockCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil // Address not in luck bag blocklist
+		}
+		return nil, fmt.Errorf("failed to get global luck bag block address: %v", err)
+	}
+	defer closer.Close()
+
+	// Deserialize data
+	var blockItem GlobalBlockItem
+	err = json.Unmarshal(data, &blockItem)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal global luck bag block item: %v", err)
+	}
+
+	return &blockItem, nil
+}
+
+// IsAddressGloballyLuckBagBlocked Check if address is in global luck bag blocklist
+func (gbdb *GlobalBlockDB) IsAddressGloballyLuckBagBlocked(address string) (bool, error) {
+	// Validate address format
+	if address == "" {
+		return false, fmt.Errorf("address cannot be empty")
+	}
+
+	// Prioritize getting from cache
+	if isBlocked, found := cache_service.IsAddressGloballyLuckBagBlockedFromCache(address); found {
+		return isBlocked, nil
+	}
+
+	// Cache miss, get from database
+	blockItem, err := gbdb.GetGlobalLuckBagBlockAddress(address)
+	if err != nil {
+		return false, err
+	}
+
+	isBlocked := blockItem != nil
+
+	// Update cache
+	cache_service.SetGlobalLuckBagBlockAddressToCache(address, isBlocked)
+
+	return isBlocked, nil
+}
+
+// GetAllGlobalLuckBagBlockAddresses Get all global luck bag blocklist addresses
+func (gbdb *GlobalBlockDB) GetAllGlobalLuckBagBlockAddresses() ([]*GlobalBlockItem, error) {
+	var blockItems []*GlobalBlockItem
+
+	// Create iterator
+	iter, err := Pb[TalkGolbalLuckBagBlockCollection].NewIter(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %v", err)
+	}
+	defer iter.Close()
+
+	// Iterate through all records
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Get data
+		data := iter.Value()
+
+		// Deserialize data
+		var blockItem GlobalBlockItem
+		err = json.Unmarshal(data, &blockItem)
+		if err != nil {
+			// Log error but continue processing other records
+			fmt.Printf("Warning: failed to unmarshal global luck bag block item for key %s: %v\n", string(iter.Key()), err)
+			continue
+		}
+
+		blockItems = append(blockItems, &blockItem)
+	}
+
+	// Check iterator error
+	if err = iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %v", err)
+	}
+
+	return blockItems, nil
+}
+
+// GetGlobalLuckBagBlockStats Get global luck bag blocklist statistics
+func (gbdb *GlobalBlockDB) GetGlobalLuckBagBlockStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Get all addresses
+	allItems, err := gbdb.GetAllGlobalLuckBagBlockAddresses()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all luck bag block addresses: %v", err)
+	}
+
+	totalCount := int64(len(allItems))
+	stats["totalCount"] = totalCount
+
+	// Count by reason
+	reasonStats := make(map[string]int64)
+	for _, item := range allItems {
+		reasonStats[item.Reason]++
+	}
+
+	stats["allItems"] = allItems
+	stats["reasonStats"] = reasonStats
+	stats["lastUpdateTime"] = time.Now().UnixMilli()
+
+	return stats, nil
+}

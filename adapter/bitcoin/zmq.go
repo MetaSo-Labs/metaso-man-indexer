@@ -30,13 +30,50 @@ func (indexer *Indexer) ZmqHashblock() {
 	}
 }
 func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
+	maxRetries := 10
+	retryDelay := time.Second * 5
+	extendedDelay := time.Second * 30 // after max retries, the extended delay
+	retryCount := 0
+
+	log.Printf("[ZMQ-RUN]Starting BTC ZMQ with auto-reconnect, max retries: %d", maxRetries)
+
+	for {
+		if retryCount > 0 {
+			if retryCount >= maxRetries {
+				log.Printf("[ZMQ-RUN]BTC ZMQ exceeded max retries (%d), using extended delay...", maxRetries)
+				time.Sleep(extendedDelay)
+			} else {
+				log.Printf("[ZMQ-RUN]BTC ZMQ reconnecting (attempt %d/%d)...", retryCount+1, maxRetries)
+				time.Sleep(retryDelay)
+			}
+		}
+
+		err := indexer.zmqConnectAndRun(chanMsg)
+		if err != nil {
+			retryCount++
+			if retryCount >= maxRetries {
+				log.Printf("[ZMQ-RUN]BTC ZMQ connection failed (attempt %d, exceeded max retries): %v", retryCount, err)
+			} else {
+				log.Printf("[ZMQ-RUN]BTC ZMQ connection failed (attempt %d/%d): %v", retryCount+1, maxRetries, err)
+			}
+			continue
+		}
+
+		// if successful connection and operation, reset the retry count
+		retryCount = 0
+		log.Println("[ZMQ-RUN]BTC ZMQ connection restored, reset retry counter")
+	}
+}
+
+func (indexer *Indexer) zmqConnectAndRun(chanMsg chan pin.MempollChanMsg) error {
 	q, _ := zmq.NewSocket(zmq.SUB)
 	defer q.Close()
 	err := q.Connect(common.Config.Btc.ZmqHost)
 	if err != nil {
-		log.Println("[ZMQ]ZmqRun:", err)
+		log.Println("[ZMQ-RUN]Connect to BTC ZMQ error", err)
+		return fmt.Errorf("failed to connect to %s: %v", common.Config.Btc.ZmqHost, err)
 	}
-	log.Printf("btc zmq connect success\n")
+	log.Printf("[ZMQ-RUN]BTC ZMQ connected successfully")
 	q.SetSubscribe("rawtx")
 	q.SetTcpKeepalive(120)
 	for {

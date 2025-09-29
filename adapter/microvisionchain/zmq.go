@@ -108,6 +108,42 @@ func keepTcpKeepalive() {
 	}
 }
 func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
+	maxRetries := 10
+	retryDelay := time.Second * 5
+	extendedDelay := time.Second * 30 // after max retries, the extended delay
+	retryCount := 0
+
+	log.Printf("[ZMQ-RUN]Starting MVC ZMQ with auto-reconnect, max retries: %d", maxRetries)
+
+	for {
+		if retryCount > 0 {
+			if retryCount >= maxRetries {
+				log.Printf("[ZMQ-RUN]MVC ZMQ exceeded max retries (%d), using extended delay...", maxRetries)
+				time.Sleep(extendedDelay)
+			} else {
+				log.Printf("[ZMQ-RUN]MVC ZMQ reconnecting (attempt %d/%d)...", retryCount+1, maxRetries)
+				time.Sleep(retryDelay)
+			}
+		}
+
+		err := indexer.zmqConnectAndRun(chanMsg)
+		if err != nil {
+			retryCount++
+			if retryCount >= maxRetries {
+				log.Printf("[ZMQ-RUN]MVC ZMQ connection failed (attempt %d, exceeded max retries): %v", retryCount, err)
+			} else {
+				log.Printf("[ZMQ-RUN]MVC ZMQ connection failed (attempt %d/%d): %v", retryCount+1, maxRetries, err)
+			}
+			continue
+		}
+
+		// if successful connection and operation, reset the retry count
+		retryCount = 0
+		log.Println("[ZMQ-RUN]MVC ZMQ connection restored, reset retry counter")
+	}
+}
+
+func (indexer *Indexer) zmqConnectAndRun(chanMsg chan pin.MempollChanMsg) error {
 	context, _ := zmq.NewContext()
 	subscriber, _ := context.NewSocket(zmq.SUB)
 	defer subscriber.Close()
@@ -116,26 +152,29 @@ func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
 	//Enable the keepalive property
 	err := subscriber.SetTcpKeepalive(1)
 	if err != nil {
-		log.Println("SetTcpKeepalive err,", err)
+		log.Println("[ZMQ-RUN]SetTcpKeepalive err,", err)
+		return fmt.Errorf("SetTcpKeepalive failed: %v", err)
 	}
 	//If there is no data exchange within 0.5 seconds, check the connection
 	err = subscriber.SetTcpKeepaliveIdle(60)
 	if err != nil {
-		log.Println("SetTcpKeepaliveIdle err,", err)
+		log.Println("[ZMQ-RUN]SetTcpKeepaliveIdle err,", err)
+		return fmt.Errorf("SetTcpKeepaliveIdle failed: %v", err)
 	}
 	//The packet sending interval during the check is 2 seconds
 	err = subscriber.SetTcpKeepaliveIntvl(1)
 	if err != nil {
-		log.Println("SetTcpKeepaliveIntvl err,", err)
+		log.Println("[ZMQ-RUN]SetTcpKeepaliveIntvl err,", err)
+		return fmt.Errorf("SetTcpKeepaliveIntvl failed: %v", err)
 	}
 	subscriber.SetRcvhwm(20000)
 	subscriber.SetRcvbuf(1024 * 200)
 	err = subscriber.Connect(common.Config.Mvc.ZmqHost)
 	if err != nil {
-		log.Println("Connect to MVC ZMQ error", err)
-		return
+		log.Println("[ZMQ-RUN]Connect to MVC ZMQ error", err)
+		return fmt.Errorf("failed to connect to %s: %v", common.Config.Mvc.ZmqHost, err)
 	} else {
-		log.Println("MVC ZMQ connected")
+		log.Println("[ZMQ-RUN]MVC ZMQ connected")
 	}
 
 	//go keepTcpKeepalive()
@@ -146,6 +185,7 @@ func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
 		if err != nil {
 			log.Println("MVC ZMQ RecvMessage Err,", err)
 			continue
+			// return fmt.Errorf("failed to receive message: %v", err)
 		} else {
 			//s, _ := subscriber.GetEvents()
 			//log.Println("Recive MVC ZMQ message", len(recvmsg), s.String())
@@ -169,7 +209,6 @@ func (indexer *Indexer) ZmqRun(chanMsg chan pin.MempollChanMsg) {
 			}
 		}
 	}
-
 }
 
 func (indexer *Indexer) TransferCheck(tx *wire.MsgTx) (transferPinList []*pin.PinInscription, err error) {

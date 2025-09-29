@@ -147,5 +147,15 @@ func RegisterDbRoutes(router *gin.Engine) {
 			globalBlockGroup.GET("/addresses", GetGlobalBlockAddresses)
 			globalBlockGroup.GET("/check", CheckGlobalBlockAddress)
 		}
+
+		// Global lucky bag block-related APIs
+		globalLuckyBagBlockGroup := dbGroup.Group("/global-lucky-bag-block")
+		{
+			globalLuckyBagBlockGroup.POST("/set", SetGlobalLuckBagBlockAddress)
+			globalLuckyBagBlockGroup.POST("/delete", DeleteGlobalLuckBagBlockAddress)
+			globalLuckyBagBlockGroup.GET("/stats", GetGlobalLuckBagBlockStats)
+			globalLuckyBagBlockGroup.GET("/addresses", GetGlobalLuckBagBlockAddresses)
+			globalLuckyBagBlockGroup.GET("/check", CheckGlobalLuckBagBlockAddress)
+		}
 	}
 }

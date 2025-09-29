@@ -2083,6 +2083,84 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/api/db/global-lucky-bag-block/set": {
+            "post": {
+                "description": "Add an address to the global luck bag block list",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Global Lucky Bag Block"],
+                "summary": "Set global luck bag block address",
+                "parameters": [
+                    {"in": "body", "name": "request", "description": "Request body with address and reason", "required": true, "schema": {"type": "object", "properties": {"address": {"type": "string"}, "reason": {"type": "string"}}}}
+                ],
+                "responses": {
+                    "200": {"description": "Success response", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-lucky-bag-block/delete": {
+            "post": {
+                "description": "Remove an address from the global luck bag block list",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["Global Lucky Bag Block"],
+                "summary": "Delete global luck bag block address",
+                "parameters": [
+                    {"in": "body", "name": "request", "description": "Request body with address", "required": true, "schema": {"type": "object", "properties": {"address": {"type": "string"}}}}
+                ],
+                "responses": {
+                    "200": {"description": "Success response", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-lucky-bag-block/stats": {
+            "get": {
+                "description": "Get statistics about the global luck bag block list",
+                "produces": ["application/json"],
+                "tags": ["Global Lucky Bag Block"],
+                "summary": "Get global luck bag block statistics",
+                "responses": {
+                    "200": {"description": "Success response with statistics", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-lucky-bag-block/addresses": {
+            "get": {
+                "description": "Get paginated list of all global luck bag block addresses",
+                "produces": ["application/json"],
+                "tags": ["Global Lucky Bag Block"],
+                "summary": "Get global luck bag block addresses",
+                "parameters": [
+                    {"type": "integer", "description": "Cursor for pagination (default: 0)", "name": "cursor", "in": "query", "required": false},
+                    {"type": "integer", "description": "Number of items per page (default: 20)", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with paginated data", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/global-lucky-bag-block/check": {
+            "get": {
+                "description": "Check if an address is in the global luck bag block list",
+                "produces": ["application/json"],
+                "tags": ["Global Lucky Bag Block"],
+                "summary": "Check global luck bag block status",
+                "parameters": [
+                    {"type": "string", "description": "Address to check", "name": "address", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Success response with block status", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/api/db/chat-statistics": {
             "get": {
                 "description": "Get comprehensive chat statistics including group chat, private chat, channel chat, group creation, and total counts within a time range",
@@ -2616,6 +2694,10 @@ func SetupSwagger(router *gin.Engine) {
         {
             "description": "Global block list management APIs for managing globally blocked addresses",
             "name": "Global Block"
+        },
+        {
+            "description": "Global lucky bag block list management APIs for managing globally blocked addresses",
+            "name": "Global Lucky Bag Block"
         },
         {
             "description": "System health and status related APIs",

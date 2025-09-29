@@ -541,7 +541,7 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		totalTime              int64
 	}{}
 
-	isAddressGloballyBlocked, _ := globalBlockDB.IsAddressGloballyBlocked(address)
+	isAddressGloballyBlocked, _ := globalBlockDB.IsAddressGloballyLuckBagBlocked(address)
 	// if err != nil {
 	// 	return "", err
 	// }
