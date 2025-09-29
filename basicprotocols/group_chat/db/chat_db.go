@@ -609,6 +609,28 @@ func (cdb *ChatDB) GetLuckyBagByPinId(pinId string) (*models.TalkGroupLuckyBagV3
 	return &red, nil
 }
 
+// Get lucky bag info by PinId from cache first, then from database
+func (cdb *ChatDB) GetLuckyBagByPinIdFromCache(groupId, pinId string) (*models.TalkGroupLuckyBagV3, error) {
+	// Try to get from cache first
+	cachedLuckyBag, err := cache_service.GetCacheLuckyBag(groupId, pinId)
+	if err == nil && cachedLuckyBag != nil {
+		return cachedLuckyBag, nil
+	}
+
+	// If not in cache, get from database
+	luckyBag, err := cdb.GetLuckyBagByPinId(pinId)
+	if err != nil {
+		return nil, err
+	}
+
+	// If found in database, save to cache
+	if luckyBag != nil {
+		cache_service.SetCacheLuckyBag(luckyBag)
+	}
+
+	return luckyBag, nil
+}
+
 // Get lucky bag list by group ID
 func (cdb *ChatDB) GetLuckyBagsByGroupId(groupId string) ([]*models.TalkGroupLuckyBagV3, error) {
 	var reds []*models.TalkGroupLuckyBagV3

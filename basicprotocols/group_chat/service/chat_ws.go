@@ -3,9 +3,11 @@ package service
 import (
 	"manindexer/basicprotocols/group_chat/api/respond"
 	"manindexer/basicprotocols/group_chat/models"
+	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/basicprotocols/group_chat/service/common_service"
 	"manindexer/basicprotocols/group_chat/service/socket_service"
 	"manindexer/common/socket_util"
+	"strings"
 )
 
 func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
@@ -95,6 +97,13 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		Chain:       chat.Chain,
 		BlockHeight: chat.BlockHeight,
 		Index:       chat.Index,
+	}
+
+	if strings.Contains(strings.ToLower(chat.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+		luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+		if luckyBag != nil {
+			groupChatItem.Domain = luckyBag.Domain
+		}
 	}
 
 	// 6. Call wsPost to send message

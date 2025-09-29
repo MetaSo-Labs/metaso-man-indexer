@@ -68,6 +68,7 @@ type GroupChatItem struct {
 	UserInfo    *UserInfo       `json:"userInfo"`
 	NickName    string          `json:"nickName"`
 	Protocol    string          `json:"protocol"`
+	Domain      string          `json:"domain"`
 	Content     string          `json:"content"`
 	ContentType string          `json:"contentType"`
 	Encryption  string          `json:"encryption"`

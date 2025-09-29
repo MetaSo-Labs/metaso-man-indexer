@@ -625,6 +625,11 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 					chatItem.TxId = ""
 				}
 			}
+		} else if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
+			}
 		}
 		if chat.ReplyPin != "" {
 			replyChat, _ := chatDB.GetChatByPinId(chat.ReplyPin)
@@ -756,6 +761,11 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 				} else {
 					chatItem.TxId = ""
 				}
+			}
+		} else if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
 			}
 		}
 		if chat.ReplyPin != "" {
@@ -1938,6 +1948,11 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 					chatItem.TxId = ""
 				}
 			}
+		} else if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
+			}
 		}
 		if chat.ReplyPin != "" {
 			replyChat, _ := chatDB.GetChatByPinId(chat.ReplyPin)
@@ -2054,6 +2069,12 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 				} else {
 					chatItem.TxId = ""
 				}
+			}
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
 			}
 		}
 		if chat.ReplyPin != "" {
@@ -2399,6 +2420,13 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 			Version:     chat.Version,
 		}
 
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
+			}
+		}
+
 		// Get user info
 		if chat.MetaId != "" {
 			userInfo := common_service.FetchMetaIDUserInfo(chat.Address)
@@ -2506,6 +2534,12 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 			BlockHeight: chat.BlockHeight,
 			Index:       chat.Index,
 			Version:     chat.Version,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
+			}
 		}
 
 		// Get user info
@@ -2615,6 +2649,12 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 			BlockHeight: chat.BlockHeight,
 			Index:       chat.Index,
 			Version:     chat.Version,
+		}
+		if strings.Contains(strings.ToLower(chatItem.Protocol), strings.ToLower(protocols.MonitorSimpleGroupLuckyBag)) {
+			luckyBag, _ := chatDB.GetLuckyBagByPinIdFromCache(chat.GroupId, chat.PinId)
+			if luckyBag != nil {
+				chatItem.Domain = luckyBag.Domain
+			}
 		}
 
 		// Get user info
