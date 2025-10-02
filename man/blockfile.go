@@ -1,6 +1,7 @@
 package man
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -12,12 +13,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/klauspost/compress/zstd"
 	"google.golang.org/protobuf/proto"
 )
 
+func GetBlockIdList(chainName string, height int) (*string, error) {
+	result, err := PebbleStore.Database.GetlBlocksDB(chainName, height)
+	return result, err
+}
 func SaveBlockFile(chainName string, height int) error {
 	result, err := PebbleStore.Database.GetlBlocksDB(chainName, height)
+	updateLastBlockHeight(chainName, height)
 	if result == nil || err != nil {
 		return errors.New("noData")
 	}
@@ -47,9 +54,109 @@ func SaveBlockFile(chainName string, height int) error {
 		pings = nil
 		partIndex++
 	}
+	fmt.Println("==>SaveBlockFile done:", chainName, height)
+
 	result = nil
 	runtime.GC()
 	return nil
+}
+func SaveBlockFileFromChain(chainName string, height int64) error {
+	pins, _, _ := IndexerAdapter[chainName].CatchPins(height)
+	batchSize := 20000
+	total := len(pins)
+	partIndex := 0
+
+	for i := 0; i < total; i += batchSize {
+		end := i + batchSize
+		if end > total {
+			end = total
+		}
+		batchKeys := pins[i:end]
+		var pingsData [][]byte
+		for _, v := range batchKeys {
+			j, err := json.Marshal(v)
+			if err != nil {
+				continue
+			}
+			pingsData = append(pingsData, j)
+		}
+		// 保存区块数据到文件
+		err := SaveFBlockPart(pingsData, chainName, int64(height), partIndex)
+		if err != nil {
+			log.Fatalf("保存区块文件失败: %v", err)
+			return err
+		}
+		pingsData = nil
+		batchKeys = nil
+		partIndex++
+	}
+	fmt.Println("==>SaveBlockFile from Chain done:", chainName, height)
+	updateLastBlockHeight(chainName, int(height))
+	pins = nil
+	runtime.GC()
+	return nil
+}
+func updateLastBlockHeight(chainName string, height int) error {
+	minKey := "blockFile_minHeight_" + chainName
+	maxKey := "blockFile_maxHeight_" + chainName
+	minValue, closer, err := PebbleStore.Database.MetaDb.Get([]byte(minKey))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			PebbleStore.Database.MetaDb.Set([]byte(minKey), []byte(strconv.Itoa(height)), pebble.Sync)
+		}
+	}
+	if closer != nil {
+		closer.Close()
+	}
+	minHeight, _ := strconv.Atoi(string(minValue))
+	if height < minHeight {
+		PebbleStore.Database.MetaDb.Set([]byte(minKey), []byte(strconv.Itoa(height)), pebble.Sync)
+	}
+	maxValue, closer, err := PebbleStore.Database.MetaDb.Get([]byte(maxKey))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			PebbleStore.Database.MetaDb.Set([]byte(maxKey), []byte(strconv.Itoa(height)), pebble.Sync)
+		}
+	}
+	if closer != nil {
+		closer.Close()
+	}
+	maxHeight, _ := strconv.Atoi(string(maxValue))
+	if height > maxHeight {
+		PebbleStore.Database.MetaDb.Set([]byte(maxKey), []byte(strconv.Itoa(height)), pebble.Sync)
+	}
+	return nil
+}
+
+func GetFileMetaHeight(chainName string) (minHeight int, maxHeight int, err error) {
+	minKey := "blockFile_minHeight_" + chainName
+	maxKey := "blockFile_maxHeight_" + chainName
+	minValue, closer, err := PebbleStore.Database.MetaDb.Get([]byte(minKey))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			err = nil
+			return
+		}
+		return
+	}
+	if closer != nil {
+		closer.Close()
+	}
+	minHeight, _ = strconv.Atoi(string(minValue))
+
+	maxValue, closer, err := PebbleStore.Database.MetaDb.Get([]byte(maxKey))
+	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			err = nil
+			return
+		}
+		return
+	}
+	if closer != nil {
+		closer.Close()
+	}
+	maxHeight, _ = strconv.Atoi(string(maxValue))
+	return
 }
 
 // GetBlockFilePath 根据区块高度计算存储路径

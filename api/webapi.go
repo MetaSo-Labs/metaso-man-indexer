@@ -138,7 +138,9 @@ func Start(f embed.FS) {
 		log.Println("use metaname api")
 		metaname.Api(r)
 	}
-
+	go func() {
+		r.Run(":7777") // 第2个端口
+	}()
 	log.Println("Server Start", common.Config.Web.Port)
 	if common.Config.Web.KeyFile != "" && common.Config.Web.PemFile != "" {
 		r.RunTLS(common.Config.Web.Port, common.Config.Web.PemFile, common.Config.Web.KeyFile)

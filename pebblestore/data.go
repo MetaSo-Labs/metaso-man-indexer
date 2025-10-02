@@ -169,6 +169,7 @@ func (db *Database) SetAllPins_BAK(height int64, pinList []interface{}, batchSiz
 	}
 	return
 }
+
 func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize int) (err error) {
 	num := len(pinList)
 	if num <= 0 {
@@ -178,6 +179,8 @@ func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize in
 	chainName := first.ChainName
 	blockTime := first.Timestamp
 	publicKeyStr := common.ConcatBytesOptimized([]string{fmt.Sprintf("%010d", blockTime), "&", chainName, "&", fmt.Sprintf("%010d", height)}, "")
+	keys := make([]string, 0, num)
+	pinSortkeys := make([]string, 0, num)
 	for i := 0; i < num; i += batchSize {
 		end := i + batchSize
 		if end > num {
@@ -187,8 +190,6 @@ func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize in
 
 		// 处理本批数据
 		list := make([]pin.PinInscription, 0, len(batch))
-		keys := make([]string, 0, len(batch))
-		pinSortkeys := make([]string, 0, len(batch))
 		pathMap := make(map[string][]string)
 		addressMap := make(map[string][]string)
 
@@ -220,8 +221,7 @@ func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize in
 			}
 			fmt.Println("  >BatchInsertPins:", time.Since(st))
 		}
-		db.InsertPinSort(db.PinSort, pinSortkeys)
-		db.InsertBlockTxs(publicKeyStr, strings.Join(keys, ","))
+
 		if len(pathMap) > 0 {
 			pathData := make(map[string]string)
 			for k, v := range pathMap {
@@ -238,11 +238,13 @@ func (db *Database) SetAllPins(height int64, pinList []interface{}, batchSize in
 		}
 		// 本批处理完后，keys等会被GC回收
 		list = list[:0]
-		keys = keys[:0]
-		pinSortkeys = pinSortkeys[:0]
 		pathMap = make(map[string][]string)
 		addressMap = make(map[string][]string)
 	}
+	db.InsertPinSort(db.PinSort, pinSortkeys)
+	db.InsertBlockTxs(publicKeyStr, strings.Join(keys, ","))
+	keys = nil
+	pinSortkeys = nil
 	return
 }
 func (db *Database) CountSet(key string, value int64) (err error) {

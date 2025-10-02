@@ -32,6 +32,7 @@ func (pd *PebbleData) Init(shardNum int) (err error) {
 }
 
 func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool) (err error) {
+	go SaveBlockFileFromChain(chainName, height)
 	//bT := time.Now()
 	if !reIndex {
 		MaxHeight[chainName] = height
@@ -66,7 +67,6 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 		startTime = time.Now()
 		pd.Database.SetAllPins(height, pinList, 20000)
 		log.Println("SetAllPins:", time.Since(startTime))
-		go SaveBlockFile(chainName, int(height))
 		//check transfer in this block
 		//var idList []string
 		tmp := pinList[0].(*pin.PinInscription)
@@ -152,6 +152,23 @@ func (pd *PebbleData) DoIndexerRun(chainName string, height int64, reIndex bool)
 	return
 }
 
+// Set PinId from block data
+func (pd *PebbleData) SetPinIdList(chainName string, height int64) (err error) {
+	pins, _, _ := IndexerAdapter[chainName].CatchPins(height)
+	var pinIdList []string
+	if len(pins) <= 0 {
+		return
+	}
+	for _, pinNode := range pins {
+		pinIdList = append(pinIdList, pinNode.Id)
+	}
+	blockTime := pins[0].Timestamp
+	publicKeyStr := common.ConcatBytesOptimized([]string{fmt.Sprintf("%010d", blockTime), "&", chainName, "&", fmt.Sprintf("%010d", height)}, "")
+	pd.Database.InsertBlockTxs(publicKeyStr, strings.Join(pinIdList, ","))
+	pinIdList = nil
+	fmt.Println(">> SetPinIdList done for height:", chainName, height)
+	return
+}
 func (pd *PebbleData) GetSaveData(chainName string, blockHeight int64) (
 	pinList []interface{},
 	protocolsData []*pin.PinInscription,

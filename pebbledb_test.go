@@ -40,7 +40,7 @@ func TestGetBlockData(t *testing.T) {
 	common.InitConfig("./config_regtest.toml")
 	man.InitAdapter("btc", "mongo", "2", "1")
 	//blockdata.GetData("btc", 432)
-	err := man.SaveBlockFile("btc", 430)
+	err := man.SaveBlockFileFromChain("btc", 430)
 	fmt.Println("SaveBlockFile:", err)
 	// 从文件加载区块数据
 	loadedData, err := man.LoadFBlockPart("btc", 430, 0)

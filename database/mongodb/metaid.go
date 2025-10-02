@@ -54,8 +54,8 @@ func (mg *Mongodb) GetMetaIdInfo(address string, mempool bool, metaid string) (i
 		if mempoolInfo.Number == -1 {
 			unconfirmedList = append(unconfirmedList, "number")
 		}
-		if mempoolInfo.Avatar != "" {
-			info.Avatar = mempoolInfo.Avatar
+		if mempoolInfo.Avatar != "" && mempoolInfo.AvatarId != "" {
+			info.Avatar = "/content/" + mempoolInfo.AvatarId
 			unconfirmedList = append(unconfirmedList, "avatar")
 		}
 		if mempoolInfo.Name != "" {
@@ -77,6 +77,9 @@ func (mg *Mongodb) GetMetaIdInfo(address string, mempool bool, metaid string) (i
 	}
 	if len(unconfirmedList) > 0 {
 		unconfirmed = strings.Join(unconfirmedList, ",")
+	}
+	if info.AvatarId != "" {
+		info.Avatar = "/content/" + info.AvatarId
 	}
 	return
 }

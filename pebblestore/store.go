@@ -38,6 +38,7 @@ type Database struct {
 	MrcDb         *pebble.DB
 	PinsMempoolDb *pebble.DB // 用于存储mempool中的pins数据
 	NotifcationDb *pebble.DB // 用于存储通知数据
+	MetaDb        *pebble.DB // 用于存储meta数据
 }
 type customLogger struct{}
 
@@ -120,9 +121,16 @@ func NewDataBase(basePath string, shardNum int) (*Database, error) {
 		log.Println(err)
 		return nil, err
 	}
+	os.MkdirAll(fmt.Sprintf("%s/meta", basePath), 0755)
+	metaDb, err := pebble.Open(fmt.Sprintf("%s/meta/db", basePath), dbOptions)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
 	return &Database{PinsDBs: pinsDBs, PinSort: pinSortDb, BlocksDB: blocksDB,
 		CountDB: countDB, PathPinDB: pathPinDB, AddressDB: addressDB,
-		CreatorDb: creatorDb, PinsMempoolDb: mempoolDb, NotifcationDb: notifcationDb}, nil
+		CreatorDb: creatorDb, PinsMempoolDb: mempoolDb, NotifcationDb: notifcationDb, MetaDb: metaDb}, nil
 }
 
 // Close 关闭所有数据库

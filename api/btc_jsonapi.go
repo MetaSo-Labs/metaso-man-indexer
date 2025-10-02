@@ -47,6 +47,8 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/block/file", blockFileGet)
 	btcGroup.GET("/block/file/partCount", blockPartCount)
 	btcGroup.GET("/block/file/create", blockFileCreate)
+	btcGroup.GET("/block/id/list", blockIdList)
+	btcGroup.GET("/block/id/create", setPinIdList)
 
 	btcGroup.GET("/pin/:numberOrId", getPinById)
 	btcGroup.GET("/address/pin/utxo/count/:address", getPinUtxoCountByAddress)
@@ -941,7 +943,10 @@ func blockPartCount(ctx *gin.Context) {
 			}
 		}
 	}
-	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"partCount": count}))
+	btcMin, btcMax, _ := man.GetFileMetaHeight("btc")
+	mvcMin, mvcMax, _ := man.GetFileMetaHeight("mvc")
+
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"partCount": count, "btcMin": btcMin, "btcMax": btcMax, "mvcMin": mvcMin, "mvcMax": mvcMax}))
 }
 func blockFileCreate(ctx *gin.Context) {
 	token := ctx.Query("token")
@@ -957,7 +962,50 @@ func blockFileCreate(ctx *gin.Context) {
 	from, _ := strconv.ParseInt(ctx.Query("from"), 10, 64)
 	to, _ := strconv.ParseInt(ctx.Query("to"), 10, 64)
 	for i := from; i <= to; i++ {
-		man.SaveBlockFile(chainName, int(i))
+		man.SaveBlockFileFromChain(chainName, i)
 	}
 	ctx.String(http.StatusOK, "block file create finish")
+}
+
+// SetPinIdList
+func setPinIdList(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token != common.Config.AdminToken || token == "" {
+		ctx.JSON(http.StatusOK, "error token")
+		return
+	}
+	chainName := ctx.Query("chain")
+	if chainName == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	from, _ := strconv.ParseInt(ctx.Query("from"), 10, 64)
+	to, _ := strconv.ParseInt(ctx.Query("to"), 10, 64)
+	for i := from; i <= to; i++ {
+		man.PebbleStore.SetPinIdList(chainName, i)
+	}
+	ctx.String(http.StatusOK, "block file pin id list create finish")
+}
+func blockIdList(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token != common.Config.AdminToken || token == "" {
+		ctx.JSON(http.StatusOK, "error token")
+		return
+	}
+	chainName := ctx.Query("chain")
+	if chainName == "" {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	height, err := strconv.ParseInt(ctx.Query("height"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrParameterError)
+		return
+	}
+	blockIds, err := man.GetBlockIdList(chainName, int(height))
+	if err != nil {
+		ctx.JSON(http.StatusOK, respond.ErrServiceError)
+		return
+	}
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", gin.H{"data": blockIds}))
 }
