@@ -45,7 +45,7 @@ swaggerHost = "http://127.0.0.1:7568"
 manHost = "https://man.metaid.io"
 backupHour = 3
 backupRetention = 7
-luckyBagDomain = "https://www.example.com/chat-api/"
+luckyBagDomain = ["https://www.example.com/chat-api/"]
 [socket]
 isEnble = true
 port = 7555

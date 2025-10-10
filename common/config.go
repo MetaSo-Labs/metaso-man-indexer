@@ -118,13 +118,13 @@ type pebble struct {
 	Num int    `toml:"num"`
 }
 type groupChatConfig struct {
-	Port            string `toml:"port"`
-	Host            string `toml:"host"`
-	SwaggerHost     string `toml:"swaggerHost"`
-	ManHost         string `toml:"manHost"`
-	BackupHour      int    `toml:"backupHour"`
-	BackupRetention int    `toml:"backupRetention"`
-	LuckyBagDomain  string `toml:"luckyBagDomain"`
+	Port            string   `toml:"port"`
+	Host            string   `toml:"host"`
+	SwaggerHost     string   `toml:"swaggerHost"`
+	ManHost         string   `toml:"manHost"`
+	BackupHour      int      `toml:"backupHour"`
+	BackupRetention int      `toml:"backupRetention"`
+	LuckyBagDomain  []string `toml:"luckyBagDomain"`
 	// log
 	LogDir           string `toml:"logDir"`
 	LogLevel         string `toml:"logLevel"`

@@ -117,18 +117,25 @@ func InitSocketManager(config *SocketConfig) error {
 			config = DefaultConfig()
 		}
 
-		// Create Socket.IO server configuration
+		// Create Socket.IO server configuration with optimized settings
 		c := socket.DefaultServerOptions()
 		c.SetServeClient(true)
-		c.SetPingInterval(300 * time.Millisecond)
-		c.SetPingTimeout(200 * time.Millisecond)
+		// Increase ping intervals to reduce connection pressure
+		c.SetPingInterval(2 * time.Second) // Increased from 300ms
+		c.SetPingTimeout(5 * time.Second)  // Increased from 200ms
 		c.SetMaxHttpBufferSize(1000000)
-		c.SetConnectTimeout(1000 * time.Millisecond)
+		c.SetConnectTimeout(10 * time.Second) // Increased from 1s
+		// Add connection timeout and cleanup settings
+		c.SetUpgradeTimeout(10 * time.Second) // Add upgrade timeout
+		c.SetMaxHttpBufferSize(1000000)       // Keep existing buffer size
 		c.SetTransports(types.NewSet("polling", "websocket"))
 		c.SetCors(&types.Cors{
 			Origin:      "*",
 			Credentials: true,
 		})
+
+		// Add additional Engine.IO configuration for stability
+		c.SetAllowEIO3(true) // Allow Engine.IO v3 compatibility
 
 		// Create Socket.IO server with configuration
 		server := socket.NewServer(nil, nil)
@@ -168,9 +175,28 @@ func InitSocketManager(config *SocketConfig) error {
 
 // setupAutoListeners Setup auto-listeners for client connections
 func (sm *SocketManager) setupAutoListeners() {
-	// Listen for client connection events
+	// Listen for client connection events with panic recovery
 	sm.server.On("connection", func(clients ...interface{}) {
-		client := clients[0].(*socket.Socket)
+		// Add panic recovery for connection handling
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Panic recovered in connection handler: %v", r)
+				// Log stack trace for debugging
+				log.Printf("Stack trace: %+v", r)
+			}
+		}()
+
+		if len(clients) == 0 {
+			log.Printf("No client provided in connection event")
+			return
+		}
+
+		client, ok := clients[0].(*socket.Socket)
+		if !ok {
+			log.Printf("Invalid client type in connection event: %T", clients[0])
+			return
+		}
+
 		sm.handleClientConnect(client)
 	})
 
@@ -179,6 +205,19 @@ func (sm *SocketManager) setupAutoListeners() {
 
 // handleClientConnect Handle client connection
 func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleClientConnect: client is nil, skipping connection handling")
+		return
+	}
+
+	// Add panic recovery for client operations
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleClientConnect: %v", r)
+		}
+	}()
+
 	if sm.extraPushAuthKey != "" {
 		// Check if this is an extra push connection
 		extraAuthKey := sm.getExtraPushAuthKeyFromSocket(client)
@@ -273,12 +312,38 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 
 // handleClientDisconnect Handle client disconnection
 func (sm *SocketManager) handleClientDisconnect(client *socket.Socket, reason string) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("[SOCKET] handleClientDisconnect: client is nil, reason: %s", reason)
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleClientDisconnect: %v", r)
+		}
+	}()
+
 	log.Printf("[SOCKET] Client disconnected: socketID=%s, reason: %s", client.Id(), reason)
 	sm.removeDeviceConnection(string(client.Id()))
 }
 
 // handleClientMessage Handle client message
 func (sm *SocketManager) handleClientMessage(client *socket.Socket, msg string) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleClientMessage: client is nil, skipping message handling")
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleClientMessage: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	sm.updateDeviceConnectionActivity(string(client.Id()))
 
@@ -301,6 +366,19 @@ func (sm *SocketManager) handleClientMessage(client *socket.Socket, msg string) 
 
 // handleClientPing Handle client ping
 func (sm *SocketManager) handleClientPing(client *socket.Socket) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleClientPing: client is nil, skipping ping handling")
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleClientPing: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	sm.updateDeviceConnectionActivity(string(client.Id()))
 
@@ -315,6 +393,19 @@ func (sm *SocketManager) handleClientPing(client *socket.Socket) {
 
 // getMetaIDAndDeviceTypeFromSocket Get metaid and device type from socket handshake
 func (sm *SocketManager) getMetaIDAndDeviceTypeFromSocket(client *socket.Socket) (string, string) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("getMetaIDAndDeviceTypeFromSocket: client is nil, returning defaults")
+		return "", DEVICE_TYPE_PC // Default to PC
+	}
+
+	// Add panic recovery for client.Handshake()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in getMetaIDAndDeviceTypeFromSocket: %v", r)
+		}
+	}()
+
 	handshake := client.Handshake()
 	if handshake == nil {
 		return "", DEVICE_TYPE_PC // Default to PC
@@ -366,6 +457,19 @@ func (sm *SocketManager) getMetaIDAndDeviceTypeFromSocket(client *socket.Socket)
 
 // getExtraPushAuthKeyFromSocket Get extraPushAuthKey from socket
 func (sm *SocketManager) getExtraPushAuthKeyFromSocket(client *socket.Socket) string {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("getExtraPushAuthKeyFromSocket: client is nil, returning empty string")
+		return ""
+	}
+
+	// Add panic recovery for client.Handshake()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in getExtraPushAuthKeyFromSocket: %v", r)
+		}
+	}()
+
 	// Get extraPushAuthKey from handshake
 	handshake := client.Handshake()
 	if handshake == nil {
@@ -423,6 +527,19 @@ func (sm *SocketManager) setupExtraPushListeners(client *socket.Socket) {
 
 // handleExtraPushMessage Handle extra push message
 func (sm *SocketManager) handleExtraPushMessage(client *socket.Socket, msg string) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleExtraPushMessage: client is nil, skipping message handling")
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleExtraPushMessage: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	if sm.extraConnection != nil {
 		sm.extraConnection.LastActive = time.Now()
@@ -447,12 +564,39 @@ func (sm *SocketManager) handleExtraPushMessage(client *socket.Socket, msg strin
 
 // handleExtraPushDisconnect Handle extra push disconnection
 func (sm *SocketManager) handleExtraPushDisconnect(client *socket.Socket, reason string) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleExtraPushDisconnect: client is nil, reason: %s", reason)
+		sm.extraConnection = nil
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleExtraPushDisconnect: %v", r)
+		}
+	}()
+
 	log.Printf("Extra push connection disconnected: socketID=%s, reason: %s", client.Id(), reason)
 	sm.extraConnection = nil
 }
 
 // handleExtraPushPing Handle extra push ping
 func (sm *SocketManager) handleExtraPushPing(client *socket.Socket) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleExtraPushPing: client is nil, skipping ping handling")
+		return
+	}
+
+	// Add panic recovery for client operations
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleExtraPushPing: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	if sm.extraConnection != nil {
 		sm.extraConnection.LastActive = time.Now()
@@ -469,6 +613,19 @@ func (sm *SocketManager) handleExtraPushPing(client *socket.Socket) {
 
 // handleExtraPushHeartbeat Handle extra push heartbeat
 func (sm *SocketManager) handleExtraPushHeartbeat(client *socket.Socket, socketData *SocketData) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleExtraPushHeartbeat: client is nil, skipping heartbeat handling")
+		return
+	}
+
+	// Add panic recovery for client operations
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleExtraPushHeartbeat: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	if sm.extraConnection != nil {
 		sm.extraConnection.LastActive = time.Now()
@@ -485,12 +642,36 @@ func (sm *SocketManager) handleExtraPushHeartbeat(client *socket.Socket, socketD
 
 // sendMessage Send message
 func (sm *SocketManager) sendMessage(client *socket.Socket, socketData *SocketData) {
+	// Add nil pointer checks to prevent panic
+	if client == nil {
+		log.Printf("sendMessage: client is nil, skipping message send")
+		return
+	}
+
+	if socketData == nil {
+		log.Printf("sendMessage: socketData is nil, skipping message send")
+		return
+	}
+
 	msg, err := socketData.ToString()
 	if err != nil {
 		log.Printf("Message serialization failed: %v", err)
 		return
 	}
 
+	// Add panic recovery for client.Emit
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in sendMessage: %v", r)
+			sm.stats.mutex.Lock()
+			sm.stats.TotalMessagesFailed++
+			sm.stats.mutex.Unlock()
+		}
+	}()
+
+	// Check if client is still connected before sending
+	// Note: Engine.IO doesn't have a direct way to check connection status,
+	// so we rely on the error handling below
 	err = client.Emit("message", msg)
 	if err != nil {
 		log.Printf("Failed to send message: %v", err)
@@ -517,6 +698,19 @@ func (sm *SocketManager) sendError(client *socket.Socket, message string, code i
 
 // handleHeartbeat Handle heartbeat event
 func (sm *SocketManager) handleHeartbeat(client *socket.Socket, socketData *SocketData) {
+	// Add nil pointer check to prevent panic
+	if client == nil {
+		log.Printf("handleHeartbeat: client is nil, skipping heartbeat handling")
+		return
+	}
+
+	// Add panic recovery for client.Id()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic recovered in handleHeartbeat: %v", r)
+		}
+	}()
+
 	// Update connection activity time
 	sm.updateDeviceConnectionActivity(string(client.Id()))
 

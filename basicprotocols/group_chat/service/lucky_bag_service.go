@@ -371,7 +371,10 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		if luckyBag.GenType == 2 {
 			return nil, errors.New("lucky bag is external")
 		}
-		if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+		// if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+		// 	return nil, errors.New("lucky bag domain not match")
+		// }
+		if !checkLuckyBagDomain(luckyBag.Domain) {
 			return nil, errors.New("lucky bag domain not match")
 		}
 		if luckyBag.GenType == 1 && luckyBag.GenState != 1 {
@@ -583,7 +586,10 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		if luckyBag.GenType == 2 {
 			return "", errors.New("lucky bag is external")
 		}
-		if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+		// if strings.TrimSuffix(luckyBag.Domain, "/") != strings.TrimSuffix(common.Config.GroupChat.LuckyBagDomain, "/") {
+		// 	return "", errors.New("lucky bag domain not match")
+		// }
+		if !checkLuckyBagDomain(luckyBag.Domain) {
 			return "", errors.New("lucky bag domain not match")
 		}
 		if luckyBag.GenType == 1 && luckyBag.GenState != 1 {
@@ -2757,4 +2763,14 @@ func StartExpiredLuckyBagProcessor() {
 			}
 		}
 	}()
+}
+
+// checkLuckyBagDomain checks if the lucky bag domain is in the list of allowed domains
+func checkLuckyBagDomain(domain string) bool {
+	for _, domain := range common.Config.GroupChat.LuckyBagDomain {
+		if strings.TrimSuffix(domain, "/") == strings.TrimSuffix(domain, "/") {
+			return true
+		}
+	}
+	return false
 }

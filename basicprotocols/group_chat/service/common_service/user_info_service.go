@@ -51,6 +51,7 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 		// Check if more than 5 minutes have passed
 		if time.Since(updateTime) <= 5*time.Minute {
 			// Cache exists and is within 5 minutes, return directly
+			fmt.Printf("Cached user[address] info exists and is within 5 minutes, returning directly\n")
 			return cachedUserInfo
 		}
 	}
@@ -59,6 +60,7 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 	userInfo, err := fetchMetaIDUserInfoInfo(address)
 	if err != nil {
 		if cachedUserInfo != nil {
+			fmt.Printf("Failed to get user[address] info from API, returning cached user info\n")
 			return cachedUserInfo
 		}
 		return nil
@@ -103,6 +105,7 @@ func FetchMetaIDUserInfoInfoByMetaId(metaId string) *respond.UserInfo {
 		// Check if more than 5 minutes have passed
 		if time.Since(updateTime) <= 5*time.Minute {
 			// Cache exists and is within 5 minutes, return directly
+			fmt.Printf("Cached user[metaid] info exists and is within 5 minutes, returning directly\n")
 			return cachedUserInfo
 		}
 	}
@@ -111,6 +114,7 @@ func FetchMetaIDUserInfoInfoByMetaId(metaId string) *respond.UserInfo {
 	userInfo, err := fetchMetaIDUserInfoInfoByMetaId(metaId)
 	if err != nil {
 		if cachedUserInfo != nil {
+			fmt.Printf("Failed to get user[metaid] info from API, returning cached user info\n")
 			return cachedUserInfo
 		}
 		return nil
