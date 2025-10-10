@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"manindexer/common"
 	"manindexer/pin"
 	"strings"
 	"time"
@@ -81,6 +82,7 @@ func (mg *Mongodb) GetMetaIdInfo(address string, mempool bool, metaid string) (i
 	if info.AvatarId != "" {
 		info.Avatar = "/content/" + info.AvatarId
 	}
+	info.MetaId = common.GetMetaIdByAddress(info.Address)
 	return
 }
 func findMetaIdInfoInMempool(key string, value string) (info pin.MetaIdInfo, err error) {
@@ -129,9 +131,9 @@ func (mg *Mongodb) BatchUpsertMetaIdInfo(infoList map[string]*pin.MetaIdInfo) (e
 		if info.Number > 0 {
 			updateInfo = append(updateInfo, bson.E{Key: "number", Value: info.Number})
 		}
-		if info.MetaId != "" {
-			updateInfo = append(updateInfo, bson.E{Key: "metaid", Value: info.MetaId})
-		}
+		//if info.MetaId != "" {
+		updateInfo = append(updateInfo, bson.E{Key: "metaid", Value: common.GetMetaIdByAddress(info.Address)})
+		//}
 		if info.Name != "" {
 			updateInfo = append(updateInfo, bson.E{Key: "name", Value: info.Name})
 		}
@@ -200,6 +202,58 @@ func BatchGetMetaIdInfo(lastupdate int64, limit int) (infoList map[string]*pin.M
 		infoList[pin.Address] = &pin
 	}
 	return
+}
+func UpdateAllMetaId() error {
+	ctx := context.TODO()
+	collection := mongoClient.Collection(MetaIdInfoCollection)
+
+	// 批量处理，防止内存溢出
+	batchSize := int64(1000)
+	var lastID primitive.ObjectID
+
+	for {
+		// 分批查询
+		filter := bson.M{}
+		if !lastID.IsZero() {
+			filter["_id"] = bson.M{"$gt": lastID}
+		}
+		opts := options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(batchSize)
+		cursor, err := collection.Find(ctx, filter, opts)
+		if err != nil {
+			return err
+		}
+		var docs []struct {
+			ID      primitive.ObjectID `bson:"_id"`
+			Address string             `bson:"address"`
+		}
+		if err := cursor.All(ctx, &docs); err != nil {
+			return err
+		}
+		if len(docs) == 0 {
+			break
+		}
+
+		var models []mongo.WriteModel
+		for _, doc := range docs {
+			newMetaId := common.GetMetaIdByAddress(doc.Address)
+			update := bson.M{"$set": bson.M{"metaid": newMetaId}}
+			model := mongo.NewUpdateOneModel().
+				SetFilter(bson.M{"_id": doc.ID}).
+				SetUpdate(update)
+			models = append(models, model)
+			lastID = doc.ID
+		}
+		if len(models) > 0 {
+			_, err := collection.BulkWrite(ctx, models)
+			if err != nil {
+				return err
+			}
+		}
+		if int64(len(docs)) < batchSize {
+			break
+		}
+	}
+	return nil
 }
 func FetchMetaIdInfoBatch(lastID string, batchSize int64) (pins []*pin.MetaIdInfo, nextLastID string, err error) {
 	// 构建过滤条件

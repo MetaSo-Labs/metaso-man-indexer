@@ -900,7 +900,7 @@ func metaIdInfoParse(pinNode *pin.PinInscription, path string, metaIdData *map[s
 	}
 
 	if metaIdInfo.MetaId == "" {
-		metaIdInfo.MetaId = pinNode.Id
+		metaIdInfo.MetaId = common.GetMetaIdByAddress(pinNode.Address)
 	}
 	if metaIdInfo.ChainName == "" {
 		metaIdInfo.ChainName = pinNode.ChainName

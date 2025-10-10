@@ -58,6 +58,7 @@ func btcJsonApi(r *gin.Engine) {
 	btcGroup.GET("/info/address/:address", getInfoByAddress)
 	btcGroup.GET("/info/metaid/:metaId", getInfoByMetaId)
 	btcGroup.GET("/info/search", infoSearch)
+	btcGroup.GET("/info/metaidUpdate", infometaidUpdate)
 	btcGroup.GET("/getAllPinByPath", getAllPinByPath)
 	btcGroup.POST("/generalQuery", generalQuery)
 	btcGroup.GET("/pin/ByOutput/:output", getPinByOutput)
@@ -437,9 +438,8 @@ func getInfoByAddress(ctx *gin.Context) {
 	if metaid.Address == "" {
 		metaid.Address = ctx.Param("address")
 	}
-	if metaid.MetaId == "" {
-		metaid.MetaId = common.GetMetaIdByAddress(ctx.Param("address"))
-	}
+
+	metaid.MetaId = common.GetMetaIdByAddress(ctx.Param("address"))
 	metaidKey := fmt.Sprintf("metaid_%s", metaid.MetaId)
 	blocked := false
 	if _, ok := common.BlockedData[metaidKey]; ok {
@@ -464,6 +464,10 @@ func getCacheInfoByAddress(ctx *gin.Context) {
 
 	// 使用代理处理请求
 	proxy.ServeHTTP(ctx.Writer, ctx.Request)
+}
+func infometaidUpdate(ctx *gin.Context) {
+	err := mongodb.UpdateAllMetaId()
+	ctx.JSON(http.StatusOK, respond.ApiSuccess(1, "ok", err))
 }
 func infoSearch(ctx *gin.Context) {
 	keyword := ctx.Query("keyword")

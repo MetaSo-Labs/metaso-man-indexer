@@ -207,7 +207,7 @@ func TestMempoolTransfer(t *testing.T) {
 	mm.CheckMempoolHadle("btc", list)
 }
 func TestCreateMetaId(t *testing.T) {
-	fmt.Println(common.GetMetaIdByAddress("a"))
+	fmt.Println(common.GetMetaIdByAddress("1FsP2iarzVRwsM856NLZzPupXc9tabiDfw"))
 }
 func TestEcdh(t *testing.T) {
 	content := []byte(`oWg+H3pEuwqgFeLwTyQvch3h3jNpv4FTPutTQGw9C9aqGzyzrK5alIjpqW1fpxAkUYP5H9YGaMHII3UPNveox4jDEVyXQKnAukpD5Pn5Au11mGUISptLLh7kk1+k3L5uqhuXOm7JwiUY5oJ0yMtEjEgcjhmvfnFl/NWtjnUGQ0/4wCBUaRIgRFWotcR99gYKv2KmyOahj1ks0Jk2PhLV6uvoMHmaQTmy9RMVd8a8bFKP2ej2HaCyFADO24yyMrGt3iYe+Bjv3kU6Kd77vU5T+t+WfO2o1wrSct0HSD9hojEcGVavvlIbLszOAP9NYHLVx0XuMm/wjisM83g9wGloYh7AQHlkfTIQJlygxCQdA6qx/Kwtr/join1VFiAylaHr24DkAPZt/eYUn6sPoDpXFdfEmeSlFBjha2mwVLXjdikWcFYf81aNhAS1dSqw4tE47ZJ1nKeZBAacJ3D24ttod4VYbza89oYERAGEFCcX5/pxm87AMoQye0Pyb4YEExOSRcbY2Exf7DXK7WEr`)
