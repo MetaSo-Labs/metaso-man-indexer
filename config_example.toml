@@ -46,6 +46,16 @@ manHost = "https://man.metaid.io"
 backupHour = 3
 backupRetention = 7
 luckyBagDomain = ["https://www.example.com/chat-api/"]
+logDir = "./log_chat"
+logLevel = "info"
+logMaxSize = 5
+logMaxBackups = 3
+logMaxAge = 7
+logConsoleOutput = true
+logFileOutput = true
+isActiveResync = false
+isMempoolDataWaitingResync = false
+grpcMetaContractAddress = "127.0.0.1:50051"
 [socket]
 isEnble = true
 port = 7555

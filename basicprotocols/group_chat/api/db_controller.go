@@ -2807,3 +2807,32 @@ func GetPinIdsByChainAndHeight(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
+
+// GetLuckyBagExtraByTxId Get lucky bag extra FT info by txId
+// @Summary Get lucky bag extra FT info by txId
+// @Description Get lucky bag extra FT information by txId
+// @Tags Database Operations
+// @Accept json
+// @Produce json
+// @Param txId query string true "Transaction ID"
+// @Success 200 {object} respond.ResponseData "Success"
+// @Failure 400 {object} respond.ResponseData "Bad Request"
+// @Failure 500 {object} respond.ResponseData "Internal Server Error"
+// @Router /api/db/luckybag/extra/txid [get]
+func GetLuckyBagExtraByTxId(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	txId := ctx.Query("txId")
+
+	if txId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("txId parameter is required"), t, 1))
+		return
+	}
+
+	result, err := service.GetLuckyBagExtraByTxId(txId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}

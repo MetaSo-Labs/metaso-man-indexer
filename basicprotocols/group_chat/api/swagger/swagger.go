@@ -2672,6 +2672,69 @@ func SetupSwagger(router *gin.Engine) {
                     "500": {"description": "Internal server error", "schema": {"type": "object"}}
                 }
             }
+        },
+        "/api/db/luckybag/extra/txid": {
+            "get": {
+                "description": "Get lucky bag extra FT information by txId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get lucky bag extra FT info by txId",
+                "parameters": [
+                    {"type": "string", "description": "Transaction ID", "name": "txId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved lucky bag extra info",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "txId": {"type": "string", "description": "Transaction ID"},
+                                        "found": {"type": "boolean", "description": "Whether the lucky bag extra was found"},
+                                        "message": {"type": "string", "description": "Message if not found"},
+                                        "data": {
+                                            "type": "object",
+                                            "description": "Lucky bag extra data (only present if found is true)",
+                                            "properties": {
+                                                "txId": {"type": "string", "description": "Transaction ID"},
+                                                "pinId": {"type": "string", "description": "Pin ID"},
+                                                "subId": {"type": "string", "description": "Sub ID"},
+                                                "groupId": {"type": "string", "description": "Group ID"},
+                                                "code": {"type": "string", "description": "Lucky bag code"},
+                                                "createTime": {"type": "integer", "description": "Create time"},
+                                                "domain": {"type": "string", "description": "Domain"},
+                                                "luckyBagAddress": {"type": "string", "description": "Lucky bag address"},
+                                                "codehash": {"type": "string", "description": "Contract code hash"},
+                                                "genesis": {"type": "string", "description": "Contract genesis"},
+                                                "type": {"type": "string", "description": "Lucky bag type"},
+                                                "tokenOutputs": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "tokenAmount": {"type": "integer", "description": "Token amount"},
+                                                            "tokenAddress": {"type": "string", "description": "Token address"},
+                                                            "index": {"type": "integer", "description": "Output index"}
+                                                        }
+                                                    },
+                                                    "description": "List of token outputs"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
         }
     },
     "tags": [

@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package metacontract;
+
+option go_package = "manindexer/basicprotocols/group_chat/service/grpc_service/proto";
+
+service MetaContractService {
+  rpc TransferFt (TransferFtRequest) returns (TransferFtResponse);
+  rpc GetHealth (HealthRequest) returns (HealthResponse);
+}
+
+message TransferFtRequest {
+  string wif = 1;
+  optional string tokenWif = 2;
+  TokenTransfer token = 3;
+  optional string ftChangeAddress = 4;
+  repeated string opreturnData = 5;
+  optional string changeAddress = 6;
+}
+
+message Receiver {
+  string address = 1;
+  string amount = 2;
+}
+
+message TokenTransfer {
+  repeated Receiver receivers = 1;
+  string codehash = 2;
+  string genesis = 3;
+  repeated GasUtxo gasUtxos = 4;
+  repeated TokenUtxo tokenUtxos = 5;
+}
+
+message GasUtxo {
+  string txId = 1;
+  optional int32 outputIndex = 2;
+  string satoshis = 3;
+}
+
+message TokenUtxo {
+  string txId = 1;
+  optional int32 outputIndex = 2;
+  string tokenAmount = 3;
+}
+
+message TransferFtResponse {
+  string status = 1;
+  string message = 2;
+  optional TransferFtData data = 3;
+}
+
+message TransferFtData {
+  string txId = 1;
+  string txHex = 2;
+  string routeCheckTxHex = 3;
+  string routeCheckTxId = 4;
+}
+
+message HealthRequest {
+  // 空请求，不需要参数
+}
+
+message HealthResponse {
+  string status = 1;
+  string message = 2;
+  optional HealthData data = 3;
+}
+
+message HealthData {
+  string version = 1;
+  string network = 2;
+  int64 timestamp = 3;
+  bool noBroadcast = 4;
+}

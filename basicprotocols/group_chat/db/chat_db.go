@@ -2494,12 +2494,13 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		luckyBagVouts    []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
 		errLuckyBagVouts []*models.LuckyBagOutput = make([]*models.LuckyBagOutput, 0)
 
-		hasLuckyFeeRate      bool  = false
-		txFeeRate            int64 = 1
-		openLuckyTxSize      int64 = protocols.OpenLuckyTxSize
-		openLuckyTxFee       int64 = 0
-		openLuckyTotalAmount int64 = 0
-		openLuckyTotalFee    int64 = 0
+		hasLuckyFeeRate         bool  = false
+		txFeeRate               int64 = 1
+		openLuckyTxSize         int64 = protocols.OpenLuckyTxSize
+		openLuckyTxFee          int64 = 0
+		openLuckyTotalAmount    int64 = 0
+		openLuckyTotalGasAmount int64 = 0
+		openLuckyTotalFee       int64 = 0
 	)
 
 	if simpleLuckyBag.FeeRate != nil && simpleLuckyBag.FeeRate != "0" && simpleLuckyBag.FeeRate != "" {
@@ -2518,36 +2519,65 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 	payAddressList := make([]string, 0)
 	// First, process all PayList items
 	for _, pay := range simpleLuckyBag.PayList {
-		payAddressList = append(payAddressList, pay.Address)
-		itemLuckyAmount := toInt64(pay.Amount) - openLuckyTxFee
-		itemLuckyFee := openLuckyTxFee
-		itemLuckyFeeRate := toString(txFeeRate)
-		if itemLuckyAmount < 546 {
-			itemLuckyAmount = 546
-			itemLuckyFee = toInt64(pay.Amount) - itemLuckyAmount
-			itemLuckyFeeRate = toString(float64(itemLuckyFee) / float64(openLuckyTxSize))
-		}
+		if strings.ToLower(simpleLuckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+			payAddressList = append(payAddressList, pay.GasAddress)
+			itemLuckyAmount := toInt64(pay.Amount)
+			itemLuckyFee := openLuckyTxFee
+			itemLuckyFeeRate := toString(txFeeRate)
+			payItem := &models.ProInfoPayList{
+				Amount:  toString(pay.Amount),
+				Address: pay.Address,
+				Index:   toInt64(pay.Index),
 
-		payItem := &models.ProInfoPayList{
-			Amount:  toString(pay.Amount),
-			Address: pay.Address,
-			Index:   toInt64(pay.Index),
-			// LuckyAmount:  toString(itemLuckyAmount),
-			// LuckyFee:     toString(itemLuckyFee),
-			// LuckyFeeRate: itemLuckyFeeRate,
-		}
-		if hasLuckyFeeRate {
-			payItem.LuckyAmount = toString(itemLuckyAmount)
-			payItem.LuckyFee = toString(itemLuckyFee)
-			payItem.LuckyFeeRate = itemLuckyFeeRate
-		}
+				GasAmount:  toString(pay.GasAmount),
+				GasAddress: pay.GasAddress,
+				GasIndex:   toInt64(pay.GasIndex),
 
-		openLuckyTotalAmount += toInt64(payItem.LuckyAmount)
-		openLuckyTotalFee += toInt64(payItem.LuckyFee)
-		if _, ok := payListByIndex[toInt64(pay.Index)]; ok {
-			errPayList = append(errPayList, payItem)
+				LuckyAmount:  toString(itemLuckyAmount),
+				LuckyFee:     toString(itemLuckyFee),
+				LuckyFeeRate: itemLuckyFeeRate,
+			}
+
+			openLuckyTotalAmount += toInt64(payItem.LuckyAmount)
+			openLuckyTotalFee += toInt64(payItem.LuckyFee)
+			if _, ok := payListByIndex[toInt64(pay.GasIndex)]; ok {
+				errPayList = append(errPayList, payItem)
+			} else {
+				payListByIndex[toInt64(pay.GasIndex)] = payItem
+			}
+
 		} else {
-			payListByIndex[toInt64(pay.Index)] = payItem
+			payAddressList = append(payAddressList, pay.Address)
+			itemLuckyAmount := toInt64(pay.Amount) - openLuckyTxFee
+			itemLuckyFee := openLuckyTxFee
+			itemLuckyFeeRate := toString(txFeeRate)
+			if itemLuckyAmount < 546 {
+				itemLuckyAmount = 546
+				itemLuckyFee = toInt64(pay.Amount) - itemLuckyAmount
+				itemLuckyFeeRate = toString(float64(itemLuckyFee) / float64(openLuckyTxSize))
+			}
+
+			payItem := &models.ProInfoPayList{
+				Amount:  toString(pay.Amount),
+				Address: pay.Address,
+				Index:   toInt64(pay.Index),
+				// GasAmount:  toString(pay.GasAmount),
+				// GasAddress: pay.GasAddress,
+				// GasIndex:   toInt64(pay.GasIndex),
+			}
+			if hasLuckyFeeRate {
+				payItem.LuckyAmount = toString(itemLuckyAmount)
+				payItem.LuckyFee = toString(itemLuckyFee)
+				payItem.LuckyFeeRate = itemLuckyFeeRate
+			}
+
+			openLuckyTotalAmount += toInt64(payItem.LuckyAmount)
+			openLuckyTotalFee += toInt64(payItem.LuckyFee)
+			if _, ok := payListByIndex[toInt64(pay.Index)]; ok {
+				errPayList = append(errPayList, payItem)
+			} else {
+				payListByIndex[toInt64(pay.Index)] = payItem
+			}
 		}
 	}
 
@@ -2648,6 +2678,9 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		CreateTimeStr:       formatInt64(simpleLuckyBag.CreateTime),
 		Domain:              simpleLuckyBag.Domain,
 		LuckyBagAddress:     simpleLuckyBag.LuckyBagAddress,
+		LuckyBagGasAddress:  simpleLuckyBag.LuckyBagGasAddress,
+		TickTxId:            simpleLuckyBag.TickTxId,
+		TickPinId:           simpleLuckyBag.TickPinId,
 		GenType:             0,
 		GenState:            0,
 		Content:             simpleLuckyBag.Content,
@@ -2655,6 +2688,7 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		ImgType:             simpleLuckyBag.ImgType,
 		Amount:              formatInt64(simpleLuckyBag.Amount),
 		LuckyTotalAmount:    formatInt64(openLuckyTotalAmount),
+		LuckyTotalGasAmount: formatInt64(openLuckyTotalGasAmount),
 		LuckyTotalFee:       formatInt64(openLuckyTotalFee),
 		FeeRate:             formatInt64(txFeeRate),
 		Count:               toString(simpleLuckyBag.Count),
@@ -2664,7 +2698,9 @@ func (cdb *ChatDB) processGroupLuckyBag(pin *pin.PinInscription, txData *wire.Ms
 		ErrPayList:          errPayList,
 		LuckyBagVouts:       luckyBagVouts,
 		ErrLuckyBagVouts:    errLuckyBagVouts,
-		Type:                simpleLuckyBag.Type,
+		Type:                strings.ToLower(simpleLuckyBag.Type),
+		TickId:              simpleLuckyBag.TickId,
+		CollectionId:        simpleLuckyBag.CollectionId,
 		RequireType:         toString(simpleLuckyBag.RequireType),
 		RequireTickId:       simpleLuckyBag.RequireTickId,
 		RequireCollectionId: simpleLuckyBag.RequireCollectionId,

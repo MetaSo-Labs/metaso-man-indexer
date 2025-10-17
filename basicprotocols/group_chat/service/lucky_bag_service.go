@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"manindexer/basicprotocols/group_chat/service/grpc_service/grpc_metacontract"
 	"manindexer/common"
 	"strconv"
 	"strings"
@@ -27,6 +29,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/cockroachdb/pebble"
 	"github.com/libsv/go-bk/bec"
+	chaincfg3 "github.com/libsv/go-bk/chaincfg"
+	"github.com/libsv/go-bk/wif"
 	"github.com/tyler-smith/go-bip32"
 )
 
@@ -194,6 +198,26 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 	}
 	perfStats.getResidueListTime = time.Now().UnixMilli() - t
 
+	var tickInfo *respond.TickInfo
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) && luckyBag.TickPinId != "" {
+		extra, err := extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+		if err != nil {
+			return nil, err
+		}
+		if extra != nil {
+			tickInfo = &respond.TickInfo{
+				TickType:   extra.Type,
+				Codehash:   extra.Codehash,
+				GenesisId:  extra.GenesisId,
+				Genesis:    extra.Genesis,
+				SensibleId: extra.SensibleId,
+				Name:       extra.Name,
+				Symbol:     extra.Symbol,
+				Decimal:    extra.Decimal,
+			}
+		}
+	}
+
 	// Build LuckyBagInfoResponse
 	response := &respond.LuckyBagInfoResponse{
 		TxId:                luckyBag.TxId,
@@ -206,6 +230,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Domain:              luckyBag.Domain,
 		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		LuckyBagGasAddress:  luckyBag.LuckyBagGasAddress,
+		TickPinId:           luckyBag.TickPinId,
+		TickTxId:            luckyBag.TickTxId,
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Content:             luckyBag.Content,
@@ -221,6 +248,9 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 		PayList:             make([]*respond.InfoPayList, 0),
 		ErrPayList:          make([]*respond.InfoPayList, 0),
 		Type:                luckyBag.Type,
+		TickId:              luckyBag.TickId,
+		TickInfo:            tickInfo,
+		CollectionId:        luckyBag.CollectionId,
 		TokenCount:          0, // TalkGroupLuckyBagV3 doesn't have TokenCount field
 		RequireType:         luckyBag.RequireType,
 		RequireTickId:       luckyBag.RequireTickId,
@@ -236,12 +266,16 @@ func GetLuckyBagWithOpenList(groupId, pinId string) (*respond.LuckyBagInfoRespon
 	for _, payItem := range luckyBag.PayList {
 		infoPayList := &respond.InfoPayList{
 			TxId:         luckyBag.TxId,
+			TokenTxId:    luckyBag.TickTxId,
 			Index:        payItem.Index,
 			Amount:       payItem.Amount,
 			LuckyAmount:  payItem.LuckyAmount,
 			LuckyFee:     payItem.LuckyFee,
 			LuckyFeeRate: payItem.LuckyFeeRate,
 			Address:      payItem.Address,
+			GasAmount:    payItem.GasAmount,
+			GasAddress:   payItem.GasAddress,
+			GasIndex:     payItem.GasIndex,
 			Used:         false,
 			GradTxId:     "",
 			GradPinId:    "",
@@ -426,6 +460,26 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 	}
 	perfStats.processResidueListTime = time.Now().UnixMilli() - t
 
+	var tickInfo *respond.TickInfo
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) && luckyBag.TickPinId != "" {
+		extra, err := extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+		if err != nil {
+			return nil, err
+		}
+		if extra != nil {
+			tickInfo = &respond.TickInfo{
+				TickType:   extra.Type,
+				Codehash:   extra.Codehash,
+				GenesisId:  extra.GenesisId,
+				Genesis:    extra.Genesis,
+				SensibleId: extra.SensibleId,
+				Name:       extra.Name,
+				Symbol:     extra.Symbol,
+				Decimal:    extra.Decimal,
+			}
+		}
+	}
+
 	t = time.Now().UnixMilli()
 	// Build LuckyBagUnusedResponse
 	response := &respond.LuckyBagUnusedResponse{
@@ -438,6 +492,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Domain:              luckyBag.Domain,
 		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		LuckyBagGasAddress:  luckyBag.LuckyBagGasAddress,
+		TickPinId:           luckyBag.TickPinId,
+		TickTxId:            luckyBag.TickTxId,
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Amount:              luckyBag.Amount,
@@ -451,6 +508,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 		ImgType:             luckyBag.ImgType,
 		Unused:              make([]*respond.UnusedList, 0),
 		Type:                luckyBag.Type,
+		TickId:              luckyBag.TickId,
+		TickInfo:            tickInfo,
+		CollectionId:        luckyBag.CollectionId,
 		TokenCount:          0, // TalkGroupLuckyBagV3 doesn't have TokenCount field
 		RequireType:         luckyBag.RequireType,
 		RequireTickId:       luckyBag.RequireTickId,
@@ -468,6 +528,9 @@ func GetLuckyBagWithUnusedList(groupId, pinId string) (*respond.LuckyBagUnusedRe
 				Index:        v.Index,
 				Amount:       v.Amount,
 				Address:      v.Address,
+				GasAmount:    v.GasAmount,
+				GasAddress:   v.GasAddress,
+				GasIndex:     v.GasIndex,
 				ScriptPubKey: "", // Need to get from LuckyBagVouts
 				LuckyAmount:  v.LuckyAmount,
 				LuckyFee:     v.LuckyFee,
@@ -717,6 +780,18 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 			LuckyAmount:  v.LuckyAmount,
 			LuckyFee:     v.LuckyFee,
 			LuckyFeeRate: v.LuckyFeeRate,
+			GasAmount:    v.GasAmount,
+			GasAddress:   v.GasAddress,
+			GasIndex:     v.GasIndex,
+		}
+		if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+			gasAmount, err := strconv.ParseInt(unused.GasAmount, 10, 64)
+			if err != nil {
+				continue
+			}
+			if gasAmount < 20000 {
+				continue // skip if gas amount is less than 20000
+			}
 		}
 		unusedList = append(unusedList, unused)
 	}
@@ -726,6 +801,29 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 		return "", errors.New("LuckyBag had been all grab.")
 	}
 
+	// check type if metacontract-ft, check tickTxId and tickPinId
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+		if luckyBag.TickTxId == "" || luckyBag.TickPinId == "" || luckyBag.TickId == "" {
+			return "", errors.New("tickTxId and tickPinId and tickId are required for metacontract-ft")
+		}
+
+		//find extra from TickTxId
+		extra, err := extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+		if err != nil {
+			return "", err
+		}
+		if extra == nil {
+			return "", errors.New("extra not found")
+		}
+		if luckyBag.TickId != extra.Codehash+"/"+extra.Genesis {
+			return "", errors.New("tickId not match")
+		}
+
+		err = checkGrpcHealth()
+		if err != nil {
+			return "", errors.New("grpc health check failed: " + err.Error())
+		}
+	}
 	t = time.Now().UnixMilli()
 	err = commonGrab(luckyBag, unusedList, metaId, address)
 	if err != nil {
@@ -776,6 +874,9 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 		unusedLuckyAmount  string
 		unusedLuckyFee     string
 		unusedLuckyFeeRate string
+		gasAmount          string
+		gasAddress         string
+		gasIndex           int64
 	}
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
@@ -811,6 +912,9 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 					unusedLuckyAmount:  unused.LuckyAmount,
 					unusedLuckyFee:     unused.LuckyFee,
 					unusedLuckyFeeRate: unused.LuckyFeeRate,
+					gasAmount:          unused.GasAmount,
+					gasAddress:         unused.GasAddress,
+					gasIndex:           unused.GasIndex,
 				})
 				break
 			}
@@ -832,6 +936,9 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 					unusedLuckyAmount:  unused.LuckyAmount,
 					unusedLuckyFee:     unused.LuckyFee,
 					unusedLuckyFeeRate: unused.LuckyFeeRate,
+					gasAmount:          unused.GasAmount,
+					gasAddress:         unused.GasAddress,
+					gasIndex:           unused.GasIndex,
 				})
 				break
 			}
@@ -894,8 +1001,14 @@ func commonGrab(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Unus
 			LuckyFee:            v.unusedLuckyFee,
 			LuckyFeeRate:        v.unusedLuckyFeeRate,
 			PkScript:            pkScript,
+			GasAmount:           v.gasAmount,
+			GasAddress:          v.gasAddress,
+			GasIndex:            v.gasIndex,
+			GasPkScript:         "",
 			Vins:                vins,
 			Type:                luckyBag.Type,
+			TickId:              luckyBag.TickId,
+			CollectionId:        luckyBag.CollectionId,
 			RequireTickId:       luckyBag.RequireTickId,
 			RequireCollectionId: luckyBag.RequireCollectionId,
 			LuckyBagTxId:        luckyBag.TxId,
@@ -1073,19 +1186,6 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 	}
 
 	toAddress := grabEntity.Address
-	_ = toAddress
-
-	// txFeeRate := int64(1)
-	// if grabEntity.LuckyFeeRate != "" && grabEntity.LuckyFeeRate != "0" {
-	// 	normalizedAmount = normalizeScientificNotation(grabEntity.LuckyFeeRate)
-	// 	feeRate, err := strconv.ParseInt(normalizedAmount, 10, 64)
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to parse lucky fee rate: %v", err)
-	// 	}
-	// 	if feeRate >= 1 {
-	// 		txFeeRate = feeRate
-	// 	}
-	// }
 
 	outputAmount := int64(0)
 	if grabEntity.LuckyAmount != "" && grabEntity.LuckyAmount != "0" {
@@ -1099,12 +1199,54 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		}
 	}
 
+	netParam := chainAdapter[grabEntity.Chain].GetNetParam()
+
+	if grabEntity.Type == string(models.LuckyBagTypeMetacontractFT) {
+		err = buildAndBroadcastMetaContractFtTransferTx(
+			grabEntity,
+			hexStr,
+			netParam,
+			toAddress, value, outputAmount,
+			totalCount,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to build meta contract ft transfer tx: %v", err)
+		}
+	} else if grabEntity.Type == string(models.LuckyBagTypeBtc) || grabEntity.Type == string(models.LuckyBagTypeSpace) {
+		err = buildAndBroadcastCommonTransferTx(
+			grabEntity,
+			hexStr,
+			netParam,
+			toAddress, value, outputAmount,
+			totalCount,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to build and broadcast common transfer tx: %v", err)
+		}
+	} else {
+		return fmt.Errorf("unsupported lucky bag type: %s", grabEntity.Type)
+	}
+
+	return nil
+}
+
+// buildAndBroadcastCommonTransferTx builds and broadcasts a common transfer transaction
+func buildAndBroadcastCommonTransferTx(
+	grabEntity *models.TalkGroupOpenLuckyBagV3,
+	privateKeyHex string,
+	netParam interface{},
+	toAddress string, value uint64, outputAmount int64,
+	totalCount int64,
+) error {
+	var (
+		err error
+	)
 	input := common.TxInputUtxo{
 		TxId:     grabEntity.LuckyBagTxId,
 		TxIndex:  int64(grabEntity.Index),
 		PkScript: grabEntity.PkScript,
 		Amount:   value,
-		PriHex:   hexStr,
+		PriHex:   privateKeyHex,
 		SignMode: common.SignModeLegacy,
 	}
 	output := common.TxOutput{
@@ -1112,8 +1254,6 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 		Amount:     int64(value),
 		NeedAmount: int64(outputAmount),
 	}
-
-	netParam := chainAdapter[grabEntity.Chain].GetNetParam()
 
 	// Type conversion based on chain type
 	var tx interface{}
@@ -1234,6 +1374,298 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 			}
 		} else {
 			fmt.Printf("[Grad][%s][%s]Retry broadcast tx: %s, retryCount: %d, totalCount: %d\n", grabEntity.Chain, grabEntity.PinId, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
+			// Still within retry limit, set error state but don't save to error collection yet
+			// grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Retry %d/5, error: %s", grabEntity.RetryCount, broadcastErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Check if error contains broadcast-related issues, if not, return the error
+			if !isBroadcastError(broadcastErr) {
+				return fmt.Errorf("broadcast transaction failed: %v", broadcastErr)
+			}
+		}
+
+	}
+
+	// Update grab lucky bag record in database
+	err = chatDB.SaveOpenLuckyBag(grabEntity)
+	if err != nil {
+		return fmt.Errorf("failed to save open lucky bag: %v", err)
+	}
+
+	// Update cache after saving to database
+	err = UpdateLuckyBagCacheAfterSave(grabEntity, nil)
+	if err != nil {
+		log.Printf("[disposingGrabLuckyBag] Failed to update cache after save: %v", err)
+		// Don't return error for cache update failure, as the main operation succeeded
+	}
+
+	return nil
+}
+
+// buildAndBroadcastMetaContractFtTransferTx builds and broadcasts a MetaContract FT transfer transaction
+func buildAndBroadcastMetaContractFtTransferTx(
+	grabEntity *models.TalkGroupOpenLuckyBagV3,
+	privateKeyHex string,
+	netParam interface{},
+	toAddress string, value uint64, outputAmount int64,
+	totalCount int64,
+) error {
+	var (
+		tokenWif    string
+		gasWif      string
+		codehash    string
+		genesis     string
+		tokenAmount string
+		gasUtxos    []*grpc_metacontract.GasUtxo   = make([]*grpc_metacontract.GasUtxo, 0)
+		tokenUtxos  []*grpc_metacontract.TokenUtxo = make([]*grpc_metacontract.TokenUtxo, 0)
+		net         *chaincfg3.Params
+	)
+	tokenAmount = strconv.FormatInt(outputAmount, 10)
+
+	if netParam, ok := netParam.(*chaincfg2.Params); ok {
+		if netParam.Name == chaincfg3.MainNet.Name {
+			net = &chaincfg3.MainNet
+		} else {
+			net = &chaincfg3.TestNet
+		}
+	} else {
+		return fmt.Errorf("invalid net param")
+	}
+
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return err
+	}
+	privateKey, _ := bec.PrivKeyFromBytes(bec.S256(), privateKeyBytes)
+
+	wifKey, err := wif.NewWIF(privateKey, net, true)
+	if err != nil {
+		return fmt.Errorf("failed to create wif key: %v", err)
+	}
+	gasWif = wifKey.String()
+	tokenWif = wifKey.String()
+
+	if grabEntity.Type != string(models.LuckyBagTypeMetacontractFT) {
+		return fmt.Errorf("lucky bag type is not metacontract-ft")
+	}
+	toAddress = grabEntity.Address
+	tokenAmount = grabEntity.Amount
+	codehashGenesis := strings.Split(grabEntity.TickId, "/")
+	if len(codehashGenesis) != 2 {
+		return fmt.Errorf("invalid tick id: %s", grabEntity.TickId)
+	}
+	codehash = codehashGenesis[0]
+	genesis = codehashGenesis[1]
+
+	gasUtxos = append(gasUtxos, &grpc_metacontract.GasUtxo{
+		TxId:        grabEntity.LuckyBagTxId,
+		OutputIndex: int32(grabEntity.GasIndex),
+		Satoshis:    grabEntity.GasAmount,
+	})
+
+	tokenUtxos = append(tokenUtxos, &grpc_metacontract.TokenUtxo{
+		TxId:        grabEntity.TickTxId,
+		OutputIndex: int32(grabEntity.Index),
+		TokenAmount: grabEntity.Amount,
+	})
+
+	client, err := grpc_metacontract.NewClient()
+	if err != nil {
+		return fmt.Errorf("failed to create grpc metacontract client: %v", err)
+	}
+	defer client.Close()
+
+	req := &grpc_metacontract.TransferFtRequest{
+		Wif:             gasWif,
+		TokenWif:        &tokenWif,
+		FtChangeAddress: &toAddress,
+		ChangeAddress:   &toAddress,
+		Token: &grpc_metacontract.TokenTransfer{
+			Receivers: []*grpc_metacontract.Receiver{
+				{
+					Address: toAddress,
+					Amount:  tokenAmount,
+				},
+			},
+			Codehash:   codehash,
+			Genesis:    genesis,
+			GasUtxos:   gasUtxos,
+			TokenUtxos: tokenUtxos,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := client.TransferFt(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to transfer ft: %v", err)
+	}
+	if resp.Status != "success" {
+		return fmt.Errorf("failed to transfer ft, resp: %s", resp.Message)
+	}
+	if resp.Data == nil {
+		return fmt.Errorf("failed to get transfer ft data")
+	}
+
+	routeCheckTxRaw := resp.Data.RouteCheckTxHex
+	txRaw := resp.Data.TxHex
+
+	isRouteCheckTxBroadcastSuccess := false
+	// Broadcast transaction with retry mechanism
+	resultRouteCheckTxId, broadcastRouteCheckErr := chainAdapter[grabEntity.Chain].BroadcastTx(routeCheckTxRaw)
+	if resultRouteCheckTxId != "" {
+		// Success case
+		// grabEntity.GrabState = models.GrabStateOpenAndSend
+		grabEntity.GrabRouteCheckTxRaw = resultRouteCheckTxId
+		// grabEntity.GrabMsg = "success"
+		// grabEntity.GrabRouteCheckTxRaw = "" // not used
+		// grabEntity.GrabTxRaw = ""           // not used
+		// grabEntity.RetryCount = 0 // Reset retry count on success
+		log.Printf("[Grad][%s][Metacontract-FT][route check]Success broadcast tx: %s, totalCount: %d", grabEntity.Chain, resultRouteCheckTxId, totalCount)
+		isRouteCheckTxBroadcastSuccess = true
+	} else if broadcastRouteCheckErr != nil &&
+		strings.Contains(strings.ToLower(broadcastRouteCheckErr.Error()), "already") {
+		isRouteCheckTxBroadcastSuccess = true
+		log.Printf("[Grad][%s][Metacontract-FT][route check]Success broadcast tx: %s, already broadcast, totalCount: %d", grabEntity.Chain, resultRouteCheckTxId, totalCount)
+	} else {
+		// Check if error is "too-long-mempool-chain" - skip retry counting for this error
+		if strings.Contains(strings.ToLower(broadcastRouteCheckErr.Error()), "too-long-mempool-chain") {
+			log.Printf("[Grad][%s][Metacontract-FT]Too-long-mempool-chain error, skipping retry count increment: %s, totalCount: %d", grabEntity.Chain, broadcastRouteCheckErr.Error(), totalCount)
+			// Don't increment retry count, just log and continue
+			grabEntity.GrabMsg = fmt.Sprintf("Too-long-mempool-chain error, will retry later: %s", broadcastRouteCheckErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Return nil to continue processing in next cycle
+			return fmt.Errorf("[Metacontract-FT][route check]too-long-mempool-chain error, skipping retry count increment: %s", broadcastRouteCheckErr.Error())
+		}
+
+		// Failure case - increment retry count for other errors
+		grabEntity.RetryCount++
+		log.Printf("[Grad][%s][Metacontract-FT][route check]Failure broadcast tx: %s, retryCount: %d, totalCount: %d", grabEntity.Chain, broadcastRouteCheckErr.Error(), grabEntity.RetryCount, totalCount)
+
+		// Update queue message with new retry count
+		err = chatDB.UpdateOpenLuckyBagQueueMessage(grabEntity.PinId, grabEntity.RetryCount, "")
+		if err != nil {
+			log.Printf("[Grad][%s][Metacontract-FT][route check]Failed to update queue message retry count: %v", grabEntity.Chain, err)
+		}
+
+		// Check if we've exceeded maximum retry attempts
+		if grabEntity.RetryCount >= 5 {
+			// Max retries exceeded, record error and save to error collection
+			grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Max retries exceeded (5), last error: %s", broadcastRouteCheckErr.Error())
+			grabEntity.GrabRouteCheckTxRaw = routeCheckTxRaw
+			grabEntity.GrabTxRaw = txRaw
+
+			// Save to error collection
+			err = chatDB.SaveOpenLuckyBagError(grabEntity.PinId, grabEntity.LuckyBagPinId)
+			if err != nil {
+				log.Printf("[Grad][%s][Metacontract-FT][route check]Failed to save open lucky bag error: %v", grabEntity.Chain, err)
+			} else {
+				log.Printf("[Grad][%s][Metacontract-FT][route check]Saved open lucky bag error record for pinId: %s", grabEntity.Chain, grabEntity.PinId)
+			}
+		} else {
+			fmt.Printf("[Grad][%s][Metacontract-FT][route check][%s]Retry broadcast tx: %s, retryCount: %d, totalCount: %d\n", grabEntity.Chain, grabEntity.PinId, broadcastRouteCheckErr.Error(), grabEntity.RetryCount, totalCount)
+			// Still within retry limit, set error state but don't save to error collection yet
+			// grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Retry %d/5, error: %s", grabEntity.RetryCount, broadcastRouteCheckErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Check if error contains broadcast-related issues, if not, return the error
+			if !isBroadcastError(broadcastRouteCheckErr) {
+				return fmt.Errorf("broadcast transaction failed: %v", broadcastRouteCheckErr)
+			}
+		}
+
+	}
+
+	// Update grab lucky bag record in database
+	err = chatDB.SaveOpenLuckyBag(grabEntity)
+	if err != nil {
+		return fmt.Errorf("failed to save open lucky bag: %v", err)
+	}
+
+	// Update cache after saving to database
+	err = UpdateLuckyBagCacheAfterSave(grabEntity, nil)
+	if err != nil {
+		log.Printf("[disposingGrabLuckyBag] Failed to update cache after save: %v", err)
+		// Don't return error for cache update failure, as the main operation succeeded
+	}
+	if !isRouteCheckTxBroadcastSuccess {
+		return fmt.Errorf("[Metacontract-FT][route check]failed to broadcast route check tx")
+	}
+
+	// Broadcast transaction with retry mechanism
+	resultTxId, broadcastErr := chainAdapter[grabEntity.Chain].BroadcastTx(txRaw)
+	if resultTxId != "" {
+		// Success case
+		grabEntity.GrabState = models.GrabStateOpenAndSend
+		grabEntity.GrabTxId = resultTxId
+		grabEntity.GrabMsg = "success"
+		grabEntity.GrabRouteCheckTxRaw = "" // not used
+		grabEntity.GrabTxRaw = ""           // not used
+		// grabEntity.RetryCount = 0 // Reset retry count on success
+		log.Printf("[Grad][%s][Metacontract-FT]Success broadcast tx: %s, totalCount: %d", grabEntity.Chain, resultTxId, totalCount)
+	} else {
+		// Check if error is "too-long-mempool-chain" - skip retry counting for this error
+		if strings.Contains(strings.ToLower(broadcastErr.Error()), "too-long-mempool-chain") {
+			log.Printf("[Grad][%s][Metacontract-FT]Too-long-mempool-chain error, skipping retry count increment: %s, totalCount: %d", grabEntity.Chain, broadcastErr.Error(), totalCount)
+			// Don't increment retry count, just log and continue
+			grabEntity.GrabMsg = fmt.Sprintf("Too-long-mempool-chain error, will retry later: %s", broadcastErr.Error())
+
+			// Update grab lucky bag record in database
+			err = chatDB.SaveOpenLuckyBag(grabEntity)
+			if err != nil {
+				return fmt.Errorf("failed to save open lucky bag: %v", err)
+			}
+
+			// Return nil to continue processing in next cycle
+			return fmt.Errorf("too-long-mempool-chain error, skipping retry count increment: %s", broadcastErr.Error())
+		}
+
+		// Failure case - increment retry count for other errors
+		grabEntity.RetryCount++
+		log.Printf("[Grad][%s][Metacontract-FT]Failure broadcast tx: %s, retryCount: %d, totalCount: %d", grabEntity.Chain, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
+
+		// Update queue message with new retry count
+		err = chatDB.UpdateOpenLuckyBagQueueMessage(grabEntity.PinId, grabEntity.RetryCount, "")
+		if err != nil {
+			log.Printf("[Grad][%s][Metacontract-FT]Failed to update queue message retry count: %v", grabEntity.Chain, err)
+		}
+
+		// Check if we've exceeded maximum retry attempts
+		if grabEntity.RetryCount >= 5 {
+			// Max retries exceeded, record error and save to error collection
+			grabEntity.GrabState = models.GrabStateOpenAndSendErr
+			grabEntity.GrabMsg = fmt.Sprintf("Max retries exceeded (5), last error: %s", broadcastErr.Error())
+			grabEntity.GrabTxRaw = txRaw
+
+			// Save to error collection
+			err = chatDB.SaveOpenLuckyBagError(grabEntity.PinId, grabEntity.LuckyBagPinId)
+			if err != nil {
+				log.Printf("[Grad][%s][Metacontract-FT]Failed to save open lucky bag error: %v", grabEntity.Chain, err)
+			} else {
+				log.Printf("[Grad][%s][Metacontract-FT]Saved open lucky bag error record for pinId: %s", grabEntity.Chain, grabEntity.PinId)
+			}
+		} else {
+			fmt.Printf("[Grad][%s][Metacontract-FT][%s]Retry broadcast tx: %s, retryCount: %d, totalCount: %d\n", grabEntity.Chain, grabEntity.PinId, broadcastErr.Error(), grabEntity.RetryCount, totalCount)
 			// Still within retry limit, set error state but don't save to error collection yet
 			// grabEntity.GrabState = models.GrabStateOpenAndSendErr
 			grabEntity.GrabMsg = fmt.Sprintf("Retry %d/5, error: %s", grabEntity.RetryCount, broadcastErr.Error())
@@ -1485,6 +1917,9 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 				LuckyAmount:  v.LuckyAmount,
 				LuckyFee:     v.LuckyFee,
 				LuckyFeeRate: v.LuckyFeeRate,
+				GasAmount:    v.GasAmount,
+				GasAddress:   v.GasAddress,
+				GasIndex:     v.GasIndex,
 			}
 			unusedList = append(unusedList, unused)
 		}
@@ -1497,6 +1932,9 @@ func ReclaimExpiredLuckyBag(groupId, pinId, metaId, address string) (string, err
 				Index:   vout.Index,
 				Amount:  strconv.FormatUint(vout.Amount, 10),
 				Address: vout.Address,
+				// GasAmount:  vout.GasAmount,
+				// GasAddress: vout.GasAddress,
+				// GasIndex:   vout.GasIndex,
 			}
 			unusedList = append(unusedList, unused)
 		}
@@ -1524,6 +1962,9 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 		unusedLuckyAmount  string
 		unusedLuckyFee     string
 		unusedLuckyFeeRate string
+		gasAmount          string
+		gasAddress         string
+		gasIndex           int64
 	}
 	reclaimEntityList := make([]*reclaimEntity, 0)
 
@@ -1536,6 +1977,9 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			unusedLuckyAmount:  unused.LuckyAmount,
 			unusedLuckyFee:     unused.LuckyFee,
 			unusedLuckyFeeRate: unused.LuckyFeeRate,
+			gasAmount:          unused.GasAmount,
+			gasAddress:         unused.GasAddress,
+			gasIndex:           unused.GasIndex,
 		})
 	}
 
@@ -1557,6 +2001,9 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 					Address:  vout.Address,
 					Index:    vout.Index,
 					PkScript: vout.ScriptPubKey,
+					// GasAmount:  vout.GasAmount,
+					// GasAddress: vout.GasAddress,
+					// GasIndex:   vout.GasIndex,
 				})
 			}
 		}
@@ -1568,6 +2015,9 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 					Address:  vout.Address,
 					Index:    vout.Index,
 					PkScript: vout.ScriptPubKey,
+					// GasAmount:  vout.GasAmount,
+					// GasAddress: vout.GasAddress,
+					// GasIndex:   vout.GasIndex,
 				})
 			}
 		}
@@ -1600,6 +2050,10 @@ func commonReclaim(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.U
 			GenState:            luckyBag.GenState,
 			Address:             address,
 			PkScript:            pkScript,
+			GasAmount:           v.gasAmount,
+			GasAddress:          v.gasAddress,
+			GasIndex:            v.gasIndex,
+			GasPkScript:         "",
 			Amount:              v.unusedAmount,
 			Index:               v.unusedIndex,
 			LuckyAmount:         v.unusedLuckyAmount,
@@ -1712,6 +2166,9 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 					Address:  vout.Address,
 					Index:    vout.Index,
 					PkScript: vout.ScriptPubKey,
+					// GasAmount:  vout.GasAmount,
+					// GasAddress: vout.GasAddress,
+					// GasIndex:   vout.GasIndex,
 				})
 			}
 		}
@@ -1722,6 +2179,9 @@ func disposingReclaimLuckyBag(reclaimEntity *models.TalkGroupResidueLuckyBagV3) 
 					Address:  vout.Address,
 					Index:    vout.Index,
 					PkScript: vout.ScriptPubKey,
+					// GasAmount:  vout.GasAmount,
+					// GasAddress: vout.GasAddress,
+					// GasIndex:   vout.GasIndex,
 				})
 			}
 		}
@@ -2581,6 +3041,11 @@ func determineLuckyBagStatus(luckyBag *models.TalkGroupLuckyBagV3, sourceCollect
 	// Count total available UTXOs (PayList + ErrLuckyBagVouts)
 	totalAvailable := len(luckyBag.PayList) + len(luckyBag.ErrLuckyBagVouts)
 	usedCount := len(usedIndices)
+
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+		//
+		return db.TalkGroupLuckyBagPinErrTimeoutResidueCollection, false
+	}
 
 	// Determine status based on source collection
 	if sourceCollection == db.TalkGroupLuckyBagPinPendingCollection {

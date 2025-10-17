@@ -219,23 +219,28 @@ type SimpleFileGroupChat struct {
 *
 */
 type SimpleGroupLuckyBag struct {
-	SubId           string      `json:"subId"`
-	GroupId         string      `json:"groupId"`
-	Code            string      `json:"code"`
-	Domain          string      `json:"domain"`
-	LuckyBagAddress string      `json:"luckyBagAddress"`
-	CreateTime      interface{} `json:"createTime"`
-	Content         string      `json:"content"`
-	Img             string      `json:"img"`
-	ImgType         string      `json:"imgType"`
-	Amount          interface{} `json:"amount"`  //Amount
-	FeeRate         interface{} `json:"feeRate"` //Fee rate， default 1.1
+	SubId              string      `json:"subId"`
+	GroupId            string      `json:"groupId"`
+	Code               string      `json:"code"`
+	Domain             string      `json:"domain"`
+	LuckyBagAddress    string      `json:"luckyBagAddress"`
+	LuckyBagGasAddress string      `json:"luckyBagGasAddress"`
+	TickTxId           string      `json:"tickTxId"`
+	TickPinId          string      `json:"tickPinId"`
+	CreateTime         interface{} `json:"createTime"`
+	Content            string      `json:"content"`
+	Img                string      `json:"img"`
+	ImgType            string      `json:"imgType"`
+	Amount             interface{} `json:"amount"`  //Amount
+	FeeRate            interface{} `json:"feeRate"` //Fee rate， default 1.1
 	// LuckyTotalAmount    interface{}       `json:"luckyTotalAmount"` //
 	// LuckyTotalFee       interface{}       `json:"luckyTotalFee"`    //
 	Count               interface{}       `json:"count"`
 	PayList             []*ProInfoPayList `json:"payList"`
-	Type                string            `json:"type"`
-	RequireType         interface{}       `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
+	Type                string            `json:"type"`                // space/btc/metacontract-ft
+	TickId              string            `json:"tickId"`              // if type is metacontract-ft, tickId is "codehash/genesis", if type is mrc20-ft, tickId is tickId
+	CollectionId        string            `json:"collectionId"`        //
+	RequireType         interface{}       `json:"requireType"`         // mrc20/mrc721/none
 	RequireTickId       string            `json:"requireTickId"`       //FT-limit requires temporarily mrc20
 	RequireCollectionId string            `json:"requireCollectionId"` //NFT-limit requires temporarily mrc721
 	LimitAmount         interface{}       `json:"limitAmount"`
@@ -264,6 +269,10 @@ type ProInfoPayList struct {
 	Index   interface{} `json:"index"`
 	// LuckyAmount interface{} `json:"luckyAmount"` //luckyAmount >= 800 satoshi
 	// LuckyFee    interface{} `json:"luckyFee"`
+
+	GasAmount  interface{} `json:"gasAmount"`  //Gas amount
+	GasAddress string      `json:"gasAddress"` //Gas address
+	GasIndex   interface{} `json:"gasIndex"`   //Gas index
 }
 
 /*
@@ -518,6 +527,8 @@ const (
 	MonitorSimpleMsg          = "SimpleMsg"
 	MonitorSimpleFileMsg      = "SimpleFileMsg"
 	MonitorSimplePrivateBlock = "SimpleBlock"
+
+	MonitorSimpleGroupLuckyBagExtra = "SimpleGroupLuckyBagExtra"
 )
 
 // info
@@ -545,5 +556,6 @@ var (
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleFileMsg)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimplePrivateBlock)),
 		fmt.Sprintf("/info/%s", strings.ToLower(MonitorInfoChatpubkey)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupLuckyBagExtra)),
 	}
 )

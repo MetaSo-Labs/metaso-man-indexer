@@ -228,6 +228,9 @@ type TalkGroupLuckyBagV3 struct {
 	CreateTimeStr         string            `json:"createTimeStr"`
 	Domain                string            `json:"domain"`
 	LuckyBagAddress       string            `json:"luckyBagAddress"`
+	LuckyBagGasAddress    string            `json:"luckyBagGasAddress"`
+	TickTxId              string            `json:"tickTxId"`
+	TickPinId             string            `json:"tickPinId"`
 	GenType               int64             `json:"genType"`  // 0-normal, 1-internal, 2-external
 	GenState              int64             `json:"genState"` // 0-normal, 1-success, 2-failed
 	Content               string            `json:"content"`
@@ -236,6 +239,7 @@ type TalkGroupLuckyBagV3 struct {
 	FeeRate               string            `json:"feeRate"`
 	Amount                string            `json:"amount"`
 	LuckyTotalAmount      string            `json:"luckyTotalAmount"`
+	LuckyTotalGasAmount   string            `json:"luckyTotalGasAmount"`
 	LuckyTotalFee         string            `json:"luckyTotalFee"`
 	Count                 string            `json:"count"`
 	ValidCount            string            `json:"validCount"`
@@ -246,8 +250,10 @@ type TalkGroupLuckyBagV3 struct {
 	ErrLuckyBagVouts      []*LuckyBagOutput `json:"errLuckyBagVouts"`
 	OriginalPayList       []*ProInfoPayList `json:"originalPayList"`
 	OriginalLuckyBagVouts []*LuckyBagOutput `json:"originalLuckyBagVouts"`
-	Type                  string            `json:"type"`
-	RequireType           string            `json:"requireType"`         //0-no limit, 1-FT, 2-NFT
+	Type                  string            `json:"type"`                // space/btc/metacontract-ft
+	TickId                string            `json:"tickId"`              // if type is metacontract-ft, tickId is "codehash/genesis", if type is mrc20-ft, tickId is tickId
+	CollectionId          string            `json:"collectionId"`        //
+	RequireType           string            `json:"requireType"`         // mrc20/mrc721/none
 	RequireTickId         string            `json:"requireTickId"`       // FT-limit requires temporarily mrc20
 	RequireCollectionId   string            `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
 	LimitAmount           uint64            `json:"limitAmount"`
@@ -264,12 +270,21 @@ type ProInfoPayList struct {
 	LuckyAmount  string `json:"luckyAmount"`
 	LuckyFee     string `json:"luckyFee"`
 	LuckyFeeRate string `json:"luckyFeeRate"`
+
+	GasAmount  string `json:"gasAmount"`  //Gas amount
+	GasAddress string `json:"gasAddress"` //Gas address
+	GasIndex   int64  `json:"gasIndex"`   //Gas index
 }
 type LuckyBagOutput struct {
 	ScriptPubKey string `json:"scriptPubKey"`
 	Amount       uint64 `json:"amount"`
 	Address      string `json:"address"`
 	Index        int64  `json:"index"`
+
+	// GasAmount   string `json:"gasAmount"`   //Gas amount
+	// GasAddress  string `json:"gasAddress"`  //Gas address
+	// GasIndex    int64  `json:"gasIndex"`    //Gas index
+	// GasPkScript string `json:"gasPkScript"` //Gas pkScript
 }
 type GrabState int
 
@@ -285,44 +300,64 @@ const (
 	GrabStateReclaimAndSendErr GrabState = 7
 )
 
+type LuckyBagType string
+
+const (
+	LuckyBagTypeSpace          LuckyBagType = "space"
+	LuckyBagTypeBtc            LuckyBagType = "btc"
+	LuckyBagTypeMetacontractFT LuckyBagType = "metacontract-ft"
+)
+
 type TalkGroupOpenLuckyBagV3 struct {
-	CommunityId         string    `json:"communityId"` // Room ID unique
-	GroupId             string    `json:"groupId"`     // Channel ID unique
-	ChannelId           string    `json:"channelId"`   // Channel ID unique
-	TxId                string    `json:"txId"`
-	PinId               string    `json:"pinId"` //
-	MetaId              string    `json:"metaId"`
-	Protocol            string    `json:"protocol"`
-	SubId               string    `json:"subId"`
-	Code                string    `json:"code"`
-	CreateTimeStr       string    `json:"createTimeStr"`
-	Domain              string    `json:"domain"`
-	LuckyBagAddress     string    `json:"luckyBagAddress"`
-	GenType             int64     `json:"genType"`  // 0-normal, 1-internal, 2-external
-	GenState            int64     `json:"genState"` // 0-normal, 1-success, 2-failed
-	Address             string    `json:"address"`
-	Index               int64     `json:"index"`
-	Amount              string    `json:"amount"`
-	LuckyAmount         string    `json:"luckyAmount"`
-	LuckyFee            string    `json:"luckyFee"`
-	LuckyFeeRate        string    `json:"luckyFeeRate"`
-	PkScript            string    `json:"pkScript"`
+	CommunityId        string `json:"communityId"` // Room ID unique
+	GroupId            string `json:"groupId"`     // Channel ID unique
+	ChannelId          string `json:"channelId"`   // Channel ID unique
+	TxId               string `json:"txId"`
+	PinId              string `json:"pinId"` //
+	MetaId             string `json:"metaId"`
+	Protocol           string `json:"protocol"`
+	SubId              string `json:"subId"`
+	Code               string `json:"code"`
+	CreateTimeStr      string `json:"createTimeStr"`
+	Domain             string `json:"domain"`
+	LuckyBagAddress    string `json:"luckyBagAddress"`
+	LuckyBagGasAddress string `json:"luckyBagGasAddress"`
+	TickTxId           string `json:"tickTxId"`
+	TickPinId          string `json:"tickPinId"`
+	GenType            int64  `json:"genType"`  // 0-normal, 1-internal, 2-external
+	GenState           int64  `json:"genState"` // 0-normal, 1-success, 2-failed
+	Address            string `json:"address"`
+	Index              int64  `json:"index"`
+	Amount             string `json:"amount"`
+	LuckyAmount        string `json:"luckyAmount"`
+	LuckyFee           string `json:"luckyFee"`
+	LuckyFeeRate       string `json:"luckyFeeRate"`
+	PkScript           string `json:"pkScript"`
+
+	GasAmount   string `json:"gasAmount"`
+	GasAddress  string `json:"gasAddress"`
+	GasIndex    int64  `json:"gasIndex"`
+	GasPkScript string `json:"gasPkScript"`
+
 	Vins                []*TxIn   `json:"vins"`
-	Type                string    `json:"type"`
+	Type                string    `json:"type"`                // space/btc/metacontract-ft
+	TickId              string    `json:"tickId"`              // if type is metacontract-ft, tickId is "codehash/genesis", if type is mrc20-ft, tickId is tickId
+	CollectionId        string    `json:"collectionId"`        //
 	RequireTickId       string    `json:"requireTickId"`       // FT-limit requires temporarily mrc20
 	RequireCollectionId string    `json:"requireCollectionId"` // NFT-limit requires temporarily mrc721
 	LuckyBagTxId        string    `json:"luckyBagTxId"`
 	LuckyBagPinId       string    `json:"luckyBagPinId"`
 	LuckyBagMetaId      string    `json:"luckyBagMetaId"`
 	IsWithdraw          bool      `json:"isWithdraw"`
-	Timestamp           int64     `json:"timestamp"`   // Chat record timestamp
-	BlockHeight         int64     `json:"blockHeight"` // Block height
-	Chain               string    `json:"chain"`       // Chain type
-	GrabState           GrabState `json:"grabState"`   // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal, 4-reclaim, 5-reclaim and sent, 6-reclaim and sent abnormal
-	GrabTxId            string    `json:"grabTxId"`    //
-	GrabMsg             string    `json:"grabMsg"`     //
-	RetryCount          int64     `json:"retryCount"`  // Retry count
-	GrabTxRaw           string    `json:"grabTxRaw"`   // Grab tx raw
+	Timestamp           int64     `json:"timestamp"`       // Chat record timestamp
+	BlockHeight         int64     `json:"blockHeight"`     // Block height
+	Chain               string    `json:"chain"`           // Chain type
+	GrabState           GrabState `json:"grabState"`       // Red envelope status, 0-chain open, 1-centralized open, 2-centralized open and sent, 3-centralized open and sent abnormal, 4-reclaim, 5-reclaim and sent, 6-reclaim and sent abnormal
+	GrabTxId            string    `json:"grabTxId"`        //
+	GrabMsg             string    `json:"grabMsg"`         //
+	RetryCount          int64     `json:"retryCount"`      // Retry count
+	GrabTxRaw           string    `json:"grabTxRaw"`       // Grab tx raw
+	GrabRouteCheckTxRaw string    `json:"routeCheckTxRaw"` // Route check tx raw if type is metacontract-ft
 }
 type TxIn struct {
 	OutTxID string `json:"outTxId"` // out-txId where it is located
@@ -350,6 +385,10 @@ type TalkGroupResidueLuckyBagV3 struct {
 	GenType             int64             `json:"genType"`  // 0-normal, 1-internal, 2-external
 	GenState            int64             `json:"genState"` // 0-normal, 1-success, 2-failed
 	PkScript            string            `json:"pkScript"`
+	GasAmount           string            `json:"gasAmount"`
+	GasAddress          string            `json:"gasAddress"`
+	GasIndex            int64             `json:"gasIndex"`
+	GasPkScript         string            `json:"gasPkScript"`
 	Amount              string            `json:"amount"`
 	LuckyAmount         string            `json:"luckyAmount"`
 	LuckyFee            string            `json:"luckyFee"`
@@ -600,4 +639,35 @@ type GroupUserRoleInfo struct {
 	IsBlocked   bool   `json:"isBlocked"`           // Is blocked
 	IsWhitelist bool   `json:"isWhitelist"`         // Is whitelist
 	IsRemoved   bool   `json:"isRemoved,omitempty"` // Is removed
+}
+
+type TalkGroupLuckyBagV3Extra struct {
+	TxId       string      `json:"txId"`
+	PinId      string      `json:"pinId"`
+	SubId      string      `json:"subId"`
+	GroupId    string      `json:"groupId"`
+	ChannelId  string      `json:"channelId"`
+	Code       string      `json:"code"`
+	CreateTime interface{} `json:"createTime"`
+
+	// PinId           string `json:"pinId"`
+	Domain          string `json:"domain"`
+	LuckyBagAddress string `json:"luckyBagAddress"`
+
+	Codehash   string `json:"codehash"`
+	Genesis    string `json:"genesis"`
+	GenesisId  string `json:"genesisId"`
+	SensibleId string `json:"sensibleId"` // GenesisTx outpoint
+	Name       string `json:"name"`       // ft name
+	Symbol     string `json:"symbol"`     // ft symbol
+	Decimal    uint8  `json:"decimal"`    // ft decimal
+
+	Type         string              `json:"type"`
+	TokenOutputs []*LuckyBagFtOutput `json:"tokenOutputs"`
+}
+
+type LuckyBagFtOutput struct {
+	TokenAmount  uint64 `json:"tokenAmount"`
+	TokenAddress string `json:"tokenAddress"`
+	Index        int64  `json:"index"`
 }

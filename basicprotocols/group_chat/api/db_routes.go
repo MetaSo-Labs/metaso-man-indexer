@@ -104,6 +104,9 @@ func RegisterDbRoutes(router *gin.Engine) {
 			luckyBagGroup.GET("/update-validation", UpdateLuckyBagValidation)
 			luckyBagGroup.GET("/process-expired", ProcessExpiredLuckyBagByPinId)
 
+			// Lucky bag extra FT info API
+			luckyBagGroup.GET("/extra/txid", GetLuckyBagExtraByTxId)
+
 			// Lucky bag collection-related APIs
 			collectionGroup := luckyBagGroup.Group("/collection")
 			{

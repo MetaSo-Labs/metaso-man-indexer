@@ -233,6 +233,9 @@ type LuckyBagInfoResponse struct {
 	CreateTime          string         `json:"createTime"`
 	Domain              string         `json:"domain"`
 	LuckyBagAddress     string         `json:"luckyBagAddress"`
+	LuckyBagGasAddress  string         `json:"luckyBagGasAddress"`
+	TickPinId           string         `json:"tickPinId"`
+	TickTxId            string         `json:"tickTxId"`
 	GenType             int64          `json:"genType"`  // 0-normal, 1-internal, 2-external
 	GenState            int64          `json:"genState"` // 0-normal, 1-success, 2-failed
 	Content             string         `json:"content"`
@@ -248,6 +251,9 @@ type LuckyBagInfoResponse struct {
 	PayList             []*InfoPayList `json:"payList"`
 	ErrPayList          []*InfoPayList `json:"errPayList"`
 	Type                string         `json:"type"`
+	TickId              string         `json:"tickId"`
+	TickInfo            *TickInfo      `json:"tickInfo"`
+	CollectionId        string         `json:"collectionId"`
 	TokenCount          uint64         `json:"tokenCount"`
 	RequireType         string         `json:"requireType"`
 	RequireTickId       string         `json:"requireTickId"`
@@ -255,13 +261,19 @@ type LuckyBagInfoResponse struct {
 	LimitAmount         uint64         `json:"limitAmount"`
 }
 type InfoPayList struct {
-	TxId         string           `json:"txId"`
-	Index        int64            `json:"index"`
-	Amount       string           `json:"amount"`
-	LuckyAmount  string           `json:"luckyAmount"`
-	LuckyFee     string           `json:"luckyFee"`
-	LuckyFeeRate string           `json:"luckyFeeRate"`
-	Address      string           `json:"address"`
+	TxId         string `json:"txId"`
+	TokenTxId    string `json:"tokenTxId"`
+	Index        int64  `json:"index"`
+	Amount       string `json:"amount"`
+	LuckyAmount  string `json:"luckyAmount"`
+	LuckyFee     string `json:"luckyFee"`
+	LuckyFeeRate string `json:"luckyFeeRate"`
+	Address      string `json:"address"`
+
+	GasAmount  string `json:"gasAmount"`
+	GasAddress string `json:"gasAddress"`
+	GasIndex   int64  `json:"gasIndex"`
+
 	Used         bool             `json:"used"`
 	GradPinId    string           `json:"gradPinId"`
 	GradMetaId   string           `json:"gradMetaId"`
@@ -286,6 +298,9 @@ type LuckyBagUnusedResponse struct {
 	CreateTime          string        `json:"createTime"`
 	Domain              string        `json:"domain"`
 	LuckyBagAddress     string        `json:"luckyBagAddress"`
+	LuckyBagGasAddress  string        `json:"luckyBagGasAddress"`
+	TickPinId           string        `json:"tickPinId"`
+	TickTxId            string        `json:"tickTxId"`
 	GenType             int64         `json:"genType"`  // 0-normal, 1-internal, 2-external
 	GenState            int64         `json:"genState"` // 0-normal, 1-success, 2-failed
 	Amount              string        `json:"amount"`
@@ -300,6 +315,9 @@ type LuckyBagUnusedResponse struct {
 	Unused              []*UnusedList `json:"unused"`
 	ErrUnused           []*UnusedList `json:"errUnused"`
 	Type                string        `json:"type"`
+	TickId              string        `json:"tickId"`
+	TickInfo            *TickInfo     `json:"tickInfo"`
+	CollectionId        string        `json:"collectionId"`
 	TokenCount          uint64        `json:"tokenCount"`
 	RequireType         string        `json:"requireType"`
 	RequireTickId       string        `json:"requireTickId"`
@@ -314,6 +332,22 @@ type UnusedList struct {
 	LuckyAmount  string `json:"luckyAmount"`
 	LuckyFee     string `json:"luckyFee"`
 	LuckyFeeRate string `json:"luckyFeeRate"`
+
+	GasAmount  string `json:"gasAmount"`
+	GasAddress string `json:"gasAddress"`
+	GasIndex   int64  `json:"gasIndex"`
+}
+
+type TickInfo struct {
+	TickType   string `json:"tickType"`
+	Codehash   string `json:"codehash"`
+	GenesisId  string `json:"genesisId"`
+	Genesis    string `json:"genesis"`
+	SensibleId string `json:"sensibleId"` // GenesisTx outpoint
+	Name       string `json:"name"`       // ft name
+	Symbol     string `json:"symbol"`     // ft symbol
+	Amount     uint64 `json:"amount"`     // ft amount
+	Decimal    uint8  `json:"decimal"`    // ft decimal
 }
 
 // UserInfoResponse User information response

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -9,7 +10,9 @@ import (
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"manindexer/basicprotocols/group_chat/service/grpc_service/grpc_metacontract"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -114,6 +117,46 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 	}
 	perfStats.getResidueListTime = time.Now().UnixMilli() - t
 
+	var tickInfo *respond.TickInfo
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) && luckyBag.TickPinId != "" {
+		// First get lucky bag extra from cache
+		extra, err := cache_service.GetCacheLuckyBagExtra(luckyBag.TickTxId)
+		if err != nil {
+			log.Printf("[GetLuckyBagWithOpenListV2] Cache get lucky bag extra error: %v", err)
+			// Cache failed, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return nil, err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		} else if extra == nil {
+			// Not in cache, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return nil, err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		}
+		if extra != nil {
+			tickInfo = &respond.TickInfo{
+				TickType:   extra.Type,
+				Codehash:   extra.Codehash,
+				GenesisId:  extra.GenesisId,
+				Genesis:    extra.Genesis,
+				SensibleId: extra.SensibleId,
+				Name:       extra.Name,
+				Symbol:     extra.Symbol,
+				Decimal:    extra.Decimal,
+			}
+		}
+	}
+
 	// Build LuckyBagInfoResponse
 	response := &respond.LuckyBagInfoResponse{
 		TxId:                luckyBag.TxId,
@@ -126,6 +169,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Domain:              luckyBag.Domain,
 		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		LuckyBagGasAddress:  luckyBag.LuckyBagGasAddress,
+		TickPinId:           luckyBag.TickPinId,
+		TickTxId:            luckyBag.TickTxId,
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Content:             luckyBag.Content,
@@ -141,6 +187,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 		PayList:             make([]*respond.InfoPayList, 0),
 		ErrPayList:          make([]*respond.InfoPayList, 0),
 		Type:                luckyBag.Type,
+		TickId:              luckyBag.TickId,
+		TickInfo:            tickInfo,
+		CollectionId:        luckyBag.CollectionId,
 		TokenCount:          0, // TalkGroupLuckyBagV3 doesn't have TokenCount field
 		RequireType:         luckyBag.RequireType,
 		RequireTickId:       luckyBag.RequireTickId,
@@ -157,6 +206,7 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 	for _, payItem := range luckyBag.PayList {
 		infoPayList := &respond.InfoPayList{
 			TxId:         luckyBag.TxId,
+			TokenTxId:    luckyBag.TickTxId,
 			Index:        payItem.Index,
 			Amount:       payItem.Amount,
 			Address:      payItem.Address,
@@ -164,6 +214,9 @@ func GetLuckyBagWithOpenListV2(groupId, pinId string) (*respond.LuckyBagInfoResp
 			LuckyAmount:  payItem.LuckyAmount,
 			LuckyFee:     payItem.LuckyFee,
 			LuckyFeeRate: payItem.LuckyFeeRate,
+			GasAmount:    payItem.GasAmount,
+			GasAddress:   payItem.GasAddress,
+			GasIndex:     payItem.GasIndex,
 			GradTxId:     "",
 			GradPinId:    "",
 			GradMetaId:   "",
@@ -473,6 +526,46 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 	}
 	perfStats.processResidueListTime = time.Now().UnixMilli() - t
 
+	var tickInfo *respond.TickInfo
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) && luckyBag.TickPinId != "" {
+		// First get lucky bag extra from cache
+		extra, err := cache_service.GetCacheLuckyBagExtra(luckyBag.TickTxId)
+		if err != nil {
+			log.Printf("[GetLuckyBagWithUnusedListV2] Cache get lucky bag extra error: %v", err)
+			// Cache failed, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return nil, err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		} else if extra == nil {
+			// Not in cache, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return nil, err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		}
+		if extra != nil {
+			tickInfo = &respond.TickInfo{
+				TickType:   extra.Type,
+				Codehash:   extra.Codehash,
+				GenesisId:  extra.GenesisId,
+				Genesis:    extra.Genesis,
+				SensibleId: extra.SensibleId,
+				Name:       extra.Name,
+				Symbol:     extra.Symbol,
+				Decimal:    extra.Decimal,
+			}
+		}
+	}
+
 	// Build LuckyBagUnusedResponse
 	response := &respond.LuckyBagUnusedResponse{
 		PinId:               luckyBag.PinId,
@@ -484,6 +577,9 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 		CreateTime:          normalizeScientificNotation(luckyBag.CreateTimeStr),
 		Domain:              luckyBag.Domain,
 		LuckyBagAddress:     luckyBag.LuckyBagAddress,
+		LuckyBagGasAddress:  luckyBag.LuckyBagGasAddress,
+		TickPinId:           luckyBag.TickPinId,
+		TickTxId:            luckyBag.TickTxId,
 		GenType:             luckyBag.GenType,
 		GenState:            luckyBag.GenState,
 		Amount:              luckyBag.Amount,
@@ -497,6 +593,9 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 		ImgType:             luckyBag.ImgType,
 		Unused:              make([]*respond.UnusedList, 0),
 		Type:                luckyBag.Type,
+		TickId:              luckyBag.TickId,
+		TickInfo:            tickInfo,
+		CollectionId:        luckyBag.CollectionId,
 		TokenCount:          0, // TalkGroupLuckyBagV3 doesn't have TokenCount field
 		RequireType:         luckyBag.RequireType,
 		RequireTickId:       luckyBag.RequireTickId,
@@ -518,6 +617,10 @@ func GetLuckyBagWithUnusedListV2(groupId, pinId string) (*respond.LuckyBagUnused
 				LuckyAmount:  v.LuckyAmount,
 				LuckyFee:     v.LuckyFee,
 				LuckyFeeRate: v.LuckyFeeRate,
+
+				GasAmount:  v.GasAmount,
+				GasAddress: v.GasAddress,
+				GasIndex:   v.GasIndex,
 			}
 			if unused.LuckyAmount == "" || unused.LuckyAmount == "0" {
 				unused.LuckyAmount = v.Amount
@@ -821,12 +924,26 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 		}
 
 		unused := &respond.UnusedList{
-			Index:        v.Index,
-			Amount:       v.Amount,
-			Address:      v.Address,
+			Index:   v.Index,
+			Amount:  v.Amount,
+			Address: v.Address,
+
 			LuckyAmount:  v.LuckyAmount,
 			LuckyFee:     v.LuckyFee,
 			LuckyFeeRate: v.LuckyFeeRate,
+
+			GasAmount:  v.GasAmount,
+			GasAddress: v.GasAddress,
+			GasIndex:   v.GasIndex,
+		}
+		if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+			gasAmount, err := strconv.ParseInt(unused.GasAmount, 10, 64)
+			if err != nil {
+				continue
+			}
+			if gasAmount < 20000 {
+				continue // skip if gas amount is less than 20000
+			}
 		}
 		unusedList = append(unusedList, unused)
 	}
@@ -834,6 +951,49 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 
 	if len(unusedList) <= 0 {
 		return "", errors.New("LuckyBag had been all grab.")
+	}
+
+	// check type if metacontract-ft, check tickTxId and tickPinId
+	if strings.ToLower(luckyBag.Type) == string(models.LuckyBagTypeMetacontractFT) {
+		if luckyBag.TickTxId == "" || luckyBag.TickPinId == "" || luckyBag.TickId == "" {
+			return "", errors.New("tickTxId and tickPinId and tickId are required for metacontract-ft")
+		}
+
+		// First get lucky bag extra from cache
+		extra, err := cache_service.GetCacheLuckyBagExtra(luckyBag.TickTxId)
+		if err != nil {
+			log.Printf("[GrabLuckyBagV2] Cache get lucky bag extra error: %v", err)
+			// Cache failed, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return "", err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		} else if extra == nil {
+			// Not in cache, get from database
+			extra, err = extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
+			if err != nil {
+				return "", err
+			}
+			// Write data to cache
+			if extra != nil {
+				cache_service.SetCacheLuckyBagExtra(luckyBag.TickTxId, extra)
+			}
+		}
+		if extra == nil {
+			return "", errors.New("extra not found")
+		}
+		if luckyBag.TickId != extra.Codehash+"/"+extra.Genesis {
+			return "", errors.New("tickId not match")
+		}
+
+		err = checkGrpcHealth()
+		if err != nil {
+			return "", errors.New("grpc health check failed: " + err.Error())
+		}
 	}
 
 	t = time.Now().UnixMilli()
@@ -885,6 +1045,9 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 		unusedLuckyAmount  string
 		unusedLuckyFee     string
 		unusedLuckyFeeRate string
+		gasAmount          string
+		gasAddress         string
+		gasIndex           int64
 	}
 	grabEntityList := make([]*grabEntity, 0)
 	has := false
@@ -920,6 +1083,9 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 					unusedLuckyAmount:  unused.LuckyAmount,
 					unusedLuckyFee:     unused.LuckyFee,
 					unusedLuckyFeeRate: unused.LuckyFeeRate,
+					gasAmount:          unused.GasAmount,
+					gasAddress:         unused.GasAddress,
+					gasIndex:           unused.GasIndex,
 				})
 				break
 			}
@@ -941,6 +1107,9 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 					unusedLuckyAmount:  unused.LuckyAmount,
 					unusedLuckyFee:     unused.LuckyFee,
 					unusedLuckyFeeRate: unused.LuckyFeeRate,
+					gasAmount:          unused.GasAmount,
+					gasAddress:         unused.GasAddress,
+					gasIndex:           unused.GasIndex,
 				})
 				break
 			}
@@ -984,28 +1153,39 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 
 		// Create grab lucky bag record
 		openLuckyBag := &models.TalkGroupOpenLuckyBagV3{
-			CommunityId:         "", // Need to get from group info
-			GroupId:             luckyBag.GroupId,
-			TxId:                txId,
-			PinId:               pinId,
-			MetaId:              metaId,
-			Protocol:            "/protocol/simplegroupopenLuckybag",
-			SubId:               luckyBag.SubId,
-			Code:                luckyBag.Code,
-			CreateTimeStr:       luckyBag.CreateTimeStr,
-			Domain:              luckyBag.Domain,
-			LuckyBagAddress:     luckyBag.LuckyBagAddress,
-			GenType:             luckyBag.GenType,
-			GenState:            luckyBag.GenState,
-			Address:             address,
-			Index:               v.unusedIndex,
-			Amount:              v.unusedAmount,
-			LuckyAmount:         v.unusedLuckyAmount,
-			LuckyFee:            v.unusedLuckyFee,
-			LuckyFeeRate:        v.unusedLuckyFeeRate,
-			PkScript:            pkScript,
-			Vins:                vins,
+			CommunityId:        "", // Need to get from group info
+			GroupId:            luckyBag.GroupId,
+			TxId:               txId,
+			PinId:              pinId,
+			MetaId:             metaId,
+			Protocol:           "/protocol/simplegroupopenLuckybag",
+			SubId:              luckyBag.SubId,
+			Code:               luckyBag.Code,
+			CreateTimeStr:      luckyBag.CreateTimeStr,
+			Domain:             luckyBag.Domain,
+			LuckyBagAddress:    luckyBag.LuckyBagAddress,
+			LuckyBagGasAddress: luckyBag.LuckyBagGasAddress,
+			TickPinId:          luckyBag.TickPinId,
+			TickTxId:           luckyBag.TickTxId,
+			GenType:            luckyBag.GenType,
+			GenState:           luckyBag.GenState,
+			Address:            address,
+			Index:              v.unusedIndex,
+			Amount:             v.unusedAmount,
+			LuckyAmount:        v.unusedLuckyAmount,
+			LuckyFee:           v.unusedLuckyFee,
+			LuckyFeeRate:       v.unusedLuckyFeeRate,
+			PkScript:           pkScript,
+			Vins:               vins,
+
+			GasAmount:   v.gasAmount,
+			GasAddress:  v.gasAddress,
+			GasIndex:    v.gasIndex,
+			GasPkScript: "",
+
 			Type:                luckyBag.Type,
+			TickId:              luckyBag.TickId,
+			CollectionId:        luckyBag.CollectionId,
 			RequireTickId:       luckyBag.RequireTickId,
 			RequireCollectionId: luckyBag.RequireCollectionId,
 			LuckyBagTxId:        luckyBag.TxId,
@@ -1111,5 +1291,24 @@ func commonGrabV2(luckyBag *models.TalkGroupLuckyBagV3, unusedList []*respond.Un
 		return errors.New("Grab err.")
 	}
 
+	return nil
+}
+
+func checkGrpcHealth() error {
+	grpcClient, err := grpc_metacontract.NewClient()
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	healthResponse, err := grpcClient.GetHealth(ctx)
+	if err != nil {
+		return err
+	}
+	if healthResponse.Status != "success" {
+		return errors.New("grpc health check failed")
+	}
 	return nil
 }

@@ -137,6 +137,9 @@ type groupChatConfig struct {
 	IsActiveResync bool `toml:"isActiveResync"`
 	// IsMempoolDataWaitingResync is used to determine if the mempool data is waiting for resync
 	IsMempoolDataWaitingResync bool `toml:"isMempoolDataWaitingResync"`
+
+	// GrpcMetaContractAddress is used to set the grpc meta contract address
+	GrpcMetaContractAddress string `toml:"grpcMetaContractAddress"`
 }
 type socketConfig struct {
 	IsEnble          bool   `toml:"isEnble"`
@@ -232,6 +235,8 @@ func InitConfig(filePath string) {
 			Config.GroupChat.IsActiveResync = *v == "true"
 		case "is_mempool_data_waiting_resync":
 			Config.GroupChat.IsMempoolDataWaitingResync = *v == "true"
+		case "grpc_meta_contract_address":
+			Config.GroupChat.GrpcMetaContractAddress = *v
 		// case "socket_port":
 		// 	Config.Socket.Port = *v
 		// case "socket_max_connections":

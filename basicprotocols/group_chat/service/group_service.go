@@ -24,6 +24,7 @@ var (
 	communityDB   *db.CommunityDB
 	groupDB       *db.GroupDB
 	chatDB        *db.ChatDB
+	extraDB       *db.ExtraDB
 	privateDB     *db.PrivateChatDB
 	userInfoDB    *db.UserInfoDB
 	socketInfoDB  *db.SocketInfoDB
@@ -42,6 +43,7 @@ func InitService(indexer *indexer.GroupChatIndexer, adapter map[string]adapter.C
 	communityDB = indexer.GetCommunityDB()
 	groupDB = indexer.GetGroupDB()
 	chatDB = indexer.GetChatDB()
+	extraDB = indexer.GetExtraDB()
 	privateDB = indexer.GetPrivateDB()
 	userInfoDB = indexer.GetUserInfoDB()
 	socketInfoDB = indexer.GetSocketInfoDB()

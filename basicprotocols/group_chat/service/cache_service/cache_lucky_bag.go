@@ -68,6 +68,15 @@ type ResidueLuckyBagCacheItem struct {
 	LastSyncTime    time.Time                          `json:"lastSyncTime"`
 }
 
+// LuckyBagExtraCacheItem Lucky bag extra cache item
+type LuckyBagExtraCacheItem struct {
+	LuckyBagExtra *models.TalkGroupLuckyBagV3Extra `json:"luckyBagExtra"`
+	UpdateTime    time.Time                        `json:"updateTime"`
+	ExpireTime    time.Time                        `json:"expireTime"`
+	IsDirty       bool                             `json:"isDirty"`
+	LastSyncTime  time.Time                        `json:"lastSyncTime"`
+}
+
 var (
 	// Lucky bag cache instances grouped by group
 	luckyBagCacheMap sync.Map // map[string]*LuckyBagCache
@@ -79,6 +88,8 @@ var (
 	openLuckyBagCacheMap sync.Map // map[string]*LuckyBagCache
 	// Residue lucky bag detail cache instances grouped by group
 	residueLuckyBagCacheMap sync.Map // map[string]*LuckyBagCache
+	// Lucky bag extra cache instances
+	luckyBagExtraCacheMap sync.Map // map[string]*LuckyBagCache
 
 	// Sync queue
 	syncQueue chan syncTask
@@ -194,6 +205,25 @@ func getResidueLuckyBagCache(groupId string) *LuckyBagCache {
 	}
 
 	if actualCache, loaded := residueLuckyBagCacheMap.LoadOrStore(groupId, newCache); loaded {
+		return actualCache.(*LuckyBagCache)
+	}
+
+	return newCache
+}
+
+// getLuckyBagExtraCache Get lucky bag extra cache
+func getLuckyBagExtraCache() *LuckyBagCache {
+	key := "global" // Use global key for lucky bag extra cache
+	if cache, ok := luckyBagExtraCacheMap.Load(key); ok {
+		return cache.(*LuckyBagCache)
+	}
+
+	// Create new cache instance
+	newCache := &LuckyBagCache{
+		ttl: 10 * time.Minute, // Default 10 minutes TTL
+	}
+
+	if actualCache, loaded := luckyBagExtraCacheMap.LoadOrStore(key, newCache); loaded {
 		return actualCache.(*LuckyBagCache)
 	}
 
@@ -345,6 +375,32 @@ func SetCacheResidueLuckyBag(groupId, residuePinId string, residueLuckyBag *mode
 		return setRedisResidueLuckyBag(residuePinId, residueLuckyBag)
 	} else {
 		return setMemoryResidueLuckyBag(groupId, residuePinId, residueLuckyBag)
+	}
+}
+
+// GetCacheLuckyBagExtra Get lucky bag extra cache
+func GetCacheLuckyBagExtra(txId string) (*models.TalkGroupLuckyBagV3Extra, error) {
+	if !initialized {
+		return nil, fmt.Errorf("cache service not initialized")
+	}
+
+	if useRedis && redisClient != nil {
+		return getRedisLuckyBagExtra(txId)
+	} else {
+		return getMemoryLuckyBagExtra(txId)
+	}
+}
+
+// SetCacheLuckyBagExtra Set lucky bag extra cache
+func SetCacheLuckyBagExtra(txId string, extra *models.TalkGroupLuckyBagV3Extra) (bool, error) {
+	if !initialized {
+		return false, fmt.Errorf("cache service not initialized")
+	}
+
+	if useRedis && redisClient != nil {
+		return setRedisLuckyBagExtra(txId, extra)
+	} else {
+		return setMemoryLuckyBagExtra(txId, extra)
 	}
 }
 
@@ -695,6 +751,63 @@ func setMemoryResidueLuckyBag(groupId, residuePinId string, residueLuckyBag *mod
 	return true, nil
 }
 
+// getMemoryLuckyBagExtra Get lucky bag extra from memory
+func getMemoryLuckyBagExtra(txId string) (*models.TalkGroupLuckyBagV3Extra, error) {
+	cache := getLuckyBagExtraCache()
+
+	// Use lucky bag level lock
+	luckyBagLock := cache.getLuckyBagLock(txId)
+	luckyBagLock.RLock()
+	defer luckyBagLock.RUnlock()
+
+	// Use sync.Map Load method
+	if value, exists := cache.memoryCache.Load(txId); exists {
+		if cacheItem, ok := value.(*LuckyBagExtraCacheItem); ok {
+			// Check if expired
+			if time.Now().Before(cacheItem.ExpireTime) {
+				// Cache hit
+				cache.hitCount++
+				return cacheItem.LuckyBagExtra, nil
+			} else {
+				// Expired, delete it (need to upgrade to write lock)
+				luckyBagLock.RUnlock()
+				luckyBagLock.Lock()
+				defer luckyBagLock.Unlock()
+
+				cache.memoryCache.Delete(txId)
+			}
+		}
+	}
+
+	// Cache miss
+	cache.missCount++
+	return nil, nil
+}
+
+// setMemoryLuckyBagExtra Set memory lucky bag extra cache
+func setMemoryLuckyBagExtra(txId string, extra *models.TalkGroupLuckyBagV3Extra) (bool, error) {
+	cache := getLuckyBagExtraCache()
+
+	// Use lucky bag level lock
+	luckyBagLock := cache.getLuckyBagLock(txId)
+	luckyBagLock.Lock()
+	defer luckyBagLock.Unlock()
+
+	now := time.Now()
+	cacheItem := &LuckyBagExtraCacheItem{
+		LuckyBagExtra: extra,
+		UpdateTime:    now,
+		ExpireTime:    now.Add(cache.ttl),
+		IsDirty:       false, // No need to sync back to database
+		LastSyncTime:  now,
+	}
+
+	// Use sync.Map Store method
+	cache.memoryCache.Store(txId, cacheItem)
+
+	return true, nil
+}
+
 // ========== Redis Cache Implementation ==========
 
 // getRedisLuckyBag Get lucky bag from Redis
@@ -1027,6 +1140,61 @@ func setRedisResidueLuckyBag(residuePinId string, residueLuckyBag *models.TalkGr
 	}:
 	default:
 		log.Printf("Sync queue is full, dropping residue lucky bag sync task for %s", residuePinId)
+	}
+
+	return true, nil
+}
+
+// getRedisLuckyBagExtra Get lucky bag extra from Redis
+func getRedisLuckyBagExtra(txId string) (*models.TalkGroupLuckyBagV3Extra, error) {
+	key := fmt.Sprintf("luckybagextra:%s", txId)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := redisClient.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("Redis get failed: %v", err)
+	}
+
+	var cacheItem LuckyBagExtraCacheItem
+	if err := json.Unmarshal([]byte(result), &cacheItem); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cache item: %v", err)
+	}
+
+	// Check if expired
+	if time.Now().After(cacheItem.ExpireTime) {
+		redisClient.Del(ctx, key)
+		return nil, nil
+	}
+
+	return cacheItem.LuckyBagExtra, nil
+}
+
+// setRedisLuckyBagExtra Set Redis lucky bag extra cache
+func setRedisLuckyBagExtra(txId string, extra *models.TalkGroupLuckyBagV3Extra) (bool, error) {
+	key := fmt.Sprintf("luckybagextra:%s", txId)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	cacheItem := &LuckyBagExtraCacheItem{
+		LuckyBagExtra: extra,
+		UpdateTime:    now,
+		ExpireTime:    now.Add(10 * time.Minute), // Default 10 minutes TTL
+		IsDirty:       false,                     // No need to sync back to database
+		LastSyncTime:  now,
+	}
+
+	data, err := json.Marshal(cacheItem)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal cache item: %v", err)
+	}
+
+	err = redisClient.Set(ctx, key, data, 10*time.Minute).Err()
+	if err != nil {
+		return false, fmt.Errorf("Redis set failed: %v", err)
 	}
 
 	return true, nil

@@ -34,13 +34,29 @@ type SocketManager struct {
 	// Singleton control
 	initialized bool
 	initMutex   sync.Mutex
+
+	// Daemon monitor control
+	isRunning      bool
+	lastHeartbeat  time.Time
+	startTime      time.Time
+	heartbeatMutex sync.RWMutex
+	port           int
+	config         *SocketConfig
+	restartCount   int64
+	daemonStopChan chan bool
 }
 
 const (
 	EXTRA_PUSH_SERVICE_METAID = "extra_push_service"
 	DEVICE_TYPE_PC            = "pc"
 	DEVICE_TYPE_APP           = "app"
-	MAX_DEVICES_PER_USER      = 2
+	MAX_APP_PER_USER          = 3 // Maximum APP devices per user
+	MAX_PC_PER_USER           = 3 // Maximum PC devices per user
+
+	// Daemon monitor settings
+	DAEMON_CHECK_INTERVAL = 10 * time.Second // Check interval for daemon monitor
+	HEARTBEAT_TIMEOUT     = 30 * time.Second // Heartbeat timeout threshold
+	RESTART_DELAY         = 3 * time.Second  // Delay before restarting server
 )
 
 // ConnectionInfo Connection information
@@ -56,7 +72,7 @@ type ConnectionInfo struct {
 // UserConnections User's device connections
 type UserConnections struct {
 	MetaID  string
-	Devices []*ConnectionInfo // Maximum 2 devices: pc and app
+	Devices []*ConnectionInfo // Multiple devices per user, limited by MAX_APP_PER_USER and MAX_PC_PER_USER
 }
 
 // ConnectionStats Connection statistics
@@ -73,7 +89,14 @@ type ConnectionStats struct {
 	AverageMemoryKB       float64 // Average memory per connection in KB
 	MemoryUsagePercent    float64 // Memory usage percentage
 	MemoryLimitMB         int     // Memory limit in MB
-	mutex                 sync.RWMutex
+
+	// Server health status
+	IsRunning     bool      // Server running status
+	RestartCount  int64     // Server restart count
+	LastHeartbeat time.Time // Last heartbeat time
+	UptimeSeconds int64     // Server uptime in seconds
+
+	mutex sync.RWMutex
 }
 
 // SocketConfig Socket configuration
@@ -150,6 +173,13 @@ func InitSocketManager(config *SocketConfig) error {
 			initialized:      true,
 			extraPushAuthKey: config.ExtraPushAuthKey,
 			extraConnection:  nil,
+			port:             config.Port,
+			config:           config,
+			isRunning:        false,
+			lastHeartbeat:    time.Now(),
+			startTime:        time.Time{}, // Will be set when server starts
+			restartCount:     0,
+			daemonStopChan:   make(chan bool, 1),
 		}
 
 		// Setup auto-listeners for client connections
@@ -158,16 +188,13 @@ func InitSocketManager(config *SocketConfig) error {
 		// Start cleanup routine
 		go globalSocketManager.startCleanupRoutine()
 
-		// Start the socket server in a goroutine to avoid blocking
-		go func() {
-			err := globalSocketManager.start(config.Port)
-			if err != nil {
-				log.Printf("Failed to start Socket server: %v", err)
-				initErr = err
-			}
-		}()
+		// Start daemon monitor
+		go globalSocketManager.startDaemonMonitor()
 
-		log.Printf("SocketManager initialized and started successfully, port: %d", config.Port)
+		// Start the socket server in a goroutine to avoid blocking
+		go globalSocketManager.startWithMonitor()
+
+		log.Printf("SocketManager initialized with daemon monitor, port: %d", config.Port)
 	})
 
 	return initErr
@@ -254,25 +281,32 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 		client.Disconnect(true)
 		return
 	}
+	fmt.Printf("[SOCKET] metaid: %s, deviceType: %s want to connect\n", metaid, deviceType)
 
 	// Check connection limit
 	if sm.getConnectionCount() >= sm.maxConnections {
 		log.Printf("Connection failed: connection limit reached, socket: %s", client.Id())
+		fmt.Printf("[SOCKET] Connection failed: connection limit reached, socket: %s\n", client.Id())
 		client.Disconnect(true)
 		return
 	}
+	fmt.Printf("[SOCKET] Connection count: %d, maxConnections: %d\n", sm.getConnectionCount(), sm.maxConnections)
 
 	// Check memory limit
 	stats := sm.GetStats()
 	if stats.TotalMemoryUsage >= int64(sm.maxMemoryMB*1024*1024) {
 		log.Printf("Connection failed: memory limit reached (%.2f MB / %d MB), socket: %s",
 			float64(stats.TotalMemoryUsage)/(1024*1024), sm.maxMemoryMB, client.Id())
+		fmt.Printf("[SOCKET] Connection failed: memory limit reached (%.2f MB / %d MB), socket: %s\n",
+			float64(stats.TotalMemoryUsage)/(1024*1024), sm.maxMemoryMB, client.Id())
 		client.Disconnect(true)
 		return
 	}
+	fmt.Printf("[SOCKET] Memory limit: %d MB, totalMemoryUsage: %d MB\n", sm.maxMemoryMB, stats.TotalMemoryUsage/(1024*1024))
 
 	// Automatically add device connection to manager
 	sm.addDeviceConnection(metaid, deviceType, string(client.Id()))
+	fmt.Printf("[SOCKET] Added device connection: metaid=%s, deviceType=%s, socketID=%s\n", metaid, deviceType, string(client.Id()))
 
 	// Send connection success response
 	response := &SocketData{
@@ -280,9 +314,11 @@ func (sm *SocketManager) handleClientConnect(client *socket.Socket) {
 		C: WS_CODE_SEND_SUCCESS,
 		D: "Connection successful",
 	}
+	fmt.Printf("[SOCKET] Sent connection success response: socketID=%s, metaid=%s, deviceType=%s\n", client.Id(), metaid, deviceType)
 
 	sm.sendMessage(client, response)
 	log.Printf("[SOCKET] Client connected successfully: socketID=%s, metaid=%s, deviceType=%s", client.Id(), metaid, deviceType)
+	fmt.Printf("[SOCKET] Client connected successfully: socketID=%s, metaid=%s, deviceType=%s\n", client.Id(), metaid, deviceType)
 
 	// Listen for client messages
 	client.On("message", func(args ...interface{}) {
@@ -369,6 +405,7 @@ func (sm *SocketManager) handleClientPing(client *socket.Socket) {
 	// Add nil pointer check to prevent panic
 	if client == nil {
 		log.Printf("handleClientPing: client is nil, skipping ping handling")
+		fmt.Printf("handleClientPing: client is nil, skipping ping handling\n")
 		return
 	}
 
@@ -376,6 +413,7 @@ func (sm *SocketManager) handleClientPing(client *socket.Socket) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Panic recovered in handleClientPing: %v", r)
+			fmt.Printf("Panic recovered in handleClientPing: %v\n", r)
 		}
 	}()
 
@@ -786,6 +824,175 @@ func (sm *SocketManager) cleanupInactiveConnections() {
 	}
 }
 
+// updateHeartbeat Update server heartbeat timestamp
+func (sm *SocketManager) updateHeartbeat() {
+	sm.heartbeatMutex.Lock()
+	defer sm.heartbeatMutex.Unlock()
+	sm.lastHeartbeat = time.Now()
+}
+
+// getLastHeartbeat Get last heartbeat timestamp
+func (sm *SocketManager) getLastHeartbeat() time.Time {
+	sm.heartbeatMutex.RLock()
+	defer sm.heartbeatMutex.RUnlock()
+	return sm.lastHeartbeat
+}
+
+// setRunning Set server running status
+func (sm *SocketManager) setRunning(running bool) {
+	sm.heartbeatMutex.Lock()
+	defer sm.heartbeatMutex.Unlock()
+	sm.isRunning = running
+}
+
+// getRunning Get server running status
+func (sm *SocketManager) getRunning() bool {
+	sm.heartbeatMutex.RLock()
+	defer sm.heartbeatMutex.RUnlock()
+	return sm.isRunning
+}
+
+// isHealthy Check if server is healthy
+func (sm *SocketManager) isHealthy() bool {
+	if !sm.getRunning() {
+		return false
+	}
+
+	lastBeat := sm.getLastHeartbeat()
+	if time.Since(lastBeat) > HEARTBEAT_TIMEOUT {
+		log.Printf("[DAEMON] Server heartbeat timeout: last=%v, timeout=%v", lastBeat, HEARTBEAT_TIMEOUT)
+		return false
+	}
+
+	return true
+}
+
+// startWithMonitor Start server with heartbeat monitoring
+func (sm *SocketManager) startWithMonitor() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[DAEMON] Panic recovered in startWithMonitor: %v", r)
+			sm.setRunning(false)
+		}
+	}()
+
+	sm.setRunning(true)
+	sm.heartbeatMutex.Lock()
+	sm.startTime = time.Now()
+	sm.heartbeatMutex.Unlock()
+	sm.updateHeartbeat()
+
+	// Start heartbeat updater
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if sm.getRunning() {
+					sm.updateHeartbeat()
+				} else {
+					return
+				}
+			case <-sm.daemonStopChan:
+				return
+			}
+		}
+	}()
+
+	log.Printf("[DAEMON] Starting socket server on port %d (restart count: %d)", sm.port, sm.restartCount)
+	err := sm.start(sm.port)
+
+	// If start returns, server has stopped
+	sm.setRunning(false)
+
+	if err != nil {
+		log.Printf("[DAEMON] Socket server stopped with error: %v", err)
+	} else {
+		log.Printf("[DAEMON] Socket server stopped normally")
+	}
+}
+
+// startDaemonMonitor Start daemon monitor to check server health
+func (sm *SocketManager) startDaemonMonitor() {
+	ticker := time.NewTicker(DAEMON_CHECK_INTERVAL)
+	defer ticker.Stop()
+
+	log.Printf("[DAEMON] Daemon monitor started, check interval: %v", DAEMON_CHECK_INTERVAL)
+
+	for {
+		select {
+		case <-ticker.C:
+			if !sm.isHealthy() {
+				log.Printf("[DAEMON] Server unhealthy detected, initiating restart...")
+				sm.restartServer()
+			}
+		case <-sm.daemonStopChan:
+			log.Printf("[DAEMON] Daemon monitor stopped")
+			return
+		}
+	}
+}
+
+// restartServer Restart socket server
+func (sm *SocketManager) restartServer() {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	log.Printf("[DAEMON] Restarting socket server...")
+
+	// Mark as not running
+	sm.setRunning(false)
+
+	// Wait a bit for cleanup
+	time.Sleep(RESTART_DELAY)
+
+	// Recreate Socket.IO server with configuration
+	c := socket.DefaultServerOptions()
+	c.SetServeClient(true)
+	c.SetPingInterval(2 * time.Second)
+	c.SetPingTimeout(5 * time.Second)
+	c.SetMaxHttpBufferSize(1000000)
+	c.SetConnectTimeout(10 * time.Second)
+	c.SetUpgradeTimeout(10 * time.Second)
+	c.SetMaxHttpBufferSize(1000000)
+	c.SetTransports(types.NewSet("polling", "websocket"))
+	c.SetCors(&types.Cors{
+		Origin:      "*",
+		Credentials: true,
+	})
+	c.SetAllowEIO3(true)
+
+	// Create new server
+	sm.server = socket.NewServer(nil, nil)
+
+	// Re-setup auto-listeners
+	sm.setupAutoListeners()
+
+	// Increment restart counter
+	sm.restartCount++
+
+	log.Printf("[DAEMON] Server recreated, restart count: %d", sm.restartCount)
+
+	// Start server in new goroutine
+	go sm.startWithMonitor()
+
+	log.Printf("[DAEMON] Socket server restart initiated successfully")
+}
+
+// StopDaemon Stop daemon monitor (for graceful shutdown)
+func (sm *SocketManager) StopDaemon() {
+	log.Printf("[DAEMON] Stopping daemon monitor...")
+	close(sm.daemonStopChan)
+	sm.setRunning(false)
+}
+
+// GetRestartCount Get server restart count
+func (sm *SocketManager) GetRestartCount() int64 {
+	return sm.restartCount
+}
+
 // Start Start Socket server
 func (sm *SocketManager) start(port int) error {
 	// Create HTTP server
@@ -837,6 +1044,19 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 	averageMemoryKB = float64(int64(averageMemoryKB*1000000)) / 1000000
 	memoryUsagePercent = float64(int64(memoryUsagePercent*1000000)) / 1000000
 
+	// Get server health status
+	isRunning := sm.getRunning()
+	lastHeartbeat := sm.getLastHeartbeat()
+
+	sm.heartbeatMutex.RLock()
+	startTime := sm.startTime
+	sm.heartbeatMutex.RUnlock()
+
+	uptimeSeconds := int64(0)
+	if isRunning && !startTime.IsZero() {
+		uptimeSeconds = int64(time.Since(startTime).Seconds())
+	}
+
 	return &ConnectionStats{
 		TotalConnections:      sm.stats.TotalConnections,
 		ActiveConnections:     sm.stats.ActiveConnections,
@@ -850,6 +1070,10 @@ func (sm *SocketManager) GetStats() *ConnectionStats {
 		AverageMemoryKB:       averageMemoryKB,
 		MemoryUsagePercent:    memoryUsagePercent,
 		MemoryLimitMB:         sm.maxMemoryMB,
+		IsRunning:             isRunning,
+		RestartCount:          sm.restartCount,
+		LastHeartbeat:         lastHeartbeat,
+		UptimeSeconds:         uptimeSeconds,
 	}
 }
 
@@ -1088,6 +1312,8 @@ func (sm *SocketManager) SendMessageToUserAllDevices(metaid string, socketData *
 	}
 
 	successCount := 0
+	pcCount := 0
+	appCount := 0
 	for _, device := range devices {
 		// Find corresponding socket connection through socketID
 		var targetSocket *socket.Socket
@@ -1102,11 +1328,16 @@ func (sm *SocketManager) SendMessageToUserAllDevices(metaid string, socketData *
 		if targetSocket != nil {
 			sm.sendMessage(targetSocket, socketData)
 			successCount++
+			if device.DeviceType == DEVICE_TYPE_PC {
+				pcCount++
+			} else if device.DeviceType == DEVICE_TYPE_APP {
+				appCount++
+			}
 		}
 	}
 
-	log.Printf("Sent message to user all devices: metaid=%s, method=%s, successCount=%d/%d",
-		metaid, socketData.M, successCount, len(devices))
+	log.Printf("Sent message to user all devices: metaid=%s, method=%s, successCount=%d/%d, pcCount=%d, appCount=%d",
+		metaid, socketData.M, successCount, len(devices), pcCount, appCount)
 	return nil
 }
 
@@ -1165,67 +1396,110 @@ func (sm *SocketManager) SendMessageToExtraPush(socketData *SocketData) error {
 
 // Helper methods for device connection management
 
-// findDeviceConnection Find device connection by device type
-func (sm *SocketManager) findDeviceConnection(userConn *UserConnections, deviceType string) (*ConnectionInfo, int) {
-	for i, device := range userConn.Devices {
-		if device.DeviceType == deviceType {
-			return device, i
-		}
-	}
-	return nil, -1
-}
-
 // addDeviceConnection Add device connection for user
 func (sm *SocketManager) addDeviceConnection(metaid, deviceType, socketID string) {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
+	newDevice := &ConnectionInfo{
+		SocketID:    socketID,
+		MetaID:      metaid,
+		DeviceType:  deviceType,
+		ConnectTime: time.Now(),
+		LastActive:  time.Now(),
+		IsActive:    true,
+	}
 
+	// Get max limit based on device type
+	maxLimit := MAX_PC_PER_USER
+	if deviceType == DEVICE_TYPE_APP {
+		maxLimit = MAX_APP_PER_USER
+	}
+	fmt.Printf("[SOCKET] addDeviceConnection: metaid=%s, deviceType=%s, socketID=%s\n", metaid, deviceType, socketID)
+
+	// Find old device to disconnect (if needed) - do this BEFORE acquiring lock
+	var oldestDeviceSocketID string
+	var needDisconnect bool
+
+	sm.mutex.Lock()
+	// Count devices by type for logging
+	appCount := 0
+	pcCount := 0
 	if value, exists := sm.connections.Load(metaid); exists {
 		userConn := value.(*UserConnections)
 
-		// Find if device type already exists
-		if existingDevice, index := sm.findDeviceConnection(userConn, deviceType); existingDevice != nil {
-			// Replace existing device of same type
-			userConn.Devices[index] = &ConnectionInfo{
-				SocketID:    socketID,
-				MetaID:      metaid,
-				DeviceType:  deviceType,
-				ConnectTime: time.Now(),
-				LastActive:  time.Now(),
-				IsActive:    true,
+		// Count devices of the same type
+		sameTypeCount := 0
+		var sameTypeDevices []*ConnectionInfo
+		for _, device := range userConn.Devices {
+			if device.DeviceType == deviceType {
+				sameTypeCount++
+				sameTypeDevices = append(sameTypeDevices, device)
 			}
-			log.Printf("[SOCKET] Replaced device connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
-		} else if len(userConn.Devices) < MAX_DEVICES_PER_USER {
-			// Add new device (within limit)
-			userConn.Devices = append(userConn.Devices, &ConnectionInfo{
-				SocketID:    socketID,
-				MetaID:      metaid,
-				DeviceType:  deviceType,
-				ConnectTime: time.Now(),
-				LastActive:  time.Now(),
-				IsActive:    true,
-			})
-			log.Printf("[SOCKET] Added device connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
-		} else {
-			log.Printf("[SOCKET] Device connection limit reached for user: metaid=%s", metaid)
 		}
+
+		// Check if we need to remove oldest connection of the same type when reaching limit
+		if sameTypeCount >= maxLimit {
+			// Find the oldest connection of the same type (by ConnectTime)
+			oldestDevice := sameTypeDevices[0]
+			oldestTime := sameTypeDevices[0].ConnectTime
+			for _, device := range sameTypeDevices {
+				if device.ConnectTime.Before(oldestTime) {
+					oldestTime = device.ConnectTime
+					oldestDevice = device
+				}
+			}
+
+			log.Printf("[SOCKET] Will remove oldest %s device connection due to limit: metaid=%s, socketID=%s, connectTime=%v",
+				deviceType, oldestDevice.MetaID, oldestDevice.SocketID, oldestDevice.ConnectTime)
+			fmt.Printf("[SOCKET] Will remove oldest %s device connection due to limit: metaid=%s, socketID=%s, connectTime=%v\n",
+				deviceType, oldestDevice.MetaID, oldestDevice.SocketID, oldestDevice.ConnectTime)
+
+			// Store the socket ID to disconnect later (outside the lock)
+			oldestDeviceSocketID = oldestDevice.SocketID
+			needDisconnect = true
+
+			// Remove from slice immediately
+			for i, device := range userConn.Devices {
+				if device.SocketID == oldestDevice.SocketID {
+					userConn.Devices = append(userConn.Devices[:i], userConn.Devices[i+1:]...)
+					break
+				}
+			}
+
+			// Update statistics for removed connection
+			sm.stats.mutex.Lock()
+			sm.stats.ActiveConnections--
+			sm.stats.mutex.Unlock()
+		}
+
+		// Add new device
+		userConn.Devices = append(userConn.Devices, newDevice)
+
+		for _, device := range userConn.Devices {
+			if device.DeviceType == DEVICE_TYPE_APP {
+				appCount++
+			} else if device.DeviceType == DEVICE_TYPE_PC {
+				pcCount++
+			}
+		}
+
+		log.Printf("[SOCKET] Added device connection: metaid=%s, deviceType=%s, socketID=%s, appCount=%d, pcCount=%d",
+			metaid, deviceType, socketID, appCount, pcCount)
+		fmt.Printf("[SOCKET] Added device connection: metaid=%s, deviceType=%s, socketID=%s, appCount=%d, pcCount=%d\n",
+			metaid, deviceType, socketID, appCount, pcCount)
 	} else {
 		// Create new user connections
 		userConn := &UserConnections{
-			MetaID: metaid,
-			Devices: []*ConnectionInfo{
-				{
-					SocketID:    socketID,
-					MetaID:      metaid,
-					DeviceType:  deviceType,
-					ConnectTime: time.Now(),
-					LastActive:  time.Now(),
-					IsActive:    true,
-				},
-			},
+			MetaID:  metaid,
+			Devices: []*ConnectionInfo{newDevice},
 		}
 		sm.connections.Store(metaid, userConn)
+		if deviceType == DEVICE_TYPE_APP {
+			appCount++
+		} else if deviceType == DEVICE_TYPE_PC {
+			pcCount++
+		}
+
 		log.Printf("[SOCKET] Created new user connection: metaid=%s, deviceType=%s, socketID=%s", metaid, deviceType, socketID)
+		fmt.Printf("[SOCKET] Created new user connection: metaid=%s, deviceType=%s, socketID=%s\n", metaid, deviceType, socketID)
 	}
 
 	// Update statistics
@@ -1234,8 +1508,36 @@ func (sm *SocketManager) addDeviceConnection(metaid, deviceType, socketID string
 	sm.stats.ActiveConnections++
 	sm.stats.mutex.Unlock()
 
+	fmt.Printf("[SOCKET] Updated statistics: TotalConnections=%d, ActiveConnections=%d\n", sm.stats.TotalConnections, sm.stats.ActiveConnections)
+
 	// Update memory statistics
 	sm.updateMemoryStats()
+
+	// Release lock before disconnecting
+	sm.mutex.Unlock()
+
+	// Disconnect the old socket AFTER releasing the lock to avoid deadlock
+	if needDisconnect {
+		log.Printf("[SOCKET] Disconnecting old socket: socketID=%s", oldestDeviceSocketID)
+		fmt.Printf("[SOCKET] Disconnecting old socket: socketID=%s\n", oldestDeviceSocketID)
+
+		// Find and disconnect the socket
+		sm.server.Sockets().Sockets().Range(func(sid socket.SocketId, client *socket.Socket) bool {
+			if string(sid) == oldestDeviceSocketID {
+				// Use goroutine to avoid blocking
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[SOCKET] Panic recovered while disconnecting socket: %v", r)
+						}
+					}()
+					client.Disconnect(true)
+				}()
+				return false
+			}
+			return true
+		})
+	}
 }
 
 // removeDeviceConnection Remove device connection for user

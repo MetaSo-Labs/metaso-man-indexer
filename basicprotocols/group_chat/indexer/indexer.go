@@ -19,6 +19,7 @@ type GroupChatIndexer struct {
 	userDB        *db.UserInfoDB
 	globalBlockDB *db.GlobalBlockDB
 	socketInfoDB  *db.SocketInfoDB
+	extraDB       *db.ExtraDB
 	pb            *db.Pebble
 
 	syncDBService *db.SyncDBService
@@ -45,6 +46,7 @@ func NewGroupChatIndexer(adapter map[string]adapter.Chain) (*GroupChatIndexer, e
 		communityDB:   db.NewCommunityDB(pb),
 		groupDB:       gdb,
 		chatDB:        ch,
+		extraDB:       db.NewExtraDB(pb),
 		privateDB:     db.NewPrivateChatDB(pb),
 		userDB:        db.NewUserInfoDB(pb),
 		globalBlockDB: db.NewGlobalBlockDB(pb),
@@ -158,6 +160,10 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{},
 		log.Printf("[%s]Private chat protocol: %s", pin.ChainName, pin.Path)
 		// Private chat related protocols
 		return gci.privateDB.ProcessPrivateChatPin(pin, isResync)
+	case strings.ToLower(protocols.MonitorSimpleGroupLuckyBagExtra):
+		log.Printf("[%s]Lucky bag extra protocol: %s", pin.ChainName, pin.Path)
+		// Lucky bag extra related protocols
+		return gci.extraDB.ProcessGroupLuckyBagExtra(pin, tx, isResync)
 	default:
 		log.Printf("[%s]Unknown protocol: %s", pin.ChainName, protocol)
 		return nil
@@ -193,6 +199,11 @@ func (gci *GroupChatIndexer) GetGroupDB() *db.GroupDB {
 // GetChatDB Get chat database instance
 func (gci *GroupChatIndexer) GetChatDB() *db.ChatDB {
 	return gci.chatDB
+}
+
+// GetExtraDB Get extra database instance
+func (gci *GroupChatIndexer) GetExtraDB() *db.ExtraDB {
+	return gci.extraDB
 }
 
 // GetPrivateDB Get private chat database instance

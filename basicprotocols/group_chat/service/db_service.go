@@ -3796,3 +3796,32 @@ func CheckPinExistsByChainAndHeight(chainName string, blockHeight int64, pinId s
 func GetPinIdsByChainAndHeight(chainName string, blockHeight int64) (map[string]interface{}, error) {
 	return syncDbService.GetPinIdsByChainAndHeight(chainName, blockHeight)
 }
+
+// GetLuckyBagExtraByTxId Get lucky bag extra FT info by txId
+func GetLuckyBagExtraByTxId(txId string) (map[string]interface{}, error) {
+	if txId == "" {
+		return nil, fmt.Errorf("txId parameter cannot be empty")
+	}
+
+	// Get lucky bag extra from ExtraDB
+	extra, err := extraDB.GetLuckyBagExtraByTxId(txId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lucky bag extra: %v", err)
+	}
+
+	if extra == nil {
+		return map[string]interface{}{
+			"txId":    txId,
+			"found":   false,
+			"message": "Lucky bag extra not found",
+		}, nil
+	}
+
+	result := map[string]interface{}{
+		"txId":  txId,
+		"found": true,
+		"data":  extra,
+	}
+
+	return result, nil
+}
