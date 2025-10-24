@@ -671,3 +671,21 @@ type LuckyBagFtOutput struct {
 	TokenAddress string `json:"tokenAddress"`
 	Index        int64  `json:"index"`
 }
+
+type TalkGroupLuckyBagV3ManualExtraGas struct {
+	Chain         string `json:"chain"`
+	LuckyBagPinId string `json:"luckyBagPinId"`
+	TxId          string `json:"txId"`
+
+	// PinId           string `json:"pinId"`
+	Domain          string `json:"domain"`
+	LuckyBagAddress string `json:"luckyBagAddress"`
+
+	GasOutputs []*LuckyBagGasOutput `json:"gasOutputs"`
+}
+
+type LuckyBagGasOutput struct {
+	GasAmount  uint64 `json:"gasAmount"`
+	GasAddress string `json:"gasAddress"`
+	GasIndex   int64  `json:"gasIndex"`
+}

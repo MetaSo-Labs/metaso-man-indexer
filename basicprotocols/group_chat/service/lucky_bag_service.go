@@ -807,6 +807,10 @@ func GrabLuckyBag(groupId, pinId, metaId, address string) (string, error) {
 			return "", errors.New("tickTxId and tickPinId and tickId are required for metacontract-ft")
 		}
 
+		if strings.Contains(luckyBag.TickTxId, "i") {
+			luckyBag.TickTxId = strings.Split(luckyBag.TickTxId, "i")[0]
+		}
+
 		//find extra from TickTxId
 		extra, err := extraDB.GetLuckyBagExtraByTxId(luckyBag.TickTxId)
 		if err != nil {
@@ -1202,12 +1206,17 @@ func disposingGrabLuckyBag(grabEntity *models.TalkGroupOpenLuckyBagV3, totalCoun
 	netParam := chainAdapter[grabEntity.Chain].GetNetParam()
 
 	if grabEntity.Type == string(models.LuckyBagTypeMetacontractFT) {
+
+		var extraGasInfo *models.TalkGroupLuckyBagV3ManualExtraGas
+		extraGasInfo, _ = extraDB.GetLuckyBagManualExtraGasByLuckyBagPinId(grabEntity.LuckyBagPinId)
+
 		err = buildAndBroadcastMetaContractFtTransferTx(
 			grabEntity,
 			hexStr,
 			netParam,
 			toAddress, value, outputAmount,
 			totalCount,
+			extraGasInfo,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to build meta contract ft transfer tx: %v", err)
@@ -1415,6 +1424,7 @@ func buildAndBroadcastMetaContractFtTransferTx(
 	netParam interface{},
 	toAddress string, value uint64, outputAmount int64,
 	totalCount int64,
+	extraGasInfo *models.TalkGroupLuckyBagV3ManualExtraGas,
 ) error {
 	var (
 		tokenWif    string
@@ -1455,7 +1465,8 @@ func buildAndBroadcastMetaContractFtTransferTx(
 		return fmt.Errorf("lucky bag type is not metacontract-ft")
 	}
 	toAddress = grabEntity.Address
-	tokenAmount = grabEntity.Amount
+	grabTAmount := normalizeScientificNotation(grabEntity.Amount)
+	tokenAmount = grabTAmount
 	codehashGenesis := strings.Split(grabEntity.TickId, "/")
 	if len(codehashGenesis) != 2 {
 		return fmt.Errorf("invalid tick id: %s", grabEntity.TickId)
@@ -1463,16 +1474,27 @@ func buildAndBroadcastMetaContractFtTransferTx(
 	codehash = codehashGenesis[0]
 	genesis = codehashGenesis[1]
 
+	grabGAmount := normalizeScientificNotation(grabEntity.GasAmount)
 	gasUtxos = append(gasUtxos, &grpc_metacontract.GasUtxo{
 		TxId:        grabEntity.LuckyBagTxId,
 		OutputIndex: int32(grabEntity.GasIndex),
-		Satoshis:    grabEntity.GasAmount,
+		Satoshis:    grabGAmount,
 	})
+	if extraGasInfo != nil {
+		if len(extraGasInfo.GasOutputs) > 0 && len(extraGasInfo.GasOutputs)+2 > int(grabEntity.GasIndex) {
+			gasUtxos = append(gasUtxos, &grpc_metacontract.GasUtxo{
+				TxId:        extraGasInfo.TxId,
+				OutputIndex: int32(extraGasInfo.GasOutputs[grabEntity.GasIndex-2].GasIndex),
+				Satoshis:    strconv.FormatUint(extraGasInfo.GasOutputs[grabEntity.GasIndex-2].GasAmount, 10),
+			})
+		}
+	}
 
+	grabAmount := normalizeScientificNotation(grabEntity.Amount)
 	tokenUtxos = append(tokenUtxos, &grpc_metacontract.TokenUtxo{
 		TxId:        grabEntity.TickTxId,
 		OutputIndex: int32(grabEntity.Index),
-		TokenAmount: grabEntity.Amount,
+		TokenAmount: grabAmount,
 	})
 
 	client, err := grpc_metacontract.NewClient()

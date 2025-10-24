@@ -83,9 +83,10 @@ const (
 	TalkGroupLuckyBagCodeAddressKeyCollection          string = "talk_group_lucky_bag_code_address_key"           //key: code_address, value: {key, code, luckyBagAddress, timestamp}
 	TalkGroupLuckyBagCodeAddressKeyCompletedCollection string = "talk_group_lucky_bag_code_address_key_completed" //key: code_address, value: {key, code, luckyBagAddress, timestamp}
 	// Error open and residue lucky bag
-	TalkGroupOpenLuckyBagErrCollection    string = "talk_group_open_lucky_bag_err"    // key: pinId，value: luckyBagPinId
-	TalkGroupResidueLuckyBagErrCollection string = "talk_group_residue_lucky_bag_err" // key: pinId，value: luckyBagPinId
-	TalkGroupLuckyBagExtraFtCollection    string = "talk_group_lucky_bag_extra_ft"    // key: txId，value: {codehash, genesis, type, tokenOutputs}
+	TalkGroupOpenLuckyBagErrCollection        string = "talk_group_open_lucky_bag_err"         // key: pinId，value: luckyBagPinId
+	TalkGroupResidueLuckyBagErrCollection     string = "talk_group_residue_lucky_bag_err"      // key: pinId，value: luckyBagPinId
+	TalkGroupLuckyBagExtraFtCollection        string = "talk_group_lucky_bag_extra_ft"         // key: txId，value: {codehash, genesis, type, tokenOutputs}
+	TalkGroupLuckyBagManualExtraGasCollection string = "talk_group_lucky_bag_manual_extra_gas" // key: txId，value: {gasAmount}
 
 	// Private chat
 	TalkPrivateChatPinCollection          string = "talk_private_chat_pin"           // key: pinId
@@ -364,6 +365,10 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupLuckyBagExtraFtCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagExtraFtCollection, err)
+	}
+	err = open(TalkGroupLuckyBagManualExtraGasCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupLuckyBagManualExtraGasCollection, err)
 	}
 
 	// Initialize private chat related databases

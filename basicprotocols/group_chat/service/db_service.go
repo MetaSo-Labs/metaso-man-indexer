@@ -3,13 +3,18 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"manindexer/basicprotocols/group_chat/db"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/service/common_service"
+	"manindexer/common"
+	"manindexer/inscribe/mrc20_service"
 	"strconv"
 	"strings"
 	"time"
 
+	chaincfg2 "github.com/bitcoinsv/bsvd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/cockroachdb/pebble"
 )
 
@@ -3817,6 +3822,15 @@ func GetLuckyBagExtraByTxId(txId string) (map[string]interface{}, error) {
 		}, nil
 	}
 
+	if strings.Contains(extra.TxId, "i") {
+		extra.TxId = strings.Split(extra.TxId, "i")[0]
+		err = extraDB.SaveLuckyBagExtra(extra)
+		if err != nil {
+			return nil, fmt.Errorf("failed to save lucky bag extra: %v", err)
+		}
+		fmt.Printf("SaveLuckyBagExtra success, txId: %s, groupId: %s", extra.TxId, extra.GroupId)
+	}
+
 	result := map[string]interface{}{
 		"txId":  txId,
 		"found": true,
@@ -3824,4 +3838,128 @@ func GetLuckyBagExtraByTxId(txId string) (map[string]interface{}, error) {
 	}
 
 	return result, nil
+}
+
+// ProcessLuckyBagManualExtraGas processes manual extra gas for lucky bag
+func ProcessLuckyBagMetaContractFtManualExtraGas(luckyBagPinId, outSidePrivateKeyHex, outSideAddress, outSideTxId string, outSideIndex int64, outSideAmount, perAmount uint64, changeAddress string) error {
+	// Get lucky bag information by pinId
+	luckyBag, err := extraDB.GetLuckyBagByPinId(luckyBagPinId)
+	if err != nil {
+		return fmt.Errorf("get lucky bag by pinId failed: %v", err)
+	}
+	if luckyBag == nil {
+		return fmt.Errorf("lucky bag not found, pinId: %s", luckyBagPinId)
+	}
+	if luckyBag.Type != string(models.LuckyBagTypeMetacontractFT) {
+		return fmt.Errorf("lucky bag type is not metacontract-ft, pinId: %s", luckyBagPinId)
+	}
+
+	// Check if manual extra gas already exists
+	existingExtra, err := extraDB.GetLuckyBagManualExtraGasByLuckyBagPinId(luckyBag.PinId)
+	if err != nil {
+		return fmt.Errorf("get existing manual extra gas failed: %v", err)
+	}
+	if existingExtra != nil {
+		log.Printf("Manual extra gas already exists for luckyBagPinId: %s, ExtraTxId: %s", luckyBag.PinId, existingExtra.TxId)
+		return nil
+	}
+
+	// Build gas outputs based on payList count
+	gasOutputs := extraDB.BuildGasOutputs(luckyBag.PayList, perAmount)
+
+	// Create manual extra gas model
+	manualExtraGas := &models.TalkGroupLuckyBagV3ManualExtraGas{
+		Chain:           luckyBag.Chain,
+		LuckyBagPinId:   luckyBag.PinId,
+		TxId:            "",
+		Domain:          luckyBag.Domain,
+		LuckyBagAddress: luckyBag.LuckyBagAddress,
+		GasOutputs:      gasOutputs,
+	}
+
+	//make transfer tx
+	netParams := &chaincfg2.MainNetParams
+	if common.TestNet == "1" {
+		netParams = &chaincfg2.TestNet3Params
+	} else if common.TestNet == "2" {
+		netParams = &chaincfg2.RegressionNetParams
+	}
+	transferOutputs := make([]*common.TxOutput, 0)
+	for _, gasOutput := range gasOutputs {
+		transferOutputs = append(transferOutputs, &common.TxOutput{
+			Address: gasOutput.GasAddress,
+			Amount:  int64(gasOutput.GasAmount),
+		})
+	}
+	netParams2 := &chaincfg.MainNetParams
+	if common.TestNet == "1" {
+		netParams2 = &chaincfg.TestNet3Params
+	} else if common.TestNet == "2" {
+		netParams2 = &chaincfg.RegressionNetParams
+	}
+	outSidePkScript, err := mrc20_service.AddressToPkScript(netParams2, outSideAddress)
+	if err != nil {
+		return fmt.Errorf("convert address to pk script failed: %v", err)
+	}
+	inputUtxo := &common.TxInputUtxo{
+		TxId:     outSideTxId,
+		TxIndex:  outSideIndex,
+		PkScript: outSidePkScript,
+		Amount:   outSideAmount,
+		PriHex:   outSidePrivateKeyHex,
+		SignMode: common.SignModeLegacy,
+	}
+	transferTx, err := common.BuildMvcCommonTx(netParams, []*common.TxInputUtxo{inputUtxo}, transferOutputs, changeAddress, 1, false)
+	if err != nil {
+		return fmt.Errorf("build transfer tx failed: %v", err)
+	}
+
+	txRaw, err := common.MvcToRaw(transferTx)
+	if err != nil {
+		return fmt.Errorf("convert tx to raw failed: %v", err)
+	}
+	manualExtraGas.TxId = transferTx.TxHash().String()
+
+	// Broadcast transaction
+	resultTxId, err := chainAdapter[luckyBag.Chain].BroadcastTx(txRaw)
+	if err != nil {
+		return fmt.Errorf("broadcast transfer tx failed: %v", err)
+	}
+
+	fmt.Printf("[Manual]success broadcast transfer tx, txId:%s\n", resultTxId)
+	// Save to database
+	err = extraDB.SaveLuckyBagManualExtraGas(manualExtraGas)
+	if err != nil {
+		return fmt.Errorf("save manual extra gas failed: %v", err)
+	}
+
+	log.Printf("ProcessLuckyBagManualExtraGas success, luckyBagPinId: %s, luckyBagTxId: %s, outSideTxId: %s",
+		luckyBagPinId, luckyBag.TxId, outSideTxId)
+	return nil
+}
+
+func GetLuckyBagManualExtraGasByLuckyBagPin(luckyBagPinId string) (map[string]interface{}, error) {
+	luckyBag, err := extraDB.GetLuckyBagByPinId(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("get lucky bag by pinId failed: %v", err)
+	}
+	if luckyBag == nil {
+		return nil, fmt.Errorf("lucky bag not found, pinId: %s", luckyBagPinId)
+	}
+	manualExtraGas, err := extraDB.GetLuckyBagManualExtraGasByLuckyBagPinId(luckyBagPinId)
+	if err != nil {
+		return nil, fmt.Errorf("get lucky bag manual extra gas by pinId failed: %v", err)
+	}
+	if manualExtraGas == nil {
+		return nil, fmt.Errorf("lucky bag manual extra gas not found, pinId: %s", luckyBagPinId)
+	}
+	return map[string]interface{}{
+		"luckyBag": luckyBag,
+		"manualExtraGas": map[string]interface{}{
+			"txId":            manualExtraGas.TxId,
+			"domain":          manualExtraGas.Domain,
+			"luckyBagAddress": manualExtraGas.LuckyBagAddress,
+			"gasOutputs":      manualExtraGas.GasOutputs,
+		},
+	}, nil
 }

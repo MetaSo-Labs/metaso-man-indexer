@@ -152,9 +152,15 @@ func (edb *ExtraDB) processGroupLuckyBagExtra(pin *pin.PinInscription, txData *w
 		}
 	}
 
+	pinIdStr := strings.Split(pin.Id, "i")
+	if len(pinIdStr) < 2 {
+		return fmt.Errorf("invalid pin id: %s", pin.Id)
+	}
+	t := pinIdStr[0]
+
 	// Create lucky bag extra information model
 	extra := &models.TalkGroupLuckyBagV3Extra{
-		TxId:            pin.Id[:len(pin.Id)-2],
+		TxId:            t,
 		PinId:           pin.Id,
 		SubId:           simpleLuckyBagExtra.SubId,
 		GroupId:         simpleLuckyBagExtra.GroupId,
@@ -317,6 +323,140 @@ func (edb *ExtraDB) CountLuckyBagExtras() (int64, error) {
 
 	if err := iter.Error(); err != nil {
 		return 0, fmt.Errorf("count lucky bag extras failed: %v", err)
+	}
+
+	return count, nil
+}
+
+// SaveLuckyBagManualExtraGas saves lucky bag manual extra gas information
+func (edb *ExtraDB) SaveLuckyBagManualExtraGas(extra *models.TalkGroupLuckyBagV3ManualExtraGas) error {
+	data, err := json.Marshal(extra)
+	if err != nil {
+		return fmt.Errorf("marshal lucky bag manual extra gas failed: %v", err)
+	}
+
+	// Use LuckyBagTxId as primary key
+	key := []byte(extra.LuckyBagPinId)
+	err = Pb[TalkGroupLuckyBagManualExtraGasCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("save lucky bag manual extra gas to db failed: %v", err)
+	}
+
+	log.Printf("SaveLuckyBagManualExtraGas success, luckyBagPinId: %s, txId: %s", extra.LuckyBagPinId, extra.TxId)
+	return nil
+}
+
+// GetLuckyBagManualExtraGasByLuckyBagTxId gets lucky bag manual extra gas information by LuckyBagTxId
+func (edb *ExtraDB) GetLuckyBagManualExtraGasByLuckyBagPinId(luckyBagPinId string) (*models.TalkGroupLuckyBagV3ManualExtraGas, error) {
+	key := []byte(luckyBagPinId)
+	value, closer, err := Pb[TalkGroupLuckyBagManualExtraGasCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get lucky bag manual extra gas from db failed: %v", err)
+	}
+	defer closer.Close()
+
+	var extra models.TalkGroupLuckyBagV3ManualExtraGas
+	err = json.Unmarshal(value, &extra)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal lucky bag manual extra gas failed: %v", err)
+	}
+
+	return &extra, nil
+}
+
+// DeleteLuckyBagManualExtraGas deletes lucky bag manual extra gas information
+func (edb *ExtraDB) DeleteLuckyBagManualExtraGas(luckyBagTxId string) error {
+	key := []byte(luckyBagTxId)
+	err := Pb[TalkGroupLuckyBagManualExtraGasCollection].Delete(key, pebble.Sync)
+	if err != nil {
+		return fmt.Errorf("delete lucky bag manual extra gas from db failed: %v", err)
+	}
+	return nil
+}
+
+// getLuckyBagByPinId gets lucky bag information by pinId
+func (edb *ExtraDB) GetLuckyBagByPinId(pinId string) (*models.TalkGroupLuckyBagV3, error) {
+	key := []byte(pinId)
+	value, closer, err := Pb[TalkGroupLuckyBagPinCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get lucky bag by pinId failed: %v", err)
+	}
+	defer closer.Close()
+
+	var luckyBag models.TalkGroupLuckyBagV3
+	err = json.Unmarshal(value, &luckyBag)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal lucky bag failed: %v", err)
+	}
+
+	return &luckyBag, nil
+}
+
+// buildGasOutputs builds gas outputs based on payList count
+func (edb *ExtraDB) BuildGasOutputs(payList []*models.ProInfoPayList, perAmount uint64) []*models.LuckyBagGasOutput {
+	gasOutputs := make([]*models.LuckyBagGasOutput, 0, len(payList))
+
+	// Calculate amount per output
+	for i, payInfo := range payList {
+
+		gasOutput := &models.LuckyBagGasOutput{
+			GasAmount:  perAmount,
+			GasAddress: payInfo.GasAddress,
+			GasIndex:   int64(i),
+		}
+		gasOutputs = append(gasOutputs, gasOutput)
+	}
+
+	return gasOutputs
+}
+
+// // GetAllLuckyBagManualExtraGases gets all lucky bag manual extra gas information
+// func (edb *ExtraDB) GetAllLuckyBagManualExtraGases() ([]*models.TalkGroupLuckyBagV3ManualExtraGas, error) {
+// 	iter, err := Pb[TalkGroupLuckyBagManualExtraGasCollection].NewIter(nil)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("create iterator failed: %v", err)
+// 	}
+// 	defer iter.Close()
+
+// 	var extras []*models.TalkGroupLuckyBagV3ManualExtraGas
+// 	for iter.First(); iter.Valid(); iter.Next() {
+// 		var extra models.TalkGroupLuckyBagV3ManualExtraGas
+// 		err := json.Unmarshal(iter.Value(), &extra)
+// 		if err != nil {
+// 			log.Printf("unmarshal lucky bag manual extra gas failed: %v", err)
+// 			continue
+// 		}
+// 		extras = append(extras, &extra)
+// 	}
+
+// 	if err := iter.Error(); err != nil {
+// 		return nil, fmt.Errorf("iterate lucky bag manual extra gases failed: %v", err)
+// 	}
+
+// 	return extras, nil
+// }
+
+// CountLuckyBagManualExtraGases counts total number of lucky bag manual extra gas information
+func (edb *ExtraDB) CountLuckyBagManualExtraGases() (int64, error) {
+	iter, err := Pb[TalkGroupLuckyBagManualExtraGasCollection].NewIter(nil)
+	if err != nil {
+		return 0, fmt.Errorf("create iterator failed: %v", err)
+	}
+	defer iter.Close()
+
+	count := int64(0)
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+
+	if err := iter.Error(); err != nil {
+		return 0, fmt.Errorf("count lucky bag manual extra gases failed: %v", err)
 	}
 
 	return count, nil

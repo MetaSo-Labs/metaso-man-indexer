@@ -166,3 +166,15 @@ type FetchGroupUserRoleInfoRequest struct {
 	ChannelId string `form:"channelId"` // Channel ID (optional)
 	MetaId    string `form:"metaId"`    // User MetaId
 }
+
+// ProcessLuckyBagMetaContractFtManualExtraGasRequest Process lucky bag meta contract FT manual extra gas request
+type ProcessLuckyBagMetaContractFtManualExtraGasRequest struct {
+	LuckyBagPinId        string `json:"luckyBagPinId"`        // Lucky bag pin ID
+	OutSidePrivateKeyHex string `json:"outSidePrivateKeyHex"` // Outside private key hex
+	OutSideAddress       string `json:"outSideAddress"`       // Outside address
+	OutSideTxId          string `json:"outSideTxId"`          // Outside transaction ID
+	OutSideIndex         int64  `json:"outSideIndex"`         // Outside output index
+	OutSideAmount        uint64 `json:"outSideAmount"`        // Outside amount
+	PerAmount            uint64 `json:"perAmount"`            // Amount per output
+	ChangeAddress        string `json:"changeAddress"`        // Change address
+}

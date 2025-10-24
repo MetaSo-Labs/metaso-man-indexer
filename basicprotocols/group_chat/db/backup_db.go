@@ -198,6 +198,9 @@ func (bdb *BackupDB) performBackup() error {
 		// Lucky bag extra ft related collections
 		TalkGroupLuckyBagExtraFtCollection,
 
+		// Lucky bag manual extra gas related collections
+		TalkGroupLuckyBagManualExtraGasCollection,
+
 		// Private chat collections
 		TalkPrivateChatPinCollection,
 		TalkPrivateChatTimestampCollection,
@@ -363,6 +366,7 @@ Collections:
 - TalkGroupChatTimestamp2Collection
 - TalkGroupChatTimestamp2OutCollection
 - TalkGroupLuckyBagExtraFtCollection
+- TalkGroupLuckyBagManualExtraGasCollection
 - TalkPrivateChatPinCollection
 - TalkPrivateChatTimestampCollection
 - TalkPrivateChatTimestampOutCollection

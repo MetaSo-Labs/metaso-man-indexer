@@ -107,6 +107,10 @@ func RegisterDbRoutes(router *gin.Engine) {
 			// Lucky bag extra FT info API
 			luckyBagGroup.GET("/extra/txid", GetLuckyBagExtraByTxId)
 
+			// Lucky bag manual extra gas APIs
+			luckyBagGroup.POST("/process-manual-extra-gas", ProcessLuckyBagMetaContractFtManualExtraGas)
+			luckyBagGroup.GET("/manual-extra-gas", GetLuckyBagManualExtraGasByLuckyBagPin)
+
 			// Lucky bag collection-related APIs
 			collectionGroup := luckyBagGroup.Group("/collection")
 			{

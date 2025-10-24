@@ -958,6 +958,9 @@ func GrabLuckyBagV2(groupId, pinId, metaId, address string) (string, error) {
 		if luckyBag.TickTxId == "" || luckyBag.TickPinId == "" || luckyBag.TickId == "" {
 			return "", errors.New("tickTxId and tickPinId and tickId are required for metacontract-ft")
 		}
+		// if strings.Contains(luckyBag.TickTxId, "i") {
+		// 	luckyBag.TickTxId = strings.Split(luckyBag.TickTxId, "i")[0]
+		// }
 
 		// First get lucky bag extra from cache
 		extra, err := cache_service.GetCacheLuckyBagExtra(luckyBag.TickTxId)

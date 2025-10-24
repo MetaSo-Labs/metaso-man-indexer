@@ -2836,3 +2836,70 @@ func GetLuckyBagExtraByTxId(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
 }
+
+// @Summary Process lucky bag meta contract FT manual extra gas
+// @Description Process manual extra gas for lucky bag meta contract FT
+// @Tags Lucky Bag
+// @Accept json
+// @Produce json
+// @Param request body request.ProcessLuckyBagMetaContractFtManualExtraGasRequest true "Process manual extra gas request"
+// @Success 200 {object} map[string]interface{} "Process result"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/lucky-bag/process-manual-extra-gas [post]
+func ProcessLuckyBagMetaContractFtManualExtraGas(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	var req request.ProcessLuckyBagMetaContractFtManualExtraGasRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("invalid request parameters: %v", err), t, 1))
+		return
+	}
+
+	err := service.ProcessLuckyBagMetaContractFtManualExtraGas(
+		req.LuckyBagPinId,
+		req.OutSidePrivateKeyHex,
+		req.OutSideAddress,
+		req.OutSideTxId,
+		req.OutSideIndex,
+		req.OutSideAmount,
+		req.PerAmount,
+		req.ChangeAddress,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(map[string]interface{}{
+		"message":       "Process lucky bag manual extra gas successfully",
+		"luckyBagPinId": req.LuckyBagPinId,
+		"outSideTxId":   req.OutSideTxId,
+	}, t))
+}
+
+// @Summary Get lucky bag manual extra gas by lucky bag pin
+// @Description Get lucky bag manual extra gas information by lucky bag pin ID
+// @Tags Lucky Bag
+// @Accept json
+// @Produce json
+// @Param luckyBagPinId query string true "Lucky bag pin ID"
+// @Success 200 {object} map[string]interface{} "Lucky bag manual extra gas information"
+// @Failure 400 {object} map[string]interface{} "Parameter error"
+// @Failure 500 {object} map[string]interface{} "Server error"
+// @Router /api/db/lucky-bag/manual-extra-gas [get]
+func GetLuckyBagManualExtraGasByLuckyBagPin(ctx *gin.Context) {
+	var t = time.Now().UnixMilli()
+	luckyBagPinId := ctx.Query("luckyBagPinId")
+	if luckyBagPinId == "" {
+		ctx.JSON(http.StatusBadRequest, respond.RespErr(fmt.Errorf("luckyBagPinId parameter is required"), t, 1))
+		return
+	}
+
+	result, err := service.GetLuckyBagManualExtraGasByLuckyBagPin(luckyBagPinId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, respond.RespSuccess(result, t))
+}

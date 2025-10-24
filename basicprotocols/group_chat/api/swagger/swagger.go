@@ -2735,6 +2735,115 @@ func SetupSwagger(router *gin.Engine) {
                     "500": {"description": "Internal server error", "schema": {"type": "object"}}
                 }
             }
+        },
+        "/api/db/luckybag/process-manual-extra-gas": {
+            "post": {
+                "description": "Process lucky bag meta contract FT manual extra gas",
+                "produces": ["application/json"],
+                "consumes": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Process manual extra gas for lucky bag meta contract FT",
+                "parameters": [
+                    {
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "luckyBagPinId": {"type": "string", "description": "Lucky bag pin ID"},
+                                "outSidePrivateKeyHex": {"type": "string", "description": "Outside private key hex"},
+                                "outSideAddress": {"type": "string", "description": "Outside address"},
+                                "outSideTxId": {"type": "string", "description": "Outside transaction ID"},
+                                "outSideIndex": {"type": "integer", "description": "Outside output index"},
+                                "outSideAmount": {"type": "integer", "description": "Outside amount"},
+                                "perAmount": {"type": "integer", "description": "Amount per output"},
+                                "changeAddress": {"type": "string", "description": "Change address"}
+                            },
+                            "required": ["luckyBagPinId", "outSidePrivateKeyHex", "outSideAddress", "outSideTxId", "outSideIndex", "outSideAmount", "perAmount", "changeAddress"]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully processed manual extra gas",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {"type": "string", "description": "Success message"},
+                                        "luckyBagPinId": {"type": "string", "description": "Lucky bag pin ID"},
+                                        "outSideTxId": {"type": "string", "description": "Outside transaction ID"}
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/luckybag/manual-extra-gas": {
+            "get": {
+                "description": "Get lucky bag manual extra gas information by lucky bag pin ID",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get lucky bag manual extra gas by pin ID",
+                "parameters": [
+                    {"type": "string", "description": "Lucky bag pin ID", "name": "luckyBagPinId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved lucky bag manual extra gas info",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "luckyBagPinId": {"type": "string", "description": "Lucky bag pin ID"},
+                                        "found": {"type": "boolean", "description": "Whether the manual extra gas was found"},
+                                        "message": {"type": "string", "description": "Message if not found"},
+                                        "data": {
+                                            "type": "object",
+                                            "description": "Manual extra gas data (only present if found is true)",
+                                            "properties": {
+                                                "luckyBagPinId": {"type": "string", "description": "Lucky bag pin ID"},
+                                                "txId": {"type": "string", "description": "Transaction ID"},
+                                                "domain": {"type": "string", "description": "Domain"},
+                                                "luckyBagAddress": {"type": "string", "description": "Lucky bag address"},
+                                                "gasOutputs": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "gasAmount": {"type": "integer", "description": "Gas amount"},
+                                                            "gasAddress": {"type": "string", "description": "Gas address"},
+                                                            "gasIndex": {"type": "integer", "description": "Gas index"}
+                                                        }
+                                                    },
+                                                    "description": "List of gas outputs"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Bad request", "schema": {"type": "object"}},
+                    "500": {"description": "Internal server error", "schema": {"type": "object"}}
+                }
+            }
         }
     },
     "tags": [
