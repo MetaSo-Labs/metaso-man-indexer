@@ -142,7 +142,9 @@ func (gci *GroupChatIndexer) ProcessPin(pin *pin.PinInscription, tx interface{},
 		strings.ToLower(protocols.MonitorSimpleGroupRemoveUser),
 		strings.ToLower(protocols.MonitorSimpleGroupAdmin),
 		strings.ToLower(protocols.MonitorSimpleGroupBlock),
-		strings.ToLower(protocols.MonitorSimpleGroupWhitelist):
+		strings.ToLower(protocols.MonitorSimpleGroupWhitelist),
+		strings.ToLower(protocols.MonitorSimpleGroupJoinBlock),
+		strings.ToLower(protocols.MonitorSimpleGroupJoinWhitelist):
 		log.Printf("[%s]Group protocol: %s", pin.ChainName, pin.Path)
 		// Group related protocols
 		return gci.groupDB.ProcessGroupPin(pin, isResync)

@@ -155,6 +155,14 @@ func (bdb *BackupDB) performBackup() error {
 		TalkGroupChannelLatestChatCollection,
 		TalkGroupRemoveUserCollection,
 
+		// Private group related collections
+		TalkPrivateGroupMetaIdPathCollection,
+
+		// Group join block and whitelist related collections
+		TalkGroupJoinBlockCollection,
+		TalkGroupJoinWhitelistCollection,
+		TalkGroupJoinUserInvalidCollection,
+
 		// Group admin related collections
 		TalkGroupAdminCollection,
 		TalkGroupBlockCollection,
@@ -348,6 +356,10 @@ Collections:
 - TalkGroupCommunityCollection
 - TalkGroupMetaIdJoinCollection
 - TalkGroupJoinCollection
+- TalkPrivateGroupMetaIdPathCollection
+- TalkGroupJoinBlockCollection
+- TalkGroupJoinWhitelistCollection
+- TalkGroupJoinUserInvalidCollection
 - TalkGroupPersonCollection
 - TalkGroupPersonListCollection
 - TalkMetaIdContextListCollection

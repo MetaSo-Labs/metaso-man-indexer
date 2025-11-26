@@ -32,6 +32,13 @@ const (
 	TalkGroupVersionInfoCollection string = "talk_group_version_info" // key: groupId_pinId and pinId_groupId
 	TalkGroupCommunityCollection   string = "talk_group_community"    // key: communityId_groupId
 
+	//PrivateGroup related databases
+	TalkPrivateGroupMetaIdPathCollection string = "talk_private_group_metaid_path" // key: metaId_groupId_pinId, value: path
+
+	TalkGroupJoinBlockCollection       string = "talk_group_join_block"        // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+	TalkGroupJoinWhitelistCollection   string = "talk_group_join_whitelist"    // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+	TalkGroupJoinUserInvalidCollection string = "talk_group_join_user_invalid" // key: groupId, value: []{pinId, []metaId, createAddress, createMetaId, timestamp}
+
 	TalkGroupChannelInfoCollection        string = "talk_group_channel_info"         // key: channelId
 	TalkGroupChannelVersionInfoCollection string = "talk_group_channel_version_info" // key: channelId_pinId and pinId_channelId
 	TalkGroupChannelCollection            string = "talk_group_channel"              // key: groupId_channelId
@@ -185,6 +192,25 @@ func (pb *Pebble) InitDatabase() error {
 	err = open(TalkGroupChannelCollection)
 	if err != nil {
 		return fmt.Errorf("Pebble %s init error: %v", TalkGroupChannelCollection, err)
+	}
+
+	// Initialize private group related databases
+	err = open(TalkPrivateGroupMetaIdPathCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkPrivateGroupMetaIdPathCollection, err)
+	}
+
+	err = open(TalkGroupJoinBlockCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupJoinBlockCollection, err)
+	}
+	err = open(TalkGroupJoinWhitelistCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupJoinWhitelistCollection, err)
+	}
+	err = open(TalkGroupJoinUserInvalidCollection)
+	if err != nil {
+		return fmt.Errorf("Pebble %s init error: %v", TalkGroupJoinUserInvalidCollection, err)
 	}
 
 	err = open(TalkGroupJoinCollection)

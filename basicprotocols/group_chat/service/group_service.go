@@ -182,6 +182,7 @@ func FetchGroupList(req *request.FetchGroupListRequest) (*respond.GroupResponse,
 			UserCount:         userCount,
 			ChatSettingType:   group.ChatSettingType,
 			DeleteStatus:      group.DeleteStatus,
+			Path:              group.Path,
 			Timestamp:         group.Timestamp,
 			Chain:             group.Chain,
 			BlockHeight:       group.BlockHeight,
@@ -303,6 +304,7 @@ func FetchLatestChatGroupList(req *request.FetchLatestChatGroupListRequest) (*re
 			UserCount:         userCount,
 			ChatSettingType:   group.ChatSettingType,
 			DeleteStatus:      group.DeleteStatus,
+			Path:              group.Path,
 			Timestamp:         group.Timestamp,
 			Chain:             group.Chain,
 			BlockHeight:       group.BlockHeight,
@@ -429,6 +431,7 @@ func FetchGroupInfo(req *request.FetchGroupInfoRequest) (*respond.GroupItem, err
 		UserCount:         userCount,
 		ChatSettingType:   group.ChatSettingType,
 		DeleteStatus:      group.DeleteStatus,
+		Path:              group.Path,
 		Timestamp:         group.Timestamp,
 		Chain:             group.Chain,
 		BlockHeight:       group.BlockHeight,
@@ -498,6 +501,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -524,6 +528,7 @@ func FetchGroupChatList(req *request.FetchGroupChatListRequest) (*respond.GroupC
 				Address:     replyChat.Address,
 				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
 				NickName:    replyChat.NickName,
+				Mention:     replyChat.Mention,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
 				ContentType: replyChat.ContentType,
@@ -612,6 +617,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -648,6 +654,7 @@ func FetchGroupChatListV3(req *request.FetchGroupChatListRequest) (*respond.Grou
 					Encryption:  replyChat.Encryption,
 					Version:     replyChat.Version,
 					ChatType:    replyChat.ChatType,
+					Mention:     replyChat.Mention,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,
 					Index:       replyChat.Index,
@@ -749,6 +756,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -785,6 +793,7 @@ func FetchGroupChatListV2(req *request.FetchGroupChatListRequest) (*respond.Grou
 					Encryption:  replyChat.Encryption,
 					Version:     replyChat.Version,
 					ChatType:    replyChat.ChatType,
+					Mention:     replyChat.Mention,
 					Timestamp:   replyChat.Timestamp,
 					Chain:       replyChat.Chain,
 					Index:       replyChat.Index,
@@ -1316,7 +1325,9 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 					return nil, err
 				}
 				if group == nil {
-					return nil, nil
+					logger.Info("[GROUP_SERVICE][FETCH_LATEST_CHAT_INFO_LIST] Group not found for groupId %s", item.GroupId)
+					continue
+					// return nil, nil
 				}
 				perfStats.groupInfoDBTime += time.Now().UnixMilli() - t1
 
@@ -1359,11 +1370,13 @@ func FetchLatestChatInfoList(req *request.FetchLatestChatInfoListRequest) (*resp
 			chatInfoItem.UserCount = userCount
 			chatInfoItem.ChatSettingType = group.ChatSettingType
 			chatInfoItem.DeleteStatus = group.DeleteStatus
+			chatInfoItem.Path = group.Path
 			chatInfoItem.Chain = group.Chain
 
 			// If latest chat info is obtained, update related fields
 			if latestChat != nil {
 				chatInfoItem.Content = latestChat.Content
+				chatInfoItem.Mention = latestChat.Mention
 				chatInfoItem.LastMessagePinId = latestChat.LastMessagePinId
 				chatInfoItem.Timestamp = latestChat.Timestamp
 				chatInfoItem.ChatType = int64(latestChat.ChatType)
@@ -1936,6 +1949,7 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -1970,6 +1984,7 @@ func FetchGroupChatListByIndex(req *request.FetchGroupChatListByIndexRequest) (*
 					Encryption:  replyChat.Encryption,
 					ChatType:    replyChat.ChatType,
 					Timestamp:   replyChat.Timestamp,
+					Mention:     replyChat.Mention,
 					Chain:       replyChat.Chain,
 					Index:       replyChat.Index,
 				}
@@ -2058,6 +2073,7 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -2095,6 +2111,7 @@ func FetchGroupChatListByStartTime(req *request.FetchGroupChatListByStartTimeReq
 				Encryption:  replyChat.Encryption,
 				ChatType:    replyChat.ChatType,
 				Timestamp:   replyChat.Timestamp,
+				Mention:     replyChat.Mention,
 				Chain:       replyChat.Chain,
 				Index:       replyChat.Index,
 			}
@@ -2184,7 +2201,7 @@ func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*res
 	var allResults []*respond.GroupAndUserSearchItem
 
 	// Search users
-	userResults, err := common_service.SearchAllMetaIDUserInfoInfo(req.Query)
+	userResults, err := common_service.SearchAllMetaIDUserInfoInfo(req.Query, 0)
 	if err != nil {
 		// Log error but continue
 		logger.Info("Failed to search users: %v\n", err)
@@ -2253,6 +2270,64 @@ func SearchGroupsAndUserByNameOrId(req *request.SearchGroupAndUserRequest) (*res
 	return &respond.GroupAndUserSearchResponse{
 		Total: int64(len(allResults)),
 		List:  allResults,
+	}, nil
+}
+
+// SearchUserByNameOrId searches users by name or ID
+func SearchUserByNameOrId(req *request.SearchGroupAndUserRequest) (*respond.UserSearchResponse, error) {
+	// Set default pagination parameters
+	if req.Size <= 0 {
+		req.Size = 20
+	}
+
+	// Search users
+	userResults, err := common_service.SearchAllMetaIDUserInfoInfo(req.Query, int(req.Size))
+	if err != nil {
+		return nil, fmt.Errorf("failed to search users: %v", err)
+	}
+
+	// Convert to response format
+	var userItems []*respond.UserSearchItem
+	for _, result := range userResults {
+		// Get chat public key from database if not available in search result
+		chatPublicKey := result.Chatpubkey
+		chatPublicKeyId := result.ChatpubkeyId
+
+		// If chat public key is not available, try to get from database
+		if chatPublicKey == "" {
+			chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(result.Metaid)
+			if chatPublicKeyInfo != nil {
+				chatPublicKey = chatPublicKeyInfo.ChatPublicKey
+				chatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+			}
+		} else {
+			// If chat public key exists but chat public key id is empty, try to get from database
+			if chatPublicKeyId == "" {
+				chatPublicKeyInfo, _ := userInfoDB.GetLatestValidUserInfoByMetaId(result.Metaid)
+				if chatPublicKeyInfo != nil {
+					if chatPublicKeyInfo.ChatPublicKey != "" && chatPublicKeyInfo.ChatPublicKey == chatPublicKey {
+						chatPublicKeyId = chatPublicKeyInfo.ChatPublicKeyId
+					}
+				}
+			}
+		}
+
+		userItem := &respond.UserSearchItem{
+			MetaId:          result.Metaid,
+			Address:         result.Address,
+			UserName:        result.Name,
+			Avatar:          result.Avatar,
+			AvatarId:        result.AvatarId,
+			ChatPublicKey:   chatPublicKey,
+			ChatPublicKeyId: chatPublicKeyId,
+			Timestamp:       0, // User search doesn't provide timestamp, use 0
+		}
+		userItems = append(userItems, userItem)
+	}
+
+	return &respond.UserSearchResponse{
+		Total: int64(len(userItems)),
+		List:  userItems,
 	}, nil
 }
 
@@ -2415,6 +2490,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -2456,6 +2532,7 @@ func FetchChannelChatListV3(req *request.FetchChannelChatListRequest) (*respond.
 						ContentType: replyChat.ContentType,
 						Encryption:  replyChat.Encryption,
 						ChatType:    replyChat.ChatType,
+						Mention:     replyChat.Mention,
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
@@ -2531,6 +2608,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -2571,6 +2649,7 @@ func FetchChannelChatListByIndex(req *request.FetchChannelChatListByIndexRequest
 						ContentType: replyChat.ContentType,
 						Encryption:  replyChat.Encryption,
 						ChatType:    replyChat.ChatType,
+						Mention:     replyChat.Mention,
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
@@ -2646,6 +2725,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 			ReplyPin:    chat.ReplyPin,
 			ReplyInfo:   nil,
 			ReplyMetaId: "",
+			Mention:     chat.Mention,
 			Timestamp:   chat.Timestamp,
 			Chain:       chat.Chain,
 			BlockHeight: chat.BlockHeight,
@@ -2686,6 +2766,7 @@ func FetchChannelChatListByStartTime(req *request.FetchChannelChatListByStartTim
 						ContentType: replyChat.ContentType,
 						Encryption:  replyChat.Encryption,
 						ChatType:    replyChat.ChatType,
+						Mention:     replyChat.Mention,
 						Timestamp:   replyChat.Timestamp,
 						Chain:       replyChat.Chain,
 						Index:       replyChat.Index,
@@ -2916,4 +2997,112 @@ func takeSocketInfoSnapshot() {
 // IsSyncCompleted Check if synchronization is completed
 func IsSyncCompleted() bool {
 	return syncDbService.IsSyncCompleted()
+}
+
+// FetchPrivateGroupPaths Get private group paths by MetaId
+func FetchPrivateGroupPaths(req *request.FetchPrivateGroupPathsRequest) (*respond.PrivateGroupPathsResponse, error) {
+	if req.MetaId == "" {
+		return nil, fmt.Errorf("metaId is required")
+	}
+
+	// Get private group paths from database
+	pathItems, err := groupDB.GetPrivateGroupPathsByMetaId(req.MetaId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get private group paths: %v", err)
+	}
+
+	// Convert to response format
+	var items []*respond.PrivateGroupPathItem
+	for _, item := range pathItems {
+		items = append(items, &respond.PrivateGroupPathItem{
+			Path:    item.Path,
+			GroupId: item.GroupId,
+			PinId:   item.PinId,
+		})
+	}
+
+	return &respond.PrivateGroupPathsResponse{
+		Total: int64(len(items)),
+		List:  items,
+	}, nil
+}
+
+// FetchGroupJoinControlList Get group join block and whitelist metaId list
+func FetchGroupJoinControlList(req *request.FetchGroupJoinControlListRequest) (*respond.GroupJoinControlListResponse, error) {
+	if req.GroupId == "" {
+		return nil, fmt.Errorf("groupId is empty")
+	}
+
+	// Get join block list
+	joinBlockList, err := groupDB.GetGroupJoinBlockList(req.GroupId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get join block list: %v", err)
+	}
+
+	// Get join whitelist list
+	joinWhitelistList, err := groupDB.GetGroupJoinWhitelistList(req.GroupId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get join whitelist list: %v", err)
+	}
+
+	// Get current effective join block metaIds (latest record)
+	var joinBlockMetaIds []string
+	if joinBlockList != nil && len(joinBlockList.Items) > 0 {
+		// Data is sorted by timestamp in ascending order, so the last item is the latest
+		latestBlockItem := joinBlockList.Items[len(joinBlockList.Items)-1]
+		joinBlockMetaIds = latestBlockItem.BlockedUsers
+	}
+
+	// Get current effective join whitelist metaIds (latest record)
+	var joinWhitelistMetaIds []string
+	if joinWhitelistList != nil && len(joinWhitelistList.Items) > 0 {
+		// Data is sorted by timestamp in ascending order, so the last item is the latest
+		latestWhitelistItem := joinWhitelistList.Items[len(joinWhitelistList.Items)-1]
+		joinWhitelistMetaIds = latestWhitelistItem.WhitelistUsers
+	}
+
+	return &respond.GroupJoinControlListResponse{
+		GroupId:              req.GroupId,
+		JoinBlockMetaIds:     joinBlockMetaIds,
+		JoinWhitelistMetaIds: joinWhitelistMetaIds,
+	}, nil
+}
+
+// FetchGroupMetaIdJoinList Get group MetaId join list
+func FetchGroupMetaIdJoinList(req *request.FetchGroupMetaIdJoinListRequest) (*respond.GroupMetaIdJoinListResponse, error) {
+	if req.MetaId == "" {
+		return nil, fmt.Errorf("metaId is required")
+	}
+	if req.GroupId == "" {
+		return nil, fmt.Errorf("groupId is required")
+	}
+
+	// Get join list from database
+	joinList, err := groupDB.GetGroupMetaIdJoinList(req.MetaId, req.GroupId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group MetaId join list: %v", err)
+	}
+
+	// Convert to response format
+	var items []*respond.GroupMetaIdJoinItemResponse
+	for _, item := range joinList.Items {
+		items = append(items, &respond.GroupMetaIdJoinItemResponse{
+			JoinPinId:     item.JoinPinId,
+			JoinType:      item.JoinType,
+			JoinTimestamp: item.JoinTimestamp,
+			GroupState:    int64(item.GroupState),
+			Address:       item.Address,
+			Referrer:      item.Referrer,
+			K:             item.K,
+			BlockHeight:   item.BlockHeight,
+			Chain:         item.Chain,
+			ByMetaId:      item.ByMetaId,
+			ByAddress:     item.ByAddress,
+		})
+	}
+
+	return &respond.GroupMetaIdJoinListResponse{
+		MetaId: joinList.MetaId,
+		Items:  items,
+	}, nil
 }

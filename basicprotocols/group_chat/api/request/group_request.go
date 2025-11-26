@@ -167,6 +167,22 @@ type FetchGroupUserRoleInfoRequest struct {
 	MetaId    string `form:"metaId"`    // User MetaId
 }
 
+// FetchGroupJoinControlListRequest Get group join block and whitelist metaId list request
+type FetchGroupJoinControlListRequest struct {
+	GroupId string `form:"groupId"` // Group ID
+}
+
+// FetchPrivateGroupPathsRequest Get private group paths by MetaId request
+type FetchPrivateGroupPathsRequest struct {
+	MetaId string `form:"metaId"` // User MetaId
+}
+
+// FetchGroupMetaIdJoinListRequest Get group MetaId join list request
+type FetchGroupMetaIdJoinListRequest struct {
+	MetaId  string `form:"metaId"`  // User MetaId
+	GroupId string `form:"groupId"` // Group ID
+}
+
 // ProcessLuckyBagMetaContractFtManualExtraGasRequest Process lucky bag meta contract FT manual extra gas request
 type ProcessLuckyBagMetaContractFtManualExtraGasRequest struct {
 	LuckyBagPinId        string `json:"luckyBagPinId"`        // Lucky bag pin ID

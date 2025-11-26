@@ -760,7 +760,7 @@ func (s *SyncDBService) checkSyncCompletion(syncInfo *SyncInfo) bool {
 		}
 
 		// Check if all three heights are equal: currentHeight == latestBlockHeight == lastProcessedHeight
-		if currentHeight != latestBlockHeight || latestBlockHeight != lastProcessedHeight || currentHeight != lastProcessedHeight {
+		if currentHeight != latestBlockHeight || lastProcessedHeight < latestBlockHeight-50 {
 			log.Printf("[SYNC]Chain %s sync not completed: current=%d, latest=%d, processed=%d (not all equal)",
 				chainName, currentHeight, latestBlockHeight, lastProcessedHeight)
 			return false

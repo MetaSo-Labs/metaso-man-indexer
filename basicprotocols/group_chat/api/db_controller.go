@@ -2127,6 +2127,114 @@ func GetGroupWhitelistByGroupId(ctx *gin.Context) {
 	})
 }
 
+// GetGroupJoinBlockByGroupId Get TalkGroupJoinBlockCollection data by groupId
+// @Summary Get group join block data by group ID
+// @Description Get TalkGroupJoinBlockCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group join block data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group/join-block/{groupId} [get]
+func GetGroupJoinBlockByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupJoinBlockByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupJoinWhitelistByGroupId Get TalkGroupJoinWhitelistCollection data by groupId
+// @Summary Get group join whitelist data by group ID
+// @Description Get TalkGroupJoinWhitelistCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group join whitelist data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group/join-whitelist/{groupId} [get]
+func GetGroupJoinWhitelistByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupJoinWhitelistByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetGroupJoinUserInvalidByGroupId Get TalkGroupJoinUserInvalidCollection data by groupId
+// @Summary Get group join user invalid data by group ID
+// @Description Get TalkGroupJoinUserInvalidCollection data for a specific group ID
+// @Tags Database
+// @Accept json
+// @Produce json
+// @Param groupId path string true "Group ID"
+// @Success 200 {object} map[string]interface{} "Success response with group join user invalid data"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /api/db/group/join-user-invalid/{groupId} [get]
+func GetGroupJoinUserInvalidByGroupId(ctx *gin.Context) {
+	groupId := ctx.Param("groupId")
+	if groupId == "" {
+		ctx.JSON(400, gin.H{
+			"success": false,
+			"error":   "groupId parameter is required",
+		})
+		return
+	}
+
+	result, err := service.QueryGroupJoinUserInvalidByGroupId(groupId)
+	if err != nil {
+		ctx.JSON(500, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
 // SetGlobalBlockAddress Set a global block address
 // @Summary Set global block address
 // @Description Set an address to the global block list

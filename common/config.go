@@ -122,6 +122,7 @@ type groupChatConfig struct {
 	Host            string   `toml:"host"`
 	SwaggerHost     string   `toml:"swaggerHost"`
 	ManHost         string   `toml:"manHost"`
+	AvatarHost      string   `toml:"avatarHost"`
 	BackupHour      int      `toml:"backupHour"`
 	BackupRetention int      `toml:"backupRetention"`
 	LuckyBagDomain  []string `toml:"luckyBagDomain"`

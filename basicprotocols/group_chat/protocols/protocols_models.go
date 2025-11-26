@@ -63,6 +63,8 @@ type SimpleGroupJoin struct {
 	GroupId  string      `json:"groupId"`  //{Group ID: hash(metaname) }
 	State    interface{} `json:"state"`    //Join state: 1-join, -1-leave
 	Referrer string      `json:"referrer"` //Referrer
+
+	K string `json:"k"` //K value
 }
 
 /*
@@ -81,7 +83,9 @@ type SimpleGroupJoin struct {
 	  "collectionId": "",
 	  "limitAmount": 100,
 	  "chatSettingType": 0,
-	  "deleteStatus": 0
+	  "deleteStatus": 0,
+
+	   "path": "10/1"//Private group path, only for private group , "10/1" mean pkh path of wallet address 10/1
 	}
 
 *
@@ -101,6 +105,8 @@ type SimpleGroupCreate struct {
 	LimitAmount     interface{} `json:"limitAmount"`
 	ChatSettingType interface{} `json:"chatSettingType"` //Used to set speech restrictions, 0-everyone, 1-administrators
 	DeleteStatus    interface{} `json:"deleteStatus"`    //Delete status, 0-normal, 1-deleted
+
+	Path string `json:"path"` //Private group path, only for private group , "10/1" mean pkh path of wallet address 10/1
 }
 
 /*
@@ -126,6 +132,38 @@ type SimpleGroupChannel struct {
 }
 
 /*
+	{
+		"groupId": "{groupId}",
+		"users": [
+			"metaid-1",
+			"metaid-2",
+			"metaid-3",
+			...
+		]
+	}
+*/
+type SimpleGroupJoinWhitelist struct {
+	GroupId string   `json:"groupId"`
+	Users   []string `json:"users"`
+}
+
+/*
+	{
+		"groupId": "{groupId}",
+		"users": [
+			"metaid-1",
+			"metaid-2",
+			"metaid-3",
+			...
+		]
+	}
+*/
+type SimpleGroupJoinBlock struct {
+	GroupId string   `json:"groupId"`
+	Users   []string `json:"users"`
+}
+
+/*
 *
 
 	{
@@ -138,6 +176,11 @@ type SimpleGroupChannel struct {
 	  "replyTx": "txId",
 
 	  "channelId": "" // optional
+
+	   "mention": [ // optional
+		  "metaid-1",
+		  ...
+	  ], //@someone, mention someone
 	}
 
 *
@@ -152,6 +195,8 @@ type SimpleGroupChat struct {
 	ReplyPin    string      `json:"replyPin"`
 
 	ChannelId string `json:"channelId"`
+
+	Mention []string `json:"mention"` //@someone, mention someone
 }
 
 /*
@@ -524,6 +569,9 @@ const (
 	MonitorSimpleGroupBlock           = "SimpleGroupBlock"
 	MonitorSimpleGroupWhitelist       = "SimpleGroupWhitelist"
 
+	MonitorSimpleGroupJoinWhitelist = "SimpleGroupJoinWhitelist"
+	MonitorSimpleGroupJoinBlock     = "SimpleGroupJoinBlock"
+
 	MonitorSimpleMsg          = "SimpleMsg"
 	MonitorSimpleFileMsg      = "SimpleFileMsg"
 	MonitorSimplePrivateBlock = "SimpleBlock"
@@ -541,6 +589,8 @@ var (
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleCommunity)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleCommunityJoin)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupCreate)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupJoinWhitelist)),
+		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupJoinBlock)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupChannel)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupJoin)),
 		fmt.Sprintf("/protocols/%s", strings.ToLower(MonitorSimpleGroupRemoveUser)),

@@ -37,6 +37,11 @@ func RegisterDbRoutes(router *gin.Engine) {
 			groupGroup.GET("/admin/:groupId", GetGroupAdminByGroupId)
 			groupGroup.GET("/block/:groupId", GetGroupBlockByGroupId)
 			groupGroup.GET("/whitelist/:groupId", GetGroupWhitelistByGroupId)
+
+			// Group join block, join whitelist, and join user invalid APIs
+			groupGroup.GET("/join-block/:groupId", GetGroupJoinBlockByGroupId)
+			groupGroup.GET("/join-whitelist/:groupId", GetGroupJoinWhitelistByGroupId)
+			groupGroup.GET("/join-user-invalid/:groupId", GetGroupJoinUserInvalidByGroupId)
 		}
 
 		// Chat-related APIs

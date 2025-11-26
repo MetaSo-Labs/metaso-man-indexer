@@ -43,6 +43,7 @@ type GroupItem struct {
 	UserCount           int64     `json:"userCount"`           //Room member count
 	ChatSettingType     int64     `json:"chatSettingType"`     //Used for setting speech restrictions, 0-everyone, 1-admin
 	DeleteStatus        int64     `json:"deleteStatus"`        //Delete status, 0-normal, 1-deleted
+	Path                string    `json:"path"`                //Path of the group
 	Timestamp           int64     `json:"timestamp"`           //Room creation timestamp
 	Chain               string    `json:"chain"`               //Chain type
 	BlockHeight         int64     `json:"blockHeight"`         //Block height
@@ -78,6 +79,7 @@ type GroupChatItem struct {
 	ReplyPin    string          `json:"replyPin"`
 	ReplyInfo   *ReplyInfo      `json:"replyInfo"`
 	ReplyMetaId string          `json:"replyMetaId"`
+	Mention     []string        `json:"mention"`     // Mention users
 	Timestamp   int64           `json:"timestamp"`   //Chat record timestamp
 	Params      string          `json:"params"`      //General field for future parameter additions
 	Chain       string          `json:"chain"`       //Chain type
@@ -98,6 +100,7 @@ type ReplyInfo struct {
 	Encryption  string          `json:"encryption"`
 	Version     string          `json:"version"`     // Version
 	ChatType    models.ChatType `json:"chatType"`    //0-msg, 1-red, 2-img
+	Mention     []string        `json:"mention"`     // Mention users
 	Timestamp   int64           `json:"timestamp"`   //Chat record timestamp
 	Chain       string          `json:"chain"`       //Chain type
 	BlockHeight int64           `json:"blockHeight"` //Block height
@@ -184,6 +187,8 @@ type ChatInfoItem struct {
 	UserCount         int64     `json:"userCount"`               // User count (for group chat)
 	ChatSettingType   int64     `json:"chatSettingType"`         // Chat setting type (for group chat)
 	DeleteStatus      int64     `json:"deleteStatus"`            // Delete status (for group chat)
+	Path              string    `json:"path"`                    // Path of the group (for group chat)
+	Mention           []string  `json:"mention"`                 // Mention users
 }
 
 // PrivateChatResponse Private chat records response
@@ -478,4 +483,63 @@ type GroupUserRoleInfo struct {
 	IsBlocked   bool      `json:"isBlocked"`           // Is blocked
 	IsWhitelist bool      `json:"isWhitelist"`         // Is whitelist
 	IsRemoved   bool      `json:"isRemoved,omitempty"` // Is removed
+}
+
+// GroupJoinControlListResponse Response for group join block and whitelist metaId list
+type GroupJoinControlListResponse struct {
+	GroupId              string   `json:"groupId"`              // Group ID
+	JoinBlockMetaIds     []string `json:"joinBlockMetaIds"`     // List of blocked user MetaIds for joining
+	JoinWhitelistMetaIds []string `json:"joinWhitelistMetaIds"` // List of whitelisted user MetaIds for joining
+}
+
+// PrivateGroupPathItem represents a private group path item
+type PrivateGroupPathItem struct {
+	Path    string `json:"path"`    // Path
+	GroupId string `json:"groupId"` // Group ID
+	PinId   string `json:"pinId"`   // Pin ID
+}
+
+// PrivateGroupPathsResponse Get private group paths response
+type PrivateGroupPathsResponse struct {
+	Total int64                   `json:"total"` // Total count
+	List  []*PrivateGroupPathItem `json:"list"`  // List of private group paths
+}
+
+// UserSearchItem User search result item
+type UserSearchItem struct {
+	MetaId          string `json:"metaId"`          // User MetaId
+	Address         string `json:"address"`         // User address
+	UserName        string `json:"userName"`        // User name
+	Avatar          string `json:"avatar"`          // Avatar
+	AvatarId        string `json:"avatarId"`        // Avatar ID
+	ChatPublicKey   string `json:"chatPublicKey"`   // Chat public key
+	ChatPublicKeyId string `json:"chatPublicKeyId"` // Chat public key ID
+	Timestamp       int64  `json:"timestamp"`       // Timestamp (default 0 for search results)
+}
+
+// UserSearchResponse User search response
+type UserSearchResponse struct {
+	Total int64             `json:"total"` // Total number of results
+	List  []*UserSearchItem `json:"list"`  // Search results
+}
+
+// GroupMetaIdJoinItemResponse Group MetaId join item response
+type GroupMetaIdJoinItemResponse struct {
+	JoinPinId     string `json:"joinPinId"`     // Join PinId
+	JoinType      string `json:"joinType"`      // Join type: create, join, leave, remove
+	JoinTimestamp int64  `json:"joinTimestamp"` // Join timestamp
+	GroupState    int64  `json:"groupState"`    // Group state: 1-in, -1-out
+	Address       string `json:"address"`       // User address
+	Referrer      string `json:"referrer"`      // Referrer
+	K             string `json:"k"`             // K value
+	BlockHeight   int64  `json:"blockHeight"`   // Block height
+	Chain         string `json:"chain"`         // Chain type
+	ByMetaId      string `json:"byMetaId"`      // By MetaId
+	ByAddress     string `json:"byAddress"`     // By Address
+}
+
+// GroupMetaIdJoinListResponse Group MetaId join list response
+type GroupMetaIdJoinListResponse struct {
+	MetaId string                         `json:"metaId"` // User MetaId
+	Items  []*GroupMetaIdJoinItemResponse `json:"items"`  // Join record list
 }

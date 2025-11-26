@@ -61,6 +61,15 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get group user role info
 		group.GET("/group-user-role", GetGroupUserRoleInfo)
 
+		// Get group join control list (block and whitelist)
+		group.GET("/group-join-control-list", GetGroupJoinControlList)
+
+		// Get private group paths by MetaId
+		group.GET("/private-group-paths", GetPrivateGroupPaths)
+
+		// Get group MetaId join list
+		group.GET("/group-metaid-join-list", GetGroupMetaIdJoinList)
+
 		// Check if sync is completed
 		group.GET("/sync-completed", IsSyncCompleted)
 
@@ -78,6 +87,7 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Group search routes
 		group.GET("/search-groups", SearchGroups)
 		group.GET("/search-groups-and-users", SearchGroupsAndUsers)
+		group.GET("/search-users", SearchUsers)
 		group.GET("/search-groups-cache-stats", GetGroupSearchCacheStats)
 
 		// Search group members

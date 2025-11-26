@@ -479,6 +479,88 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/group-join-control-list": {
+            "get": {
+                "description": "Get the current effective join block and whitelist metaId lists for a group",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group join block and whitelist metaId list",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return join control lists",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupJoinControlListResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Request parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/private-group-paths": {
+            "get": {
+                "description": "Get all private group paths (path, groupId, pinId) used by a user",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get private group paths by MetaId",
+                "parameters": [
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return private group paths",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/PrivateGroupPathsResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Request parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/group-metaid-join-list": {
+            "get": {
+                "description": "Get user's group join records (create, join, leave, remove) for a specific group from TalkGroupMetaIdJoinCollection",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Get group MetaId join list",
+                "parameters": [
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": true},
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "query", "required": true}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return group MetaId join list",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/GroupMetaIdJoinListResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Request parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Internal server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
         "/group-chat/sync-completed": {
             "get": {
                 "description": "Check if data synchronization is completed",
@@ -591,6 +673,34 @@ func SetupSwagger(router *gin.Engine) {
                                 "code": {"type": "integer", "description": "Response code"},
                                 "message": {"type": "string", "description": "Response message"},
                                 "data": {"$ref": "#/definitions/GroupAndUserSearchResponse"},
+                                "timestamp": {"type": "integer", "description": "Response timestamp"}
+                            }
+                        }
+                    },
+                    "400": {"description": "Parameter error", "schema": {"$ref": "#/definitions/Message"}},
+                    "500": {"description": "Server error", "schema": {"$ref": "#/definitions/Message"}}
+                }
+            }
+        },
+        "/group-chat/search-users": {
+            "get": {
+                "description": "Search users by name or ID using fuzzy search, returns results with chat public key",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Search users by name or ID",
+                "parameters": [
+                    {"type": "string", "description": "Search query (user name or metaId)", "name": "query", "in": "query", "required": true},
+                    {"type": "integer", "description": "Page size, default is 5", "name": "size", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully return user search results", 
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "code": {"type": "integer", "description": "Response code"},
+                                "message": {"type": "string", "description": "Response message"},
+                                "data": {"$ref": "#/definitions/UserSearchResponse"},
                                 "timestamp": {"type": "integer", "description": "Response timestamp"}
                             }
                         }
@@ -1752,6 +1862,57 @@ func SetupSwagger(router *gin.Engine) {
                     "200": {"description": "Group whitelist data", "schema": {"type": "object"}},
                     "400": {"description": "Parameter error", "schema": {"type": "object"}},
                     "404": {"description": "Group whitelist not found", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/group/join-block/{groupId}": {
+            "get": {
+                "description": "Get TalkGroupJoinBlockCollection data by specific groupId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get group join block by groupId",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "path", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Group join block data", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "404": {"description": "Group join block not found", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/group/join-whitelist/{groupId}": {
+            "get": {
+                "description": "Get TalkGroupJoinWhitelistCollection data by specific groupId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get group join whitelist by groupId",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "path", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Group join whitelist data", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "404": {"description": "Group join whitelist not found", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
+        "/api/db/group/join-user-invalid/{groupId}": {
+            "get": {
+                "description": "Get TalkGroupJoinUserInvalidCollection data by specific groupId",
+                "produces": ["application/json"],
+                "tags": ["Database Operations"],
+                "summary": "Get group join user invalid by groupId",
+                "parameters": [
+                    {"type": "string", "description": "Group ID", "name": "groupId", "in": "path", "required": true}
+                ],
+                "responses": {
+                    "200": {"description": "Group join user invalid data", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "404": {"description": "Group join user invalid not found", "schema": {"type": "object"}},
                     "500": {"description": "Server error", "schema": {"type": "object"}}
                 }
             }
@@ -3797,6 +3958,59 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "UserSearchResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total number of users found"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UserSearchItem"
+                    },
+                    "description": "List of users"
+                }
+            }
+        },
+        "UserSearchItem": {
+            "type": "object",
+            "properties": {
+                "metaId": {
+                    "type": "string",
+                    "description": "User MetaId"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "userName": {
+                    "type": "string",
+                    "description": "User name"
+                },
+                "avatar": {
+                    "type": "string",
+                    "description": "Avatar"
+                },
+                "avatarId": {
+                    "type": "string",
+                    "description": "Avatar ID"
+                },
+                "chatPublicKey": {
+                    "type": "string",
+                    "description": "Chat public key"
+                },
+                "chatPublicKeyId": {
+                    "type": "string",
+                    "description": "Chat public key ID"
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "description": "Timestamp (default 0 for search results)"
+                }
+            }
+        },
         "GroupChannelResponse": {
             "type": "object",
             "properties": {
@@ -3863,6 +4077,119 @@ func SetupSwagger(router *gin.Engine) {
                 "index": {
                     "type": "integer",
                     "description": "Index"
+                }
+            }
+        },
+        "GroupJoinControlListResponse": {
+            "type": "object",
+            "properties": {
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "joinBlockMetaIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of blocked user MetaIds for joining"
+                },
+                "joinWhitelistMetaIds": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of whitelisted user MetaIds for joining"
+                }
+            }
+        },
+        "PrivateGroupPathsResponse": {
+            "type": "object",
+            "properties": {
+                "total": {
+                    "type": "integer",
+                    "description": "Total count"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/PrivateGroupPathItem"},
+                    "description": "List of private group paths"
+                }
+            }
+        },
+        "PrivateGroupPathItem": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path"
+                },
+                "groupId": {
+                    "type": "string",
+                    "description": "Group ID"
+                },
+                "pinId": {
+                    "type": "string",
+                    "description": "Pin ID"
+                }
+            }
+        },
+        "GroupMetaIdJoinListResponse": {
+            "type": "object",
+            "properties": {
+                "metaId": {
+                    "type": "string",
+                    "description": "User MetaId"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {"$ref": "#/definitions/GroupMetaIdJoinItemResponse"},
+                    "description": "Join record list"
+                }
+            }
+        },
+        "GroupMetaIdJoinItemResponse": {
+            "type": "object",
+            "properties": {
+                "joinPinId": {
+                    "type": "string",
+                    "description": "Join PinId"
+                },
+                "joinType": {
+                    "type": "string",
+                    "description": "Join type: create, join, leave, remove"
+                },
+                "joinTimestamp": {
+                    "type": "integer",
+                    "description": "Join timestamp"
+                },
+                "groupState": {
+                    "type": "integer",
+                    "description": "Group state: 1-in, -1-out"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "User address"
+                },
+                "referrer": {
+                    "type": "string",
+                    "description": "Referrer"
+                },
+                "k": {
+                    "type": "string",
+                    "description": "K value"
+                },
+                "blockHeight": {
+                    "type": "integer",
+                    "description": "Block height"
+                },
+                "chain": {
+                    "type": "string",
+                    "description": "Chain type"
+                },
+                "byMetaId": {
+                    "type": "string",
+                    "description": "By MetaId"
+                },
+                "byAddress": {
+                    "type": "string",
+                    "description": "By Address"
                 }
             }
         }

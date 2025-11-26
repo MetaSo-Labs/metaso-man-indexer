@@ -374,6 +374,7 @@ func (gic *GroupInfoCache) copyGroupInfo(groupInfo *models.TalkGroupModel) *mode
 		ChatSettingType:   groupInfo.ChatSettingType,
 		Chain:             groupInfo.Chain,
 		DeleteStatus:      groupInfo.DeleteStatus,
+		Path:              groupInfo.Path,
 		Timestamp:         groupInfo.Timestamp,
 		BlockHeight:       groupInfo.BlockHeight,
 	}

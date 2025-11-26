@@ -1168,6 +1168,43 @@ func SearchGroupsAndUsers(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Search users by name or ID
+// @Description Search users by name or ID using fuzzy search, returns results with chat public key
+// @Produce json
+// @Param query query string true "Search query (user name or metaId)"
+// @Param size query int false "Page size, default is 20"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=respond.UserSearchResponse} "Successfully return user search results"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/search-users [get]
+func SearchUsers(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.SearchGroupAndUserRequest{
+			Query: c.DefaultQuery("query", ""),
+			Size: func() int64 {
+				size, _ := strconv.ParseInt(c.DefaultQuery("size", "10"), 10, 64)
+				return size
+			}(),
+		}
+	)
+
+	if req.Query == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("query parameter is required"), t, 1))
+		return
+	}
+
+	response, err := service.SearchUserByNameOrId(req)
+	if err != nil {
+		log.Printf("Failed to search users for query %s: %v", req.Query, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
+}
+
 // @Summary Get group search cache statistics
 // @Description Get group search cache statistics
 // @Produce json
@@ -1455,6 +1492,115 @@ func IsSyncCompleted(c *gin.Context) {
 	var t = time.Now().UnixMilli()
 
 	result := service.IsSyncCompleted()
+
+	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// GetGroupJoinControlList Get group join block and whitelist metaId list
+// @Summary Get group join block and whitelist metaId list
+// @Description Get the current effective join block and whitelist metaId lists for a group
+// @Tags Group Management
+// @Accept json
+// @Produce json
+// @Param groupId query string true "Group ID"
+// @Success 200 {object} respond.RespSuccess{data=respond.GroupJoinControlListResponse} "Successfully return join control lists"
+// @Failure 400 {object} respond.RespError "Request parameter error"
+// @Failure 500 {object} respond.RespError "Internal server error"
+// @Router /group-chat/group-join-control-list [get]
+func GetGroupJoinControlList(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupJoinControlListRequest{
+			GroupId: c.DefaultQuery("groupId", ""),
+		}
+	)
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is empty"), t, 1))
+		return
+	}
+
+	result, err := service.FetchGroupJoinControlList(req)
+	if err != nil {
+		log.Printf("Failed to fetch group join control list for groupId %s: %v", req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// GetPrivateGroupPaths Get private group paths by MetaId
+// @Summary Get private group paths by MetaId
+// @Description Get all private group paths (path, groupId, pinId) used by a user
+// @Tags Group Management
+// @Accept json
+// @Produce json
+// @Param metaId query string true "User MetaId"
+// @Success 200 {object} respond.RespSuccess{data=respond.PrivateGroupPathsResponse} "Successfully return private group paths"
+// @Failure 400 {object} respond.RespError "Request parameter error"
+// @Failure 500 {object} respond.RespError "Internal server error"
+// @Router /group-chat/private-group-paths [get]
+func GetPrivateGroupPaths(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchPrivateGroupPathsRequest{
+			MetaId: c.DefaultQuery("metaId", ""),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is required"), t, 1))
+		return
+	}
+
+	result, err := service.FetchPrivateGroupPaths(req)
+	if err != nil {
+		log.Printf("Failed to fetch private group paths for metaId %s: %v", req.MetaId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
+}
+
+// GetGroupMetaIdJoinList Get group MetaId join list
+// @Summary Get group MetaId join list
+// @Description Get user's group join records (create, join, leave, remove) for a specific group from TalkGroupMetaIdJoinCollection
+// @Tags Group Management
+// @Accept json
+// @Produce json
+// @Param metaId query string true "User MetaId"
+// @Param groupId query string true "Group ID"
+// @Success 200 {object} respond.RespSuccess{data=respond.GroupMetaIdJoinListResponse} "Successfully return group MetaId join list"
+// @Failure 400 {object} respond.RespError "Request parameter error"
+// @Failure 500 {object} respond.RespError "Internal server error"
+// @Router /group-chat/group-metaid-join-list [get]
+func GetGroupMetaIdJoinList(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.FetchGroupMetaIdJoinListRequest{
+			MetaId:  c.DefaultQuery("metaId", ""),
+			GroupId: c.DefaultQuery("groupId", ""),
+		}
+	)
+
+	if req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("metaId is required"), t, 1))
+		return
+	}
+
+	if req.GroupId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("groupId is required"), t, 1))
+		return
+	}
+
+	result, err := service.FetchGroupMetaIdJoinList(req)
+	if err != nil {
+		log.Printf("Failed to fetch group MetaId join list for metaId %s, groupId %s: %v", req.MetaId, req.GroupId, err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
 
 	c.JSONP(http.StatusOK, respond.RespSuccess(result, t))
 }

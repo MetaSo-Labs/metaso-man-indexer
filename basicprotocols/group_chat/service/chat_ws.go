@@ -19,6 +19,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 
 	// 2. Build metaIdList
 	metaIdList := make([]string, 0)
+	mentionMetaIds := make([]string, 0)
 
 	// Check if there is a community
 	if groupInfo != nil && groupInfo.CommunityId != "" {
@@ -28,6 +29,14 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 			for _, member := range communityMembers {
 				if member.MetaId != "" {
 					metaIdList = append(metaIdList, member.MetaId)
+				}
+
+				if len(chat.Mention) > 0 {
+					for _, mention := range chat.Mention {
+						if mention == member.MetaId {
+							mentionMetaIds = append(mentionMetaIds, member.MetaId)
+						}
+					}
 				}
 			}
 		}
@@ -39,6 +48,13 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 			for _, member := range groupMembers {
 				if member.MetaId != "" {
 					metaIdList = append(metaIdList, member.MetaId)
+				}
+				if len(chat.Mention) > 0 {
+					for _, mention := range chat.Mention {
+						if mention == member.MetaId {
+							mentionMetaIds = append(mentionMetaIds, member.MetaId)
+						}
+					}
 				}
 			}
 		}
@@ -59,6 +75,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 				Address:     replyChat.Address,
 				UserInfo:    common_service.FetchMetaIDUserInfo(replyChat.Address),
 				NickName:    replyChat.NickName,
+				Mention:     replyChat.Mention,
 				Protocol:    replyChat.Protocol,
 				Content:     replyChat.Content,
 				ContentType: replyChat.ContentType,
@@ -92,6 +109,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 		ReplyPin:    chat.ReplyPin,
 		ReplyInfo:   replyInfo,
 		ReplyMetaId: replyMetaId,
+		Mention:     chat.Mention,
 		Timestamp:   chat.Timestamp,
 		Params:      "",
 		Chain:       chat.Chain,
@@ -113,7 +131,7 @@ func wsPostGroupMsg(chat *models.TalkGroupChatV3) {
 	// common_service.WsPost(chat.PinId, groupChatItem, metaIdList)
 
 	// 7. Send message to extra push
-	socket_service.SendAllMessageToExtraPush(groupChatItem, metaIdList, socket_util.WS_SERVER_NOTIFY_GROUP_CHAT)
+	socket_service.SendAllMessageToExtraPush(groupChatItem, metaIdList, mentionMetaIds, socket_util.WS_SERVER_NOTIFY_GROUP_CHAT)
 
 }
 
@@ -137,7 +155,7 @@ func wsPostGroupRoleInfo(roleInfo *models.GroupUserRoleInfo) {
 	}
 
 	socket_service.SendGroupRoleInfoToUser(roleInfo.MetaId, roleInfoItem)
-	socket_service.SendAllMessageToExtraPush(roleInfoItem, []string{roleInfo.MetaId}, socket_util.WS_SERVER_NOTIFY_GROUP_ROLE)
+	socket_service.SendAllMessageToExtraPush(roleInfoItem, []string{roleInfo.MetaId}, nil, socket_util.WS_SERVER_NOTIFY_GROUP_ROLE)
 }
 
 func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
@@ -215,5 +233,5 @@ func wsPostPrivateMsg(chat *models.TalkPrivateChatV3) {
 	// common_service.WsPost(chat.PinId, privateChatItem, metaIdList)
 
 	// 7. Send message to extra push
-	socket_service.SendAllMessageToExtraPush(privateChatItem, metaIdList, socket_util.WS_SERVER_NOTIFY_PRIVATE_CHAT)
+	socket_service.SendAllMessageToExtraPush(privateChatItem, metaIdList, nil, socket_util.WS_SERVER_NOTIFY_PRIVATE_CHAT)
 }

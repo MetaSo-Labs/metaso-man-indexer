@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"manindexer/basicprotocols/group_chat/models"
 	"manindexer/basicprotocols/group_chat/protocols"
 	"manindexer/basicprotocols/group_chat/service/cache_service"
@@ -23,6 +24,7 @@ type GroupSearchCacheItem struct {
 	GroupIcon   string `json:"groupIcon"`   // Group icon
 	PinId       string `json:"pinId"`       // Pin ID
 	Timestamp   int64  `json:"timestamp"`   // Timestamp
+	JoinType    string `json:"joinType"`    // Timestamp
 }
 
 // Group database operations
@@ -249,6 +251,83 @@ func (gdb *GroupDB) DeleteGroupCommunity(communityId, groupId string) error {
 	return nil
 }
 
+// Save private group metaId path
+func (gdb *GroupDB) SavePrivateGroupMetaIdPath(metaId, groupId, pinId, path, groupType string) error {
+	if groupType != "100" {
+		return nil
+	}
+
+	// Use metaId_groupId as primary key, value is path
+	key := []byte(metaId + "_" + groupId + "_" + pinId)
+	return Pb[TalkPrivateGroupMetaIdPathCollection].Set(key, []byte(path), pebble.Sync)
+}
+
+// Delete private group metaId path
+func (gdb *GroupDB) DeletePrivateGroupMetaIdPath(metaId, groupId, pinId string) error {
+	key := []byte(metaId + "_" + groupId + "_" + pinId)
+	err := Pb[TalkPrivateGroupMetaIdPathCollection].Delete(key, pebble.Sync)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// PrivateGroupPathItem represents a private group path item
+type PrivateGroupPathItem struct {
+	Path    string `json:"path"`    // Path
+	GroupId string `json:"groupId"` // Group ID
+	PinId   string `json:"pinId"`   // Pin ID
+}
+
+// GetPrivateGroupPathsByMetaId Get all private group paths by MetaId
+func (gdb *GroupDB) GetPrivateGroupPathsByMetaId(metaId string) ([]*PrivateGroupPathItem, error) {
+	var items []*PrivateGroupPathItem
+
+	// Use prefix query, because key is metaId_groupId_pinId format
+	prefix := []byte(metaId + "_")
+	iter, err := Pb[TalkPrivateGroupMetaIdPathCollection].NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff), // Use 0xff as upper bound to ensure only query keys starting with metaId_
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Parse key: metaId_groupId_pinId
+		// Since metaId might contain underscores, we need to handle it carefully
+		// We know the prefix is metaId_, so we can extract the rest
+		key := string(iter.Key())
+		prefixLen := len(metaId) + 1 // metaId + "_"
+		if len(key) <= prefixLen {
+			continue
+		}
+
+		// Extract the remaining part: groupId_pinId
+		remaining := key[prefixLen:]
+		parts := strings.SplitN(remaining, "_", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		groupId := parts[0]
+		pinId := parts[1]
+
+		// Get path from value
+		path := string(iter.Value())
+
+		item := &PrivateGroupPathItem{
+			Path:    path,
+			GroupId: groupId,
+			PinId:   pinId,
+		}
+		items = append(items, item)
+	}
+
+	return items, nil
+}
+
 // Save group channel association
 func (gdb *GroupDB) SaveGroupChannel(channel *models.TalkGroupChannelModel) error {
 	data, err := json.Marshal(channel)
@@ -377,6 +456,10 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription, isResync bool) erro
 			return gdb.processGroupBlock(pin, "", isResync)
 		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
 			return gdb.processGroupWhitelist(pin, "", isResync)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupJoinBlock) {
+			return gdb.processGroupJoinBlock(pin, "", isResync)
+		} else if strings.ToLower(protocol) == strings.ToLower(protocols.MonitorSimpleGroupJoinWhitelist) {
+			return gdb.processGroupJoinWhitelist(pin, "", isResync)
 		}
 	case "modify":
 		// Check ParentPath
@@ -392,6 +475,10 @@ func (gdb *GroupDB) ProcessGroupPin(pin *pin.PinInscription, isResync bool) erro
 			return gdb.processGroupBlockModify(pin, isResync)
 		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupWhitelist) {
 			return gdb.processGroupWhitelistModify(pin, isResync)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupJoinBlock) {
+			return gdb.processGroupJoinBlockModify(pin, isResync)
+		} else if strings.ToLower(parentProtocol) == strings.ToLower(protocols.MonitorSimpleGroupJoinWhitelist) {
+			return gdb.processGroupJoinWhitelistModify(pin, isResync)
 		}
 		return nil
 	default:
@@ -433,6 +520,7 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription, isResync bool) e
 		RoomJoinType:      getStringValue(simpleGroupCreate.JoinType),
 		ChatSettingType:   getInt64Value(simpleGroupCreate.ChatSettingType),
 		DeleteStatus:      getInt64Value(simpleGroupCreate.DeleteStatus),
+		Path:              simpleGroupCreate.Path,
 		CreateUserMetaId:  pin.CreateMetaId,
 		CreateUserAddress: pin.CreateAddress,
 		Chain:             pin.ChainName,
@@ -496,6 +584,14 @@ func (gdb *GroupDB) processGroupCreate(pin *pin.PinInscription, isResync bool) e
 		return err
 	}
 
+	// Save private group metaId path if path is not empty
+	if group.Path != "" {
+		err = gdb.SavePrivateGroupMetaIdPath(pin.CreateMetaId, group.GroupId, group.PinId, group.Path, group.RoomJoinType)
+		if err != nil {
+			return err
+		}
+	}
+
 	// Trigger cache update
 	gdb.triggerCacheUpdate(group.GroupId)
 
@@ -550,6 +646,14 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription, isResync bool) e
 		return errors.New("group creator not match")
 	}
 
+	// Handle changes in group-community relationship (save before update)
+	oldCommunityId := existingGroup.CommunityId
+	newCommunityId := simpleGroupCreate.CommunityId
+
+	// Handle changes in private group path (save before update)
+	oldPath := existingGroup.Path
+	newPath := simpleGroupCreate.Path
+
 	// Update group info
 	existingGroup.RoomName = simpleGroupCreate.GroupName
 	existingGroup.RoomNote = simpleGroupCreate.GroupNote
@@ -559,14 +663,11 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription, isResync bool) e
 	existingGroup.RoomJoinType = getStringValue(simpleGroupCreate.JoinType)
 	existingGroup.ChatSettingType = getInt64Value(simpleGroupCreate.ChatSettingType)
 	existingGroup.DeleteStatus = getInt64Value(simpleGroupCreate.DeleteStatus)
+	existingGroup.Path = simpleGroupCreate.Path
 	existingGroup.TxId = pin.Id[:len(pin.Id)-2] // Remove last two characters
 	existingGroup.PinId = pin.Id
 	existingGroup.Timestamp = pin.Timestamp
 	existingGroup.BlockHeight = pin.GenesisHeight
-
-	// Handle changes in group-community relationship
-	oldCommunityId := existingGroup.CommunityId
-	newCommunityId := simpleGroupCreate.CommunityId
 
 	modifyGroup := &models.TalkGroupModel{
 		GroupId:           simpleGroupCreate.GroupId,
@@ -581,6 +682,7 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription, isResync bool) e
 		RoomJoinType:      getStringValue(simpleGroupCreate.JoinType),
 		ChatSettingType:   getInt64Value(simpleGroupCreate.ChatSettingType),
 		DeleteStatus:      getInt64Value(simpleGroupCreate.DeleteStatus),
+		Path:              simpleGroupCreate.Path,
 		CreateUserMetaId:  pin.CreateMetaId,
 		CreateUserAddress: pin.CreateAddress,
 		Chain:             pin.ChainName,
@@ -648,6 +750,28 @@ func (gdb *GroupDB) processGroupModify(pin *pin.PinInscription, isResync bool) e
 		return err
 	}
 
+	// Handle private group path changes
+	// Case 1: No path before, now has one
+	if oldPath == "" && newPath != "" {
+		err = gdb.SavePrivateGroupMetaIdPath(pin.CreateMetaId, existingGroup.GroupId, pin.Id, newPath, existingGroup.RoomJoinType)
+		if err != nil {
+			return err
+		}
+	} else if oldPath != "" && newPath == "" {
+		// Case 2: Had path before, now doesn't have one
+		// err = gdb.DeletePrivateGroupMetaIdPath(pin.CreateMetaId, existingGroup.GroupId)
+		// if err != nil {
+		// 	return err
+		// }
+	} else if oldPath != "" && newPath != "" && oldPath != newPath {
+		// Case 3: Had path before, now has a different new path
+		err = gdb.SavePrivateGroupMetaIdPath(pin.CreateMetaId, existingGroup.GroupId, pin.Id, newPath, existingGroup.RoomJoinType)
+		if err != nil {
+			return err
+		}
+	}
+	// Case 4: Had path before, now has the same path - no update needed
+
 	// Trigger cache update
 	gdb.triggerCacheUpdate(existingGroup.GroupId)
 
@@ -707,6 +831,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 		Address:    pin.CreateAddress,
 		GroupState: groupState,
 		Referrer:   simpleGroupJoin.Referrer,
+		K:          simpleGroupJoin.K,
 		// IsValid:      true,
 		// IsNew:        true,
 		BlockHeight:  pin.GenesisHeight,
@@ -743,6 +868,87 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 	if existingPerson == nil {
 		// New member, decide whether to save based on state
 		if groupState == models.RoomStateIn {
+			// Check if user is blocked from joining
+			isJoinBlocked, err := gdb.IsUserJoinBlock(simpleGroupJoin.GroupId, pin.CreateMetaId, pin.Timestamp)
+			if err != nil {
+				return err
+			}
+			if isJoinBlocked {
+				// User is blocked from joining, record invalid join
+				invalidItem := &models.GroupJoinUserInvalidItem{
+					JoinPinId:     pin.Id,
+					InvalidType:   "block",
+					MetaId:        pin.CreateMetaId,
+					Address:       pin.CreateAddress,
+					InvalidReason: "blocked",
+					Timestamp:     pin.Timestamp,
+					BlockHeight:   pin.GenesisHeight,
+					Chain:         pin.ChainName,
+				}
+				err = gdb.saveGroupJoinUserInvalid(simpleGroupJoin.GroupId, invalidItem)
+				if err != nil {
+					// Log error but continue
+					log.Printf("Failed to save invalid join record: %v", err)
+				}
+
+				// Mark pin as synced to avoid reprocessing
+				err = MarkPinAsSynced(pin.Id, true)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+
+			// Get group info to check join type
+			group, err := gdb.GetGroupInfoByGroupId(simpleGroupJoin.GroupId)
+			if err != nil {
+				return err
+			}
+			if group == nil {
+				return errors.New("group not found")
+			}
+
+			// Only check join whitelist if group join type is "1" (password-mode)
+			if group.RoomJoinType == "100" {
+				// Check if join whitelist is set and user is not in whitelist
+				joinWhitelistList, err := gdb.getGroupJoinWhitelistList(simpleGroupJoin.GroupId)
+				if err != nil {
+					return err
+				}
+				if joinWhitelistList != nil && len(joinWhitelistList.Items) > 0 {
+					// Join whitelist is set, check if user is whitelisted
+					isJoinWhitelisted, err := gdb.IsUserJoinWhitelist(simpleGroupJoin.GroupId, pin.CreateMetaId, pin.Timestamp)
+					if err != nil {
+						return err
+					}
+					if !isJoinWhitelisted {
+						// User is not whitelisted, record invalid join
+						invalidItem := &models.GroupJoinUserInvalidItem{
+							JoinPinId:     pin.Id,
+							InvalidType:   "whitelist",
+							MetaId:        pin.CreateMetaId,
+							Address:       pin.CreateAddress,
+							InvalidReason: "not_whitelisted",
+							Timestamp:     pin.Timestamp,
+							BlockHeight:   pin.GenesisHeight,
+							Chain:         pin.ChainName,
+						}
+						err = gdb.saveGroupJoinUserInvalid(simpleGroupJoin.GroupId, invalidItem)
+						if err != nil {
+							// Log error but continue
+							log.Printf("Failed to save invalid join record: %v", err)
+						}
+
+						// Mark pin as synced to avoid reprocessing
+						err = MarkPinAsSynced(pin.Id, true)
+						if err != nil {
+							return err
+						}
+						return nil
+					}
+				}
+			}
+
 			// Create group member info
 			person := &models.TalkGroupPerson{
 				GroupId:      simpleGroupJoin.GroupId,
@@ -769,7 +975,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 			}
 
 			// Add join record to MetaId join list
-			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, "", "")
+			err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, simpleGroupJoin.K, "", "")
 			if err != nil {
 				return err
 			}
@@ -780,6 +986,87 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 		if existingPerson.GroupState != groupState {
 			// State has changed, need to update
 			if groupState == models.RoomStateIn {
+				// Changed from Out to In, check if user is blocked from joining
+				isJoinBlocked, err := gdb.IsUserJoinBlock(simpleGroupJoin.GroupId, pin.CreateMetaId, pin.Timestamp)
+				if err != nil {
+					return err
+				}
+				if isJoinBlocked {
+					// User is blocked from joining, record invalid join
+					invalidItem := &models.GroupJoinUserInvalidItem{
+						JoinPinId:     pin.Id,
+						InvalidType:   "block",
+						MetaId:        pin.CreateMetaId,
+						Address:       pin.CreateAddress,
+						InvalidReason: "blocked",
+						Timestamp:     pin.Timestamp,
+						BlockHeight:   pin.GenesisHeight,
+						Chain:         pin.ChainName,
+					}
+					err = gdb.saveGroupJoinUserInvalid(simpleGroupJoin.GroupId, invalidItem)
+					if err != nil {
+						// Log error but continue
+						log.Printf("Failed to save invalid join record: %v", err)
+					}
+
+					// Mark pin as synced to avoid reprocessing
+					err = MarkPinAsSynced(pin.Id, true)
+					if err != nil {
+						return err
+					}
+					return nil
+				}
+
+				// Get group info to check join type
+				group, err := gdb.GetGroupInfoByGroupId(simpleGroupJoin.GroupId)
+				if err != nil {
+					return err
+				}
+				if group == nil {
+					return errors.New("group not found")
+				}
+
+				// Only check join whitelist if group join type is "100" (private group)
+				if group.RoomJoinType == "100" {
+					// Check if join whitelist is set and user is not in whitelist
+					joinWhitelistList, err := gdb.getGroupJoinWhitelistList(simpleGroupJoin.GroupId)
+					if err != nil {
+						return err
+					}
+					if joinWhitelistList != nil && len(joinWhitelistList.Items) > 0 {
+						// Join whitelist is set, check if user is whitelisted
+						isJoinWhitelisted, err := gdb.IsUserJoinWhitelist(simpleGroupJoin.GroupId, pin.CreateMetaId, pin.Timestamp)
+						if err != nil {
+							return err
+						}
+						if !isJoinWhitelisted {
+							// User is not whitelisted, record invalid join
+							invalidItem := &models.GroupJoinUserInvalidItem{
+								JoinPinId:     pin.Id,
+								InvalidType:   "whitelist",
+								MetaId:        pin.CreateMetaId,
+								Address:       pin.CreateAddress,
+								InvalidReason: "not_whitelisted",
+								Timestamp:     pin.Timestamp,
+								BlockHeight:   pin.GenesisHeight,
+								Chain:         pin.ChainName,
+							}
+							err = gdb.saveGroupJoinUserInvalid(simpleGroupJoin.GroupId, invalidItem)
+							if err != nil {
+								// Log error but continue
+								log.Printf("Failed to save invalid join record: %v", err)
+							}
+
+							// Mark pin as synced to avoid reprocessing
+							err = MarkPinAsSynced(pin.Id, true)
+							if err != nil {
+								return err
+							}
+							return nil
+						}
+					}
+				}
+
 				// Changed from Out to In, save member info
 				existingPerson.GroupState = groupState
 				existingPerson.Timestamp = pin.Timestamp
@@ -797,7 +1084,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 				}
 
 				// Add join record to MetaId join list
-				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, "", "")
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "join", pin, groupState, simpleGroupJoin.Referrer, simpleGroupJoin.K, "", "")
 				if err != nil {
 					return err
 				}
@@ -815,7 +1102,7 @@ func (gdb *GroupDB) processGroupJoin(pin *pin.PinInscription, isResync bool) err
 				}
 
 				// Add leave record to MetaId join list (state is out)
-				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer, "", "")
+				err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, simpleGroupJoin.GroupId, pin.Id, "leave", pin, groupState, simpleGroupJoin.Referrer, simpleGroupJoin.K, "", "")
 				if err != nil {
 					return err
 				}
@@ -882,7 +1169,7 @@ func (gdb *GroupDB) processCreatorAutoJoin(group *models.TalkGroupModel, pin *pi
 	}
 
 	// Add creator join record to MetaId join list
-	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "", "", "")
+	err = gdb.addGroupJoinToMetaIdList(pin.CreateMetaId, group.GroupId, pin.Id, "create", pin, models.RoomStateIn, "", "", "", "")
 	if err != nil {
 		return err
 	}
@@ -993,6 +1280,7 @@ func (gdb *GroupDB) initMetaIdContextList(metaId, groupId string, pin *pin.PinIn
 	// Create new group list item
 	newItem := &models.MetaIdContextItem{
 		GroupId:          groupId,
+		Type:             "1", // Group chat
 		Timestamp:        pin.Timestamp,
 		ChatType:         models.ChatTypeMsg, // Default to message type
 		Content:          "",                 // Initially empty
@@ -1779,6 +2067,7 @@ type GroupMetaIdJoinItem struct {
 	GroupState    models.RoomState `json:"groupState"`    // Group state: 1-in, -1-out
 	Address       string           `json:"address"`       // User address
 	Referrer      string           `json:"referrer"`      // Referrer
+	K             string           `json:"k"`             // K value
 	BlockHeight   int64            `json:"blockHeight"`   // Block height
 	Chain         string           `json:"chain"`         // Chain type
 	ByMetaId      string           `json:"byMetaId"`      // By MetaId
@@ -1791,9 +2080,15 @@ type GroupMetaIdJoinList struct {
 	Items  []*GroupMetaIdJoinItem `json:"items"`  // Join record list
 }
 
+// Get user's group join list (public method for service layer)
+func (gdb *GroupDB) GetGroupMetaIdJoinList(metaId, groupId string) (*GroupMetaIdJoinList, error) {
+	return gdb.getGroupMetaIdJoinList(metaId, groupId)
+}
+
 // Get user's group join list
-func (gdb *GroupDB) getGroupMetaIdJoinList(metaId string) (*GroupMetaIdJoinList, error) {
-	key := []byte(metaId)
+func (gdb *GroupDB) getGroupMetaIdJoinList(metaId, groupId string) (*GroupMetaIdJoinList, error) {
+	//key: metaId_groupId
+	key := []byte(metaId + "_" + groupId)
 	value, closer, err := Pb[TalkGroupMetaIdJoinCollection].Get(key)
 	if err != nil {
 		if err == pebble.ErrNotFound {
@@ -1827,7 +2122,7 @@ func (gdb *GroupDB) saveGroupMetaIdJoinList(joinList *GroupMetaIdJoinList, group
 // Add group join record to user's join list
 func (gdb *GroupDB) addGroupJoinToMetaIdList(
 	metaId, groupId, pinId, joinType string,
-	pin *pin.PinInscription, groupState models.RoomState, referrer string,
+	pin *pin.PinInscription, groupState models.RoomState, referrer, k string,
 	byMetaId, byAddress string) error {
 	// Add lock for TalkGroupMetaIdJoinCollection operations
 	mutex := GetGroupMetaIdJoinMutex(metaId)
@@ -1835,7 +2130,7 @@ func (gdb *GroupDB) addGroupJoinToMetaIdList(
 	defer mutex.Unlock()
 
 	// Get existing join list
-	existingList, err := gdb.getGroupMetaIdJoinList(metaId)
+	existingList, err := gdb.getGroupMetaIdJoinList(metaId, groupId)
 	if err != nil {
 		return err
 	}
@@ -1848,6 +2143,7 @@ func (gdb *GroupDB) addGroupJoinToMetaIdList(
 		GroupState:    groupState,
 		Address:       pin.CreateAddress,
 		Referrer:      referrer,
+		K:             k,
 		BlockHeight:   pin.GenesisHeight,
 		Chain:         pin.ChainName,
 		ByMetaId:      byMetaId,
@@ -1968,7 +2264,7 @@ func (gdb *GroupDB) processGroupRemoveUser(pin *pin.PinInscription, isResync boo
 	// Add remove record to user's join list
 	err = gdb.addGroupJoinToMetaIdList(
 		simpleGroupRemoveUser.RemoveMetaid, simpleGroupRemoveUser.GroupId, pin.Id, "remove",
-		pin, models.RoomStateOut, "",
+		pin, models.RoomStateOut, "", "",
 		pin.CreateMetaId, pin.CreateAddress,
 	)
 	if err != nil {
@@ -2859,6 +3155,516 @@ func (gdb *GroupDB) IsUserWhitelist(groupId, metaId string, pinTimestamp int64) 
 	return false, nil
 }
 
+// Process group join block setting
+func (gdb *GroupDB) processGroupJoinBlock(pin *pin.PinInscription, operation string, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
+	// Parse protocol data
+	var simpleGroupJoinBlock protocols.SimpleGroupJoinBlock
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupJoinBlock)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupJoinBlock.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the join block setting is the group creator
+	// Check by metaId, skip if not match
+	if group.CreateUserMetaId != pin.CreateMetaId {
+		// Not the group creator, skip processing
+		// Mark pin as synced to avoid reprocessing
+		err = MarkPinAsSynced(pin.Id, true)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if operation == "" {
+		operation = "create"
+	}
+	// Add join block record to group join block list
+	err = gdb.addGroupJoinBlockToGroupList(simpleGroupJoinBlock.GroupId, pin.Id, operation, pin, simpleGroupJoinBlock.Users, isResync)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process group join block modify
+func (gdb *GroupDB) processGroupJoinBlockModify(pin *pin.PinInscription, isResync bool) error {
+	return gdb.processGroupJoinBlock(pin, "modify", isResync)
+}
+
+// Process group join whitelist setting
+func (gdb *GroupDB) processGroupJoinWhitelist(pin *pin.PinInscription, operation string, isResync bool) error {
+	isSynced, err := IsPinSynced(pin.Id)
+	if err != nil {
+		return err
+	}
+	if isSynced {
+		// Already synced, skip processing
+		return nil
+	}
+
+	// Parse protocol data
+	var simpleGroupJoinWhitelist protocols.SimpleGroupJoinWhitelist
+	err = json.Unmarshal(pin.ContentBody, &simpleGroupJoinWhitelist)
+	if err != nil {
+		return err
+	}
+
+	// Get group info to verify creator
+	group, err := gdb.GetGroupInfoByGroupId(simpleGroupJoinWhitelist.GroupId)
+	if err != nil {
+		return err
+	}
+	if group == nil {
+		return errors.New("group not found")
+	}
+
+	// Verify that the user initiating the join whitelist setting is the group creator
+	// Check by metaId, skip if not match
+	if group.CreateUserMetaId != pin.CreateMetaId {
+		// Not the group creator, skip processing
+		// Mark pin as synced to avoid reprocessing
+		err = MarkPinAsSynced(pin.Id, true)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if operation == "" {
+		operation = "create"
+	}
+	// Add join whitelist record to group join whitelist list
+	err = gdb.addGroupJoinWhitelistToGroupList(simpleGroupJoinWhitelist.GroupId, pin.Id, operation, pin, simpleGroupJoinWhitelist.Users, isResync)
+	if err != nil {
+		return err
+	}
+
+	// Mark pin as synced
+	err = MarkPinAsSynced(pin.Id, true)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Process group join whitelist modify
+func (gdb *GroupDB) processGroupJoinWhitelistModify(pin *pin.PinInscription, isResync bool) error {
+	return gdb.processGroupJoinWhitelist(pin, "modify", isResync)
+}
+
+// GetGroupJoinBlockList Get group join block list (exported method)
+func (gdb *GroupDB) GetGroupJoinBlockList(groupId string) (*models.GroupJoinBlockList, error) {
+	return gdb.getGroupJoinBlockList(groupId)
+}
+
+// Get group join block list
+func (gdb *GroupDB) getGroupJoinBlockList(groupId string) (*models.GroupJoinBlockList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupJoinBlockCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupJoinBlockList{GroupId: groupId, Items: []*models.GroupJoinBlockItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var blockList models.GroupJoinBlockList
+	err = json.Unmarshal(value, &blockList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blockList, nil
+}
+
+// Save group join block list
+func (gdb *GroupDB) saveGroupJoinBlockList(blockList *models.GroupJoinBlockList) error {
+	data, err := json.Marshal(blockList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(blockList.GroupId)
+	err = Pb[TalkGroupJoinBlockCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Add group join block record to group join block list
+func (gdb *GroupDB) addGroupJoinBlockToGroupList(
+	groupId, pinId, blockType string,
+	pin *pin.PinInscription, blockedUsers []string, isResync bool) error {
+	// Add lock for TalkGroupJoinBlockCollection operations
+	mutex := GetGroupBlockMutex(groupId) // Reuse existing mutex manager
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Get existing join block list
+	existingList, err := gdb.getGroupJoinBlockList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Create new join block record item
+	newItem := &models.GroupJoinBlockItem{
+		BlockPinId:     pinId,
+		BlockType:      blockType,
+		BlockTimestamp: pin.Timestamp,
+		BlockedUsers:   blockedUsers,
+		SetByMetaId:    pin.CreateMetaId,
+		SetByAddress:   pin.CreateAddress,
+		BlockHeight:    pin.GenesisHeight,
+		Chain:          pin.ChainName,
+	}
+
+	// Check if join block record already exists
+	found := false
+	for i, item := range existingList.Items {
+		// Determine if already exists by BlockPinId (because each block has different PinId)
+		if item.BlockPinId == pinId {
+			found = true
+			if item.BlockTimestamp >= newItem.BlockTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// Sort by timestamp in ascending order
+	gdb.sortGroupJoinBlockListByTimestamp(existingList)
+
+	// Save updated join block list
+	err = gdb.saveGroupJoinBlockList(existingList)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Sort group join block list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupJoinBlockListByTimestamp(blockList *models.GroupJoinBlockList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(blockList.Items)-1; i++ {
+		for j := 0; j < len(blockList.Items)-1-i; j++ {
+			if blockList.Items[j].BlockTimestamp > blockList.Items[j+1].BlockTimestamp {
+				blockList.Items[j], blockList.Items[j+1] = blockList.Items[j+1], blockList.Items[j]
+			}
+		}
+	}
+}
+
+// GetGroupJoinWhitelistList Get group join whitelist list (exported method)
+func (gdb *GroupDB) GetGroupJoinWhitelistList(groupId string) (*models.GroupJoinWhitelistList, error) {
+	return gdb.getGroupJoinWhitelistList(groupId)
+}
+
+// Get group join whitelist list
+func (gdb *GroupDB) getGroupJoinWhitelistList(groupId string) (*models.GroupJoinWhitelistList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupJoinWhitelistCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupJoinWhitelistList{GroupId: groupId, Items: []*models.GroupJoinWhitelistItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var whitelistList models.GroupJoinWhitelistList
+	err = json.Unmarshal(value, &whitelistList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &whitelistList, nil
+}
+
+// Save group join whitelist list
+func (gdb *GroupDB) saveGroupJoinWhitelistList(whitelistList *models.GroupJoinWhitelistList) error {
+	data, err := json.Marshal(whitelistList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(whitelistList.GroupId)
+	err = Pb[TalkGroupJoinWhitelistCollection].Set(key, data, pebble.Sync)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Add group join whitelist record to group join whitelist list
+func (gdb *GroupDB) addGroupJoinWhitelistToGroupList(
+	groupId, pinId, whitelistType string,
+	pin *pin.PinInscription, whitelistUsers []string, isResync bool) error {
+	// Add lock for TalkGroupJoinWhitelistCollection operations
+	mutex := GetGroupWhitelistMutex(groupId) // Reuse existing mutex manager
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// Get existing join whitelist list
+	existingList, err := gdb.getGroupJoinWhitelistList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Create new join whitelist record item
+	newItem := &models.GroupJoinWhitelistItem{
+		WhitelistPinId:     pinId,
+		WhitelistType:      whitelistType,
+		WhitelistTimestamp: pin.Timestamp,
+		WhitelistUsers:     whitelistUsers,
+		SetByMetaId:        pin.CreateMetaId,
+		SetByAddress:       pin.CreateAddress,
+		BlockHeight:        pin.GenesisHeight,
+		Chain:              pin.ChainName,
+	}
+
+	// Check if join whitelist record already exists
+	found := false
+	for i, item := range existingList.Items {
+		// Determine if already exists by WhitelistPinId (because each whitelist has different PinId)
+		if item.WhitelistPinId == pinId {
+			found = true
+			if item.WhitelistTimestamp >= newItem.WhitelistTimestamp {
+				// Update existing item
+				existingList.Items[i] = newItem
+			}
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, newItem)
+	}
+
+	// Sort by timestamp in ascending order
+	gdb.sortGroupJoinWhitelistListByTimestamp(existingList)
+
+	// Save updated join whitelist list
+	err = gdb.saveGroupJoinWhitelistList(existingList)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Sort group join whitelist list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupJoinWhitelistListByTimestamp(whitelistList *models.GroupJoinWhitelistList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(whitelistList.Items)-1; i++ {
+		for j := 0; j < len(whitelistList.Items)-1-i; j++ {
+			if whitelistList.Items[j].WhitelistTimestamp > whitelistList.Items[j+1].WhitelistTimestamp {
+				whitelistList.Items[j], whitelistList.Items[j+1] = whitelistList.Items[j+1], whitelistList.Items[j]
+			}
+		}
+	}
+}
+
+// Check if user is blocked from joining the group at specific timestamp
+func (gdb *GroupDB) IsUserJoinBlock(groupId, metaId string, pinTimestamp int64) (bool, error) {
+	// Get join block list from database
+	blockList, err := gdb.getGroupJoinBlockList(groupId)
+	if err != nil {
+		return false, err
+	}
+
+	if blockList == nil || len(blockList.Items) == 0 {
+		return false, nil
+	}
+
+	// Data is already sorted by timestamp in ascending order
+	// Find the block record that was effective at the given timestamp
+	var effectiveBlockItem *models.GroupJoinBlockItem
+	for _, item := range blockList.Items {
+		// Find the latest block record that was set before or at the pinTimestamp
+		if item.BlockTimestamp <= pinTimestamp {
+			effectiveBlockItem = item
+		} else {
+			// Since data is sorted by timestamp, we can break here
+			break
+		}
+	}
+
+	// If no effective block record found, user is not blocked
+	if effectiveBlockItem == nil {
+		return false, nil
+	}
+
+	// Check if metaId is in the effective block list
+	for _, blockedMetaId := range effectiveBlockItem.BlockedUsers {
+		if blockedMetaId == metaId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Check if user is whitelisted for joining the group at specific timestamp
+func (gdb *GroupDB) IsUserJoinWhitelist(groupId, metaId string, pinTimestamp int64) (bool, error) {
+	// Get join whitelist from database
+	whitelistList, err := gdb.getGroupJoinWhitelistList(groupId)
+	if err != nil {
+		return false, err
+	}
+
+	if whitelistList == nil || len(whitelistList.Items) == 0 {
+		return false, nil
+	}
+
+	// Data is already sorted by timestamp in ascending order
+	// Find the whitelist record that was effective at the given timestamp
+	var effectiveWhitelistItem *models.GroupJoinWhitelistItem
+	for _, item := range whitelistList.Items {
+		// Find the latest whitelist record that was set before or at the pinTimestamp
+		if item.WhitelistTimestamp <= pinTimestamp {
+			effectiveWhitelistItem = item
+		} else {
+			// Since data is sorted by timestamp, we can break here
+			break
+		}
+	}
+
+	// If no effective whitelist record found, user is not whitelisted
+	if effectiveWhitelistItem == nil {
+		return false, nil
+	}
+
+	// Check if metaId is in the effective whitelist
+	for _, whitelistMetaId := range effectiveWhitelistItem.WhitelistUsers {
+		if whitelistMetaId == metaId {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// Save group join user invalid record
+func (gdb *GroupDB) saveGroupJoinUserInvalid(groupId string, invalidItem *models.GroupJoinUserInvalidItem) error {
+	// Get existing invalid list
+	existingList, err := gdb.getGroupJoinUserInvalidList(groupId)
+	if err != nil {
+		return err
+	}
+
+	// Check if record already exists
+	found := false
+	for i, item := range existingList.Items {
+		if item.JoinPinId == invalidItem.JoinPinId {
+			found = true
+			// Update existing item if timestamp is newer
+			if invalidItem.Timestamp >= item.Timestamp {
+				existingList.Items[i] = invalidItem
+			}
+			break
+		}
+	}
+
+	// If not found, add new item
+	if !found {
+		existingList.Items = append(existingList.Items, invalidItem)
+	}
+
+	// Sort by timestamp in ascending order
+	gdb.sortGroupJoinUserInvalidListByTimestamp(existingList)
+
+	// Save updated list
+	return gdb.saveGroupJoinUserInvalidList(existingList)
+}
+
+// Get group join user invalid list
+func (gdb *GroupDB) getGroupJoinUserInvalidList(groupId string) (*models.GroupJoinUserInvalidList, error) {
+	key := []byte(groupId)
+	value, closer, err := Pb[TalkGroupJoinUserInvalidCollection].Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return &models.GroupJoinUserInvalidList{GroupId: groupId, Items: []*models.GroupJoinUserInvalidItem{}}, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var invalidList models.GroupJoinUserInvalidList
+	err = json.Unmarshal(value, &invalidList)
+	if err != nil {
+		return nil, err
+	}
+
+	return &invalidList, nil
+}
+
+// Save group join user invalid list
+func (gdb *GroupDB) saveGroupJoinUserInvalidList(invalidList *models.GroupJoinUserInvalidList) error {
+	data, err := json.Marshal(invalidList)
+	if err != nil {
+		return err
+	}
+
+	key := []byte(invalidList.GroupId)
+	return Pb[TalkGroupJoinUserInvalidCollection].Set(key, data, pebble.Sync)
+}
+
+// Sort group join user invalid list by timestamp in ascending order
+func (gdb *GroupDB) sortGroupJoinUserInvalidListByTimestamp(invalidList *models.GroupJoinUserInvalidList) {
+	// Simple bubble sort, ascending order by timestamp
+	for i := 0; i < len(invalidList.Items)-1; i++ {
+		for j := 0; j < len(invalidList.Items)-1-i; j++ {
+			if invalidList.Items[j].Timestamp > invalidList.Items[j+1].Timestamp {
+				invalidList.Items[j], invalidList.Items[j+1] = invalidList.Items[j+1], invalidList.Items[j]
+			}
+		}
+	}
+}
+
+// GetGroupJoinUserInvalidList Get group join user invalid list (exported method)
+func (gdb *GroupDB) GetGroupJoinUserInvalidList(groupId string) (*models.GroupJoinUserInvalidList, error) {
+	return gdb.getGroupJoinUserInvalidList(groupId)
+}
+
 // startCacheUpdateGoroutine starts the cache update goroutine
 func (gdb *GroupDB) startCacheUpdateGoroutine() {
 	// Execute initial cache update immediately on startup
@@ -2936,6 +3742,9 @@ func (gdb *GroupDB) updateSearchCache() {
 			continue
 		}
 
+		if group.RoomJoinType == "100" {
+			continue
+		}
 		// Add to new cache
 		cacheItem := &GroupSearchCacheItem{
 			GroupId:   group.GroupId,
@@ -2943,6 +3752,7 @@ func (gdb *GroupDB) updateSearchCache() {
 			GroupIcon: group.RoomIcon,
 			PinId:     group.PinId,
 			Timestamp: group.Timestamp,
+			JoinType:  group.RoomJoinType,
 		}
 		newCache[group.GroupId] = cacheItem
 	}
@@ -2963,6 +3773,11 @@ func (gdb *GroupDB) triggerCacheUpdate(groupId string) {
 		return
 	}
 
+	if group.RoomJoinType == "100" {
+		fmt.Printf("[GroupDB] Private Group[%s], skip search cache\n", groupId)
+		return
+	}
+
 	// Update only this specific group in cache
 	gdb.searchCacheMutex.Lock()
 	defer gdb.searchCacheMutex.Unlock()
@@ -2974,6 +3789,7 @@ func (gdb *GroupDB) triggerCacheUpdate(groupId string) {
 		GroupIcon: group.RoomIcon,
 		PinId:     group.PinId,
 		Timestamp: group.Timestamp,
+		JoinType:  group.RoomJoinType,
 	}
 	gdb.searchCache[groupId] = cacheItem
 
@@ -2995,6 +3811,9 @@ func (gdb *GroupDB) SearchGroups(query string, limit int, memberCountMin int) ([
 	gdb.searchCacheMutex.RLock()
 	cacheCopy := make(map[string]*GroupSearchCacheItem, len(gdb.searchCache))
 	for k, v := range gdb.searchCache {
+		if v.JoinType == "100" {
+			continue
+		}
 		cacheCopy[k] = v
 	}
 	gdb.searchCacheMutex.RUnlock()

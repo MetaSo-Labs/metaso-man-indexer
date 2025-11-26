@@ -180,7 +180,7 @@ func IsUserOnline(metaid string) bool {
 }
 
 // SendAllMessageToExtraPush Send message to all extra push connections
-func SendAllMessageToExtraPush(message interface{}, repostMetaIds []string, method string) error {
+func SendAllMessageToExtraPush(message interface{}, repostMetaIds, mentionMetaIds []string, method string) error {
 	socketManager := socket_util.GetSocketManager()
 	if socketManager == nil {
 		log.Printf("Socket manager not initialized")
@@ -188,13 +188,15 @@ func SendAllMessageToExtraPush(message interface{}, repostMetaIds []string, meth
 	}
 
 	type ExtraPushMessage struct {
-		Message       interface{} `json:"message"`
-		RepostMetaIds []string    `json:"repostMetaIds"`
+		Message        interface{} `json:"message"`
+		RepostMetaIds  []string    `json:"repostMetaIds"`
+		MentionMetaIds []string    `json:"mentionMetaIds"`
 	}
 
 	extraPushMessage := &ExtraPushMessage{
-		Message:       message,
-		RepostMetaIds: repostMetaIds,
+		Message:        message,
+		RepostMetaIds:  repostMetaIds,
+		MentionMetaIds: mentionMetaIds,
 	}
 
 	// Create message

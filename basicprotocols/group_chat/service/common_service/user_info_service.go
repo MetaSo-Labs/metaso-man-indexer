@@ -69,7 +69,7 @@ func FetchMetaIDUserInfo(address string) *respond.UserInfo {
 	// Build user info
 	avatarImage := ""
 	if userInfo.Avatar != "" {
-		avatarImage = common.Config.GroupChat.ManHost + userInfo.Avatar
+		avatarImage = common.Config.GroupChat.AvatarHost + userInfo.Avatar
 	}
 
 	userInfoResponse := &respond.UserInfo{
@@ -123,7 +123,7 @@ func FetchMetaIDUserInfoInfoByMetaId(metaId string) *respond.UserInfo {
 	// Build user info
 	avatarImage := ""
 	if userInfo.Avatar != "" {
-		avatarImage = common.Config.GroupChat.ManHost + "/content/" + userInfo.AvatarId
+		avatarImage = common.Config.GroupChat.AvatarHost + "/content/" + userInfo.AvatarId
 	}
 
 	userInfoResponse := &respond.UserInfo{
@@ -222,18 +222,65 @@ const (
 	keyTypeMetaId keyType = "metaid"
 )
 
-func SearchAllMetaIDUserInfoInfo(queryWord string) ([]*MetaIDUserInfo, error) {
-	limit := 2
+func SearchAllMetaIDUserInfoInfo(queryWord string, size int) ([]*MetaIDUserInfo, error) {
 	metaIdDataList, _ := searchMetaIDUserInfoInfo(queryWord, keyTypeMetaId)
-	if len(metaIdDataList) > limit {
-		metaIdDataList = metaIdDataList[:limit]
-	}
 	nameDataList, _ := searchMetaIDUserInfoInfo(queryWord, keyTypeName)
-	if len(nameDataList) > limit {
-		nameDataList = nameDataList[:limit]
+
+	// Backward-compatible behavior when size is not provided
+	if size <= 0 {
+		limit := 2
+		if len(metaIdDataList) > limit {
+			metaIdDataList = metaIdDataList[:limit]
+		}
+		if len(nameDataList) > limit {
+			nameDataList = nameDataList[:limit]
+		}
+		return append(nameDataList, metaIdDataList...), nil
 	}
-	dataList := append(nameDataList, metaIdDataList...)
+
+	targetTotal := size
+	nameLimit := (targetTotal + 1) / 2 // Prefer slightly more name matches when odd
+	metaLimit := targetTotal - nameLimit
+
+	// Initial take respecting calculated limits
+	takeName := minInt(len(nameDataList), nameLimit)
+	takeMeta := minInt(len(metaIdDataList), metaLimit)
+
+	currentTotal := takeName + takeMeta
+	if currentTotal < targetTotal {
+		remaining := targetTotal - currentTotal
+
+		// Try to fill remaining slots with extra name results first
+		if extraName := len(nameDataList) - takeName; extraName > 0 && remaining > 0 {
+			additional := minInt(extraName, remaining)
+			takeName += additional
+			remaining -= additional
+		}
+
+		// Then use additional metaId results if still not enough
+		if extraMeta := len(metaIdDataList) - takeMeta; extraMeta > 0 && remaining > 0 {
+			additional := minInt(extraMeta, remaining)
+			takeMeta += additional
+			remaining -= additional
+		}
+	}
+
+	dataList := make([]*MetaIDUserInfo, 0, takeName+takeMeta)
+	if takeName > 0 {
+		dataList = append(dataList, nameDataList[:takeName]...)
+	}
+	if takeMeta > 0 {
+		dataList = append(dataList, metaIdDataList[:takeMeta]...)
+	}
+
 	return dataList, nil
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func searchMetaIDUserInfoInfo(queryWord string, keyType keyType) ([]*MetaIDUserInfo, error) {
@@ -414,7 +461,7 @@ func updateSingleUserInfo(address string) {
 	// Build user info response
 	avatarImage := ""
 	if userInfo.Avatar != "" {
-		avatarImage = common.Config.GroupChat.ManHost + userInfo.Avatar
+		avatarImage = common.Config.GroupChat.AvatarHost + userInfo.Avatar
 	}
 
 	userInfoResponse := &respond.UserInfo{
@@ -468,7 +515,7 @@ func updateSingleUserInfoByMetaId(metaId string) {
 	// Build user info response
 	avatarImage := ""
 	if userInfo.Avatar != "" {
-		avatarImage = common.Config.GroupChat.ManHost + "/content/" + userInfo.AvatarId
+		avatarImage = common.Config.GroupChat.AvatarHost + "/content/" + userInfo.AvatarId
 	}
 
 	userInfoResponse := &respond.UserInfo{

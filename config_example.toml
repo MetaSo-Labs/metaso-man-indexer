@@ -43,6 +43,7 @@ port = "7568"
 host = "0.0.0.0"
 swaggerHost = "http://127.0.0.1:7568"
 manHost = "https://man.metaid.io"
+avatarHost = "https://man.metaid.io"
 backupHour = 3
 backupRetention = 7
 luckyBagDomain = ["https://www.example.com/chat-api/"]

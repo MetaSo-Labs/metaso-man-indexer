@@ -1171,6 +1171,7 @@ func (cdb *ChatDB) updateGroupLatestChat(groupId string, chat *models.TalkGroupC
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,
+		Mention:          chat.Mention,
 		CreateAddress:    chat.Address,
 		LastMessagePinId: chat.PinId,
 		MetaId:           chat.MetaId,
@@ -1271,6 +1272,7 @@ func (cdb *ChatDB) updateGroupChannelLatestChat(channelId string, chat *models.T
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,
+		Mention:          chat.Mention,
 		CreateAddress:    chat.Address,
 		LastMessagePinId: chat.PinId,
 		MetaId:           chat.MetaId,
@@ -1366,6 +1368,7 @@ func (cdb *ChatDB) updateSingleMemberContextList(metaId, groupId string, chat *m
 		Timestamp:        chat.Timestamp,
 		ChatType:         chat.ChatType,
 		Content:          chat.Content,
+		Mention:          chat.Mention,
 		CreateMetaId:     chat.MetaId,
 		CreateAddress:    chat.Address,
 		LastMessagePinId: chat.PinId,
@@ -1976,6 +1979,7 @@ func (cdb *ChatDB) processGroupChat(pin *pin.PinInscription, isResync bool) erro
 		ChatType:    models.ChatTypeMsg,       // Default to message type
 		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleGroupChat.ReplyPin,
+		Mention:     simpleGroupChat.Mention,
 		Timestamp:   pin.Timestamp,
 		Version:     pin.Version,
 		Chain:       pin.ChainName,
@@ -2421,6 +2425,7 @@ func (cdb *ChatDB) processFileGroupChat(pin *pin.PinInscription, isResync bool) 
 		ChatType:    models.ChatTypeFile,      // File type
 		InsideIndex: models.ChatInsideIndexIn, // Default to in state
 		ReplyPin:    simpleFileGroupChat.ReplyPin,
+		// Mention:     simpleFileGroupChat.Mention,
 		Timestamp:   pin.Timestamp,
 		Version:     pin.Version,
 		BlockHeight: pin.GenesisHeight,

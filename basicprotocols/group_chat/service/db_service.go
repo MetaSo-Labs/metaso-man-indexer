@@ -3126,6 +3126,114 @@ func QueryGroupWhitelistByGroupId(groupId string) (map[string]interface{}, error
 	return result, nil
 }
 
+// QueryGroupJoinBlockByGroupId Get TalkGroupJoinBlockCollection data by groupId
+func QueryGroupJoinBlockByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupJoinBlockCollection
+	value, closer, err := db.Pb[db.TalkGroupJoinBlockCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group join block data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
+// QueryGroupJoinWhitelistByGroupId Get TalkGroupJoinWhitelistCollection data by groupId
+func QueryGroupJoinWhitelistByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupJoinWhitelistCollection
+	value, closer, err := db.Pb[db.TalkGroupJoinWhitelistCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group join whitelist data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
+// QueryGroupJoinUserInvalidByGroupId Get TalkGroupJoinUserInvalidCollection data by groupId
+func QueryGroupJoinUserInvalidByGroupId(groupId string) (map[string]interface{}, error) {
+	if groupId == "" {
+		return nil, fmt.Errorf("groupId parameter cannot be empty")
+	}
+
+	// Query by groupId from TalkGroupJoinUserInvalidCollection
+	value, closer, err := db.Pb[db.TalkGroupJoinUserInvalidCollection].Get([]byte(groupId))
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return map[string]interface{}{
+				"groupId": groupId,
+				"found":   false,
+				"message": "Group join user invalid data not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("query failed: %v", err)
+	}
+	defer closer.Close()
+
+	// Try to parse JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(value, &jsonData); err != nil {
+		// If not JSON, use string directly
+		jsonData = string(value)
+	}
+
+	result := map[string]interface{}{
+		"groupId": groupId,
+		"found":   true,
+		"value":   jsonData,
+	}
+
+	return result, nil
+}
+
 // ChatStatistics represents statistics for chat data
 type ChatStatistics struct {
 	StartTime           int64                       `json:"startTime"`             // Start time
