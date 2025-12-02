@@ -913,6 +913,41 @@ func GetBatchUserInfo(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, respond.RespSuccess(response, t))
 }
 
+// @Summary Update user info cache
+// @Description Trigger update user info cache by address or metaId. If address is provided, it will be used; if address is empty but metaId is provided, metaId will be used; if both are empty, an error will be returned.
+// @Produce json
+// @Param address query string false "User address"
+// @Param metaId query string false "User MetaId"
+// @Tags Group
+// @Success 200 {object} respond.Message{data=string} "Successfully triggered user info cache update"
+// @Failure 400 {object} respond.Message{data=string} "Parameter error"
+// @Failure 500 {object} respond.Message{data=string} "Server error"
+// @Router /group-chat/update-user-info-cache [get]
+func UpdateUserInfoCache(c *gin.Context) {
+	var (
+		t   = time.Now().UnixMilli()
+		req = &request.UpdateUserInfoCacheRequest{
+			Address: c.DefaultQuery("address", ""),
+			MetaId:  c.DefaultQuery("metaId", ""),
+		}
+	)
+
+	// Check if both address and metaId are empty
+	if req.Address == "" && req.MetaId == "" {
+		c.JSONP(http.StatusBadRequest, respond.RespErr(fmt.Errorf("either address or metaId must be provided"), t, 1))
+		return
+	}
+
+	err := service.UpdateUserInfoCache(req)
+	if err != nil {
+		log.Printf("Failed to update user info cache: %v", err)
+		c.JSONP(http.StatusInternalServerError, respond.RespErr(err, t, 1))
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, respond.RespSuccess("User info cache update triggered successfully", t))
+}
+
 // @Summary Get current maximum group chat index
 // @Description Get the current maximum index for a group's chat records
 // @Produce json

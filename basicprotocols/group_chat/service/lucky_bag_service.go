@@ -1474,6 +1474,15 @@ func buildAndBroadcastMetaContractFtTransferTx(
 	codehash = codehashGenesis[0]
 	genesis = codehashGenesis[1]
 
+	if grabEntity.TickTxId == "" {
+		// find lucky bag by grabEntity.LuckyBagPinId
+		luckyBag, _ := chatDB.GetLuckyBagByPinId(grabEntity.LuckyBagPinId)
+		if luckyBag != nil {
+			grabEntity.TickTxId = luckyBag.TickTxId
+			grabEntity.TickPinId = luckyBag.TickPinId
+		}
+	}
+
 	grabGAmount := normalizeScientificNotation(grabEntity.GasAmount)
 	gasUtxos = append(gasUtxos, &grpc_metacontract.GasUtxo{
 		TxId:        grabEntity.LuckyBagTxId,

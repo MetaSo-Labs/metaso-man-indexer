@@ -537,3 +537,21 @@ func updateSingleUserInfoByMetaId(metaId string) {
 		log.Printf("[CACHE_SERVICE]Successfully updated user info cache for metaId: %s", metaId)
 	}
 }
+
+// TriggerUpdateUserInfo Trigger update user info by address (public method)
+func TriggerUpdateUserInfo(address string) error {
+	if address == "" {
+		return fmt.Errorf("address is empty")
+	}
+	updateSingleUserInfo(address)
+	return nil
+}
+
+// TriggerUpdateUserInfoByMetaId Trigger update user info by metaId (public method)
+func TriggerUpdateUserInfoByMetaId(metaId string) error {
+	if metaId == "" {
+		return fmt.Errorf("metaId is empty")
+	}
+	updateSingleUserInfoByMetaId(metaId)
+	return nil
+}

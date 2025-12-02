@@ -590,6 +590,23 @@ func SetupSwagger(router *gin.Engine) {
                 }
             }
         },
+        "/group-chat/update-user-info-cache": {
+            "get": {
+                "description": "Trigger update user info cache by address or metaId. If address is provided, it will be used; if address is empty but metaId is provided, metaId will be used; if both are empty, an error will be returned.",
+                "produces": ["application/json"],
+                "tags": ["Group Management"],
+                "summary": "Update user info cache",
+                "parameters": [
+                    {"type": "string", "description": "User address", "name": "address", "in": "query", "required": false},
+                    {"type": "string", "description": "User MetaId", "name": "metaId", "in": "query", "required": false}
+                ],
+                "responses": {
+                    "200": {"description": "Successfully triggered user info cache update", "schema": {"type": "object"}},
+                    "400": {"description": "Parameter error", "schema": {"type": "object"}},
+                    "500": {"description": "Server error", "schema": {"type": "object"}}
+                }
+            }
+        },
         "/group-chat/batch-user-info": {
             "post": {
                 "description": "Get user information by multiple addresses or metaIds in batch. Maximum total count is 100 (addresses + metaIds).",

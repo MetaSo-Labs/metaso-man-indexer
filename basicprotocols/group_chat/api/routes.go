@@ -76,6 +76,9 @@ func RegisterGroupRoutes(router *gin.Engine) {
 		// Get user info by address
 		group.GET("/user-info", GetUserInfoByAddress)
 
+		// Update user info cache
+		group.GET("/update-user-info-cache", UpdateUserInfoCache)
+
 		// Get batch user info by addresses or metaIds
 		group.POST("/batch-user-info", GetBatchUserInfo)
 

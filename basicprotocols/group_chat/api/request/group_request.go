@@ -194,3 +194,9 @@ type ProcessLuckyBagMetaContractFtManualExtraGasRequest struct {
 	PerAmount            uint64 `json:"perAmount"`            // Amount per output
 	ChangeAddress        string `json:"changeAddress"`        // Change address
 }
+
+// UpdateUserInfoCacheRequest Update user info cache request
+type UpdateUserInfoCacheRequest struct {
+	Address string `form:"address" json:"address"` // User address
+	MetaId  string `form:"metaId" json:"metaId"`   // User MetaId
+}

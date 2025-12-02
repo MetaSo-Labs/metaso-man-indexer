@@ -3106,3 +3106,13 @@ func FetchGroupMetaIdJoinList(req *request.FetchGroupMetaIdJoinListRequest) (*re
 		Items:  items,
 	}, nil
 }
+
+// UpdateUserInfoCache Update user info cache by address or metaId
+func UpdateUserInfoCache(req *request.UpdateUserInfoCacheRequest) error {
+	if req.Address != "" {
+		return common_service.TriggerUpdateUserInfo(req.Address)
+	} else if req.MetaId != "" {
+		return common_service.TriggerUpdateUserInfoByMetaId(req.MetaId)
+	}
+	return fmt.Errorf("either address or metaId must be provided")
+}
